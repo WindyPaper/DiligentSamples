@@ -26,6 +26,7 @@
  */
 
 #include "My_Terrain.hpp"
+#include "MapHelper.hpp"
 
 namespace Diligent
 {
@@ -57,9 +58,9 @@ void main(in  uint    VertId : SV_VertexID,
     Pos[2] = float4(+0.5, -0.5, 0.0, 1.0);
 
     float3 Col[3];
-    Col[0] = float3(1.0, 0.0, 0.0); // red
-    Col[1] = float3(0.0, 1.0, 0.0); // green
-    Col[2] = float3(0.0, 0.0, 1.0); // blue
+    Col[0] = float3(1.0, 1.0, 1.0); // red
+    Col[1] = float3(1.0, 1.0, 1.0); // green
+    Col[2] = float3(1.0, 1.0, 1.0); // blue
 
     PSIn.Pos   = Pos[VertId];
     PSIn.Color = Col[VertId];
@@ -112,12 +113,28 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
     // Primitive topology defines what kind of primitives will be rendered by this pipeline state
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     // No back face culling for this tutorial
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_BACK;
     // Disable depth testing
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = True;
+
+	// Define vertex shader input layout
+	LayoutElement LayoutElems[] =
+	{
+		// Attribute 0 - vertex position
+		LayoutElement{0, 0, 3, VT_FLOAT32, False},
+		// Attribute 1 - vertex color
+		LayoutElement{1, 0, 4, VT_FLOAT32, False}
+	};
+	// clang-format on
+	PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
+	PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
+
     // clang-format on
 
     ShaderCreateInfo ShaderCI;
+	RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
     // Tell the system that the shader source code is in HLSL.
     // For OpenGL, the engine will convert this into GLSL under the hood.
     ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -128,9 +145,19 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
     {
         ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
         ShaderCI.EntryPoint      = "main";
-        ShaderCI.Desc.Name       = "Triangle vertex shader";
-        ShaderCI.Source          = VSSource;
+        ShaderCI.Desc.Name       = "Terrain vertex shader";
+        //ShaderCI.Source          = VSSource;
+		ShaderCI.FilePath		 = "cube.vsh";
         m_pDevice->CreateShader(ShaderCI, &pVS);
+
+		//Create dynamic buffer
+		BufferDesc CBDesc;
+		CBDesc.Name = "VS Constants CB";
+		CBDesc.uiSizeInBytes = sizeof(float4x4);
+		CBDesc.Usage = USAGE_DYNAMIC;
+		CBDesc.BindFlags = BIND_UNIFORM_BUFFER;
+		CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+		m_pDevice->CreateBuffer(CBDesc, nullptr, &m_pVsConstBuf);
     }
 
     // Create a pixel shader
@@ -138,8 +165,9 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
     {
         ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
         ShaderCI.EntryPoint      = "main";
-        ShaderCI.Desc.Name       = "Triangle pixel shader";
-        ShaderCI.Source          = PSSource;
+        ShaderCI.Desc.Name       = "Terrain pixel shader";
+        //ShaderCI.Source          = PSSource;
+		ShaderCI.FilePath		 = "cube.psh";
         m_pDevice->CreateShader(ShaderCI, &pPS);
     }
 
@@ -147,6 +175,16 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
     m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPSO);
+
+	// Since we did not explcitly specify the type for 'Constants' variable, default
+	// type (SHADER_RESOURCE_VARIABLE_TYPE_STATIC) will be used. Static variables never
+	// change and are bound directly through the pipeline state object.
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVsConstBuf);
+
+	// Create a shader resource binding object and bind all static resources in it
+	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
+
+	CreateTerrainBuffer();
 }
 
 // Render a frame
@@ -160,20 +198,113 @@ void My_Terrain::Render()
     m_pImmediateContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
+	// Bind vertex and index buffers
+	Uint32   offset = 0;
+	IBuffer* pBuffs[] = { m_TerrainData.pVertexBuf };
+	m_pImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+	m_pImmediateContext->SetIndexBuffer(m_TerrainData.pIdxBuf, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	// Set uniform
+	{
+		// Map the buffer and write current world-view-projection matrix
+		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+		*CBConstants = m_WorldViewProjMatrix.Transpose();
+	}
+
     // Set the pipeline state in the immediate context
     m_pImmediateContext->SetPipelineState(m_pPSO);
 
-    // Typically we should now call CommitShaderResources(), however shaders in this example don't
-    // use any resources.
+	// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+	// makes sure that resources are transitioned to required states.
+	m_pImmediateContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    DrawAttribs drawAttrs;
-    drawAttrs.NumVertices = 3; // We will render 3 vertices
-    m_pImmediateContext->Draw(drawAttrs);
+	DrawIndexedAttribs drawAttrs;
+	drawAttrs.IndexType = VT_UINT32; // Index type
+	drawAttrs.NumIndices = m_TerrainData.IdxNum;
+	// Verify the state of vertex and index buffers
+	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+    m_pImmediateContext->DrawIndexed(drawAttrs);
 }
 
 void My_Terrain::Update(double CurrTime, double ElapsedTime)
 {
     SampleBase::Update(CurrTime, ElapsedTime);
+
+	// Apply rotation
+	float4x4 CubeModelTransform = float4x4::RotationY(static_cast<float>(CurrTime) * 1.0f) * float4x4::RotationX(-PI_F * 0.1f);
+
+	// Camera is at (0, 0, -5) looking along the Z axis
+	float4x4 View = float4x4::Translation(0.f, 0.0f, 5.0f);
+
+	// Get pretransform matrix that rotates the scene according the surface orientation
+	auto SrfPreTransform = GetSurfacePretransformMatrix(float3{ 0, 0, 1 });
+
+	// Get projection matrix adjusted to the current screen orientation
+	auto Proj = GetAdjustedProjectionMatrix(PI_F / 4.0f, 0.1f, 100.f);
+
+	// Compute world-view-projection matrix
+	m_WorldViewProjMatrix = CubeModelTransform * View * SrfPreTransform * Proj;
+}
+
+void MakePlane(int rows, int columns, TerrainVertexAttrData *vertices, int *indices)
+{
+	// Set up vertices
+	for (int i = 0, y = 0; y <= rows; y++) {
+		for (int x = 0; x <= columns; x++, i++) {
+			vertices[i].pos = float3((float)x, 0.0f, (float)y);
+		}
+	}
+
+	// Set up indices
+	for (int ti = 0, vi = 0, y = 0; y < rows; y++, vi++) {
+		for (int x = 0; x < columns; x++, ti += 6, vi++) {
+			indices[ti] = vi;
+			indices[ti + 3] = indices[ti + 2] = vi + 1;
+			indices[ti + 4] = indices[ti + 1] = vi + columns + 1;
+			indices[ti + 5] = vi + columns + 2;
+		}
+	}
+}
+
+void My_Terrain::CreateTerrainBuffer()
+{
+	int row = 10;
+	int column = 10;
+	
+	const int vertexNum = (column + 1) * (row + 1);
+	const int indexNum = column * row * 6; //(row * column) + (column - 1)*(row - 2);
+
+	TerrainVertexAttrData* vertexBuf = new TerrainVertexAttrData[vertexNum];
+	int* indexBuf = new int[indexNum];
+
+	MakePlane(row, column, vertexBuf, indexBuf);
+
+	//vertex
+	BufferDesc VertBufDesc;
+	VertBufDesc.Name = "Terrain Vertex Buffer";
+	VertBufDesc.Usage = USAGE_IMMUTABLE;
+	VertBufDesc.BindFlags = BIND_VERTEX_BUFFER;
+	VertBufDesc.uiSizeInBytes = sizeof(TerrainVertexAttrData) * vertexNum;
+
+	BufferData VBData;
+	VBData.pData = vertexBuf;
+	VBData.DataSize = sizeof(TerrainVertexAttrData) * vertexNum;
+	m_pDevice->CreateBuffer(VertBufDesc, &VBData, &m_TerrainData.pVertexBuf);
+
+	//index
+	BufferDesc IdxBufDesc;
+	IdxBufDesc.Name = "Terrain Index Buffer";
+	IdxBufDesc.Usage = USAGE_IMMUTABLE;
+	IdxBufDesc.BindFlags = BIND_INDEX_BUFFER;
+	IdxBufDesc.uiSizeInBytes = sizeof(int) * indexNum;
+
+	BufferData IdxData;
+	IdxData.pData = indexBuf;
+	IdxData.DataSize = sizeof(int) * indexNum;
+	m_pDevice->CreateBuffer(IdxBufDesc, &IdxData, &m_TerrainData.pIdxBuf);
+
+	m_TerrainData.VertexNum = vertexNum;
+	m_TerrainData.IdxNum = indexNum;
 }
 
 } // namespace Diligent

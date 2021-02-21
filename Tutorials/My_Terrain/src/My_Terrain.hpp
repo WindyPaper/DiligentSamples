@@ -32,6 +32,28 @@
 namespace Diligent
 {
 
+struct TerrainVertexAttrData
+{
+	float3 pos;
+	float4 color;
+
+	TerrainVertexAttrData() :
+		pos(0.0f, 0.0f, 0.0f),
+		color(1.0f, 0.0f, 0.0f, 1.0f)
+	{
+
+	}
+};
+
+struct TerrainData
+{
+	RefCntAutoPtr<IBuffer> pVertexBuf;
+	RefCntAutoPtr<IBuffer> pIdxBuf;
+
+	int VertexNum = 0;
+	int IdxNum = 0;
+};
+
 class My_Terrain final : public SampleBase
 {
 public:
@@ -42,8 +64,20 @@ public:
 
     virtual const Char* GetSampleName() const override final { return "Tutorial01: Hello Triangle"; }
 
+protected:
+	void CreateTerrainBuffer();
+
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
+
+	/*RefCntAutoPtr<IBuffer> m_pVertexBuf;
+	RefCntAutoPtr<IBuffer> m_pIndexBuf;*/
+	TerrainData m_TerrainData;
+
+	RefCntAutoPtr<IBuffer> m_pVsConstBuf;
+	RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
+
+	float4x4 m_WorldViewProjMatrix;
 };
 
 } // namespace Diligent
