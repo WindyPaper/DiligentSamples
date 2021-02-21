@@ -758,6 +758,7 @@ void SampleApp::ProcessCommandLine(const char* CmdLine)
         pos = strchr(pos, '-');
     }
 
+	m_DeviceType = RENDER_DEVICE_TYPE_D3D12;
     if (m_DeviceType == RENDER_DEVICE_TYPE_UNDEFINED)
     {
         SelectDeviceType();
