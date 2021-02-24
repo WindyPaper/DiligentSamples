@@ -28,6 +28,7 @@
 #pragma once
 
 #include "SampleBase.hpp"
+#include "FirstPersonCamera.hpp"
 
 namespace Diligent
 {
@@ -64,6 +65,8 @@ public:
 
     virtual const Char* GetSampleName() const override final { return "Tutorial01: Hello Triangle"; }
 
+	virtual void WindowResize(Uint32 Width, Uint32 Height);
+
 protected:
 	void CreateTerrainBuffer();
 
@@ -77,7 +80,11 @@ private:
 	RefCntAutoPtr<IBuffer> m_pVsConstBuf;
 	RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 
-	float4x4 m_WorldViewProjMatrix;
+	float4x4 m_TerrainWorldMatrix;
+
+	FirstPersonCamera m_Camera;
+	RefCntAutoPtr<IBuffer> m_CameraAttribsCB;
+	MouseState        m_LastMouseState;
 };
 
 } // namespace Diligent

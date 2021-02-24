@@ -112,6 +112,10 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
     PSOCreateInfo.GraphicsPipeline.DSVFormat                    = m_pSwapChain->GetDesc().DepthBufferFormat;
     // Primitive topology defines what kind of primitives will be rendered by this pipeline state
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+	// Wireframe
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode		= FILL_MODE_WIREFRAME;
+
     // No back face culling for this tutorial
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_BACK;
     // Disable depth testing
@@ -185,6 +189,12 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
 
 	CreateTerrainBuffer();
+
+	m_Camera.SetPos(float3(0, 0, -5.f));
+	m_Camera.SetRotation(0, 0);
+	m_Camera.SetRotationSpeed(0.005f);
+	m_Camera.SetMoveSpeed(5.f);
+	m_Camera.SetSpeedUpScales(5.f, 10.f);
 }
 
 // Render a frame
@@ -206,9 +216,15 @@ void My_Terrain::Render()
 
 	// Set uniform
 	{
+		// Get pretransform matrix that rotates the scene according the surface orientation
+		auto SrfPreTransform = GetSurfacePretransformMatrix(float3{ 0, 0, 1 });
+		const auto  CameraView = m_Camera.GetViewMatrix() * SrfPreTransform;
+		const auto& Proj = m_Camera.GetProjMatrix();
+
 		// Map the buffer and write current world-view-projection matrix
-		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-		*CBConstants = m_WorldViewProjMatrix.Transpose();
+		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);		
+
+		*CBConstants = m_TerrainWorldMatrix * CameraView * Proj;
 	}
 
     // Set the pipeline state in the immediate context
@@ -230,20 +246,13 @@ void My_Terrain::Update(double CurrTime, double ElapsedTime)
 {
     SampleBase::Update(CurrTime, ElapsedTime);
 
+	m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));	
+
 	// Apply rotation
-	float4x4 CubeModelTransform = float4x4::RotationY(static_cast<float>(CurrTime) * 1.0f) * float4x4::RotationX(-PI_F * 0.1f);
-
-	// Camera is at (0, 0, -5) looking along the Z axis
-	float4x4 View = float4x4::Translation(0.f, 0.0f, 5.0f);
-
-	// Get pretransform matrix that rotates the scene according the surface orientation
-	auto SrfPreTransform = GetSurfacePretransformMatrix(float3{ 0, 0, 1 });
-
-	// Get projection matrix adjusted to the current screen orientation
-	auto Proj = GetAdjustedProjectionMatrix(PI_F / 4.0f, 0.1f, 100.f);
+	//float4x4 CubeModelTransform = float4x4::RotationY(static_cast<float>(CurrTime) * 1.0f) * float4x4::RotationX(-PI_F * 0.1f);	
 
 	// Compute world-view-projection matrix
-	m_WorldViewProjMatrix = CubeModelTransform * View * SrfPreTransform * Proj;
+	m_TerrainWorldMatrix = float4x4::Identity();// CubeModelTransform;
 }
 
 void MakePlane(int rows, int columns, TerrainVertexAttrData *vertices, int *indices)
@@ -305,6 +314,15 @@ void My_Terrain::CreateTerrainBuffer()
 
 	m_TerrainData.VertexNum = vertexNum;
 	m_TerrainData.IdxNum = indexNum;
+}
+
+void My_Terrain::WindowResize(Uint32 Width, Uint32 Height)
+{
+	float NearPlane = 0.1f;
+	float FarPlane = 250.f;
+	float AspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
+	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
+		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 }
 
 } // namespace Diligent
