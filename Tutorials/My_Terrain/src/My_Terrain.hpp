@@ -32,7 +32,7 @@
 
 namespace Diligent
 {
-
+class GroundMesh;
 struct TerrainVertexAttrData
 {
 	float3 pos;
@@ -85,6 +85,8 @@ private:
 	FirstPersonCamera m_Camera;
 	RefCntAutoPtr<IBuffer> m_CameraAttribsCB;
 	MouseState        m_LastMouseState;
+
+	std::shared_ptr<GroundMesh> m_apClipMap;
 };
 
 } // namespace Diligent

@@ -27,6 +27,7 @@
 
 #include "My_Terrain.hpp"
 #include "MapHelper.hpp"
+#include "GroundMesh.h"
 
 namespace Diligent
 {
@@ -196,6 +197,10 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.SetSpeedUpScales(5.f, 10.f);
 
 	m_Camera.SetLookAt(float3(5, 0, 5));
+
+	m_apClipMap.reset(new GroundMesh(64, 10, 0.25f));
+
+	m_apClipMap->InitClipMap(m_pDevice);
 }
 
 // Render a frame

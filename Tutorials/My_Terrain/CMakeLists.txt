@@ -4,10 +4,12 @@ project(My_Terrain CXX)
 
 set(SOURCE
     src/My_Terrain.cpp
+    src/GroundMesh.cpp
 )
 
 set(INCLUDE
     src/My_Terrain.hpp
+    src/GroundMesh.h
 )
 
 set(SHADERS)

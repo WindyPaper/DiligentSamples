@@ -8,7 +8,9 @@ Diligent::GroundMesh::GroundMesh(const uint SizeM, const uint Level, const float
 	m_level(Level),
 	m_clip_scale(ClipScale),
 	m_pVerticesData(NULL),
-	m_pIndicesData(NULL)
+	m_pIndicesData(NULL),
+	m_VertexNum(0),
+	m_IndexNum(0)
 {
 
 }
@@ -173,7 +175,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 
 void GroundMesh::InitVertexBuffer()
 {
-	const int VertexNum = m_sizem * m_sizem;
+	uint VertexNum = m_sizem * m_sizem;
 		
 	m_pVerticesData = new ClipMapTerrainVerticesData[VertexNum];
 	ClipMapTerrainVerticesData *pCurr = m_pVerticesData;
@@ -188,7 +190,7 @@ void GroundMesh::InitVertexBuffer()
 		}
 	}
 
-	
+	m_VertexNum += VertexNum;
 }
 
 void GroundMesh::InitIndicesBuffer()
@@ -198,6 +200,7 @@ void GroundMesh::InitIndicesBuffer()
 	m_block.Count = PatchIndexCount(m_sizem, m_sizem);
 
 	uint NumIndex = m_block.Count;
+	m_IndexNum = NumIndex;
 	m_pIndicesData = new uint16_t[NumIndex];
 	memset(m_pIndicesData, 0, sizeof(uint16_t) * NumIndex);
 
