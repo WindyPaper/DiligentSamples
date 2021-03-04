@@ -4,6 +4,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include "Buffer.h"
 #include "BasicMath.hpp"
 #include "DeviceContext.h"
@@ -12,6 +13,8 @@
 
 namespace Diligent
 {
+	class FirstPersonCamera;
+
 	struct ClipMapTerrainVerticesData
 	{
 		float2 XZ;
@@ -24,26 +27,38 @@ namespace Diligent
 		uint2 Size;
 	};
 
+	struct PerPatchShaderData
+	{
+		float2 Offset;
+		float Scale;
+		float Level;
+	};
+
 	class GroundMesh
 	{
 	public:
 		GroundMesh(const uint SizeM, const uint Level, const float ClipScale);
 		~GroundMesh();
 
-		void InitClipMap(IRenderDevice *pDevice);
-		void UpdateLevelOffset(const float2 CamPosXZ);
+		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain);		
 		void Render(IDeviceContext *pContext);
+
+		void Update(const FirstPersonCamera *pCam);
 
 	protected:
 		void InitVertexBuffer();
 		void InitIndicesBuffer();
 		void CommitToGPUDeviceBuffer(IRenderDevice *pDevice);
 
+		void UpdateLevelOffset(const float2& CamPosXZ);
+
 		void InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain);
 
 		uint16_t* GeneratePatchIndices(uint16_t *pIndexdata, uint VertexOffset, uint SizeX, uint SizeZ);
 
-		int PatchIndexCount(const uint sizex, const uint sizez);
+		int PatchIndexCount(const uint sizex, const uint sizez) const;
+
+		float2 GetOffsetLevel(const float2 &CamPosXZ, const uint Level) const;
 
 	private:
 		uint m_sizem;
@@ -58,11 +73,18 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_pVertexGPUBuffer;
 		RefCntAutoPtr<IBuffer> m_pIndexGPUBuffer;
 		RefCntAutoPtr<IBuffer> m_pVsConstBuf;
+		RefCntAutoPtr<IBuffer> m_pVsPatchBuf;
 		RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 
 		RefCntAutoPtr<IPipelineState> m_pPSO;
 
+		std::vector<float2> m_LevelOffsets;
+
 		Patch m_block;
+
+		float4x4 m_TerrainViewProjMat;
+
+		PerPatchShaderData m_PatchInstanceConst[16];//test for lv 0
 	};
 }
 

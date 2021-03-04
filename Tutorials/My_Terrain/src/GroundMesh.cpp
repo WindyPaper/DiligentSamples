@@ -1,4 +1,6 @@
 #include "GroundMesh.h"
+#include "FirstPersonCamera.hpp"
+#include "MapHelper.hpp"
 
 namespace Diligent
 {
@@ -30,22 +32,72 @@ Diligent::GroundMesh::~GroundMesh()
 	}
 }
 
-void Diligent::GroundMesh::UpdateLevelOffset(const float2 CamPosXZ)
+void Diligent::GroundMesh::UpdateLevelOffset(const float2& CamPosXZ)
 {
-
+	m_LevelOffsets.resize(m_level);
+	for (int i = 0; i < m_LevelOffsets.size(); ++i)
+	{
+		m_LevelOffsets[i] = GetOffsetLevel(CamPosXZ, i);
+	}
 }
 
-void Diligent::GroundMesh::Render(IDeviceContext *Device)
+void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 {
+	// Bind vertex and index buffers
+	Uint32   offset = 0;
+	IBuffer* pBuffs[] = { m_pVertexGPUBuffer };
+	pContext->SetVertexBuffers(0, 1, pBuffs, &offset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+	pContext->SetIndexBuffer(m_pIndexGPUBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
+	// Set the pipeline state in the immediate context
+	pContext->SetPipelineState(m_pPSO);
+	
+	for (unsigned int z = 0; z < 4; z++)
+	{
+		for (unsigned int x = 0; x < 4; x++)
+		{
+			// Set uniform
+			{
+				// Map the buffer and write current world-view-projection matrix
+				MapHelper<float4x4> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+				*CBConstants = m_TerrainViewProjMat;
+
+				MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+				PerPatchConstData->Level = 0;
+				PerPatchConstData->Scale = m_clip_scale;
+				PerPatchConstData->Offset = m_LevelOffsets[0] + float2(x * (m_sizem - 1), z * (m_sizem - 1));
+				PerPatchConstData->Offset *= m_clip_scale;
+			}
+			
+			// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+			// makes sure that resources are transitioned to required states.
+			pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+			DrawIndexedAttribs drawAttrs;
+			drawAttrs.IndexType = VT_UINT16; // Index type
+			drawAttrs.NumIndices = m_IndexNum;
+			// Verify the state of vertex and index buffers
+			drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+			pContext->DrawIndexed(drawAttrs);
+		}
+	}
 }
 
-void GroundMesh::InitClipMap(IRenderDevice *pDevice)
+void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 {
 	InitVertexBuffer();
 	InitIndicesBuffer();
 
 	CommitToGPUDeviceBuffer(pDevice);
+	InitPSO(pDevice, pSwapChain);
+}
+
+void GroundMesh::Update(const FirstPersonCamera *pCam)
+{
+	const float3 &pos = pCam->GetPos();
+	UpdateLevelOffset(float2(pos.x, pos.z));
+
+	m_TerrainViewProjMat = Matrix4x4<float>::Identity() * pCam->GetViewMatrix() * pCam->GetProjMatrix();
 }
 
 void GroundMesh::CommitToGPUDeviceBuffer(IRenderDevice *pDevice)
@@ -115,6 +167,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	// clang-format on
 	PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
 	PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
+	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	// clang-format on
 
@@ -137,7 +190,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 		ShaderCI.FilePath = "clipmap.vsh";
 		pDevice->CreateShader(ShaderCI, &pVS);
 
-		//Create dynamic buffer
+		//Create dynamic const buffer
 		BufferDesc CBDesc;
 		CBDesc.Name = "ClipMap VS Constants CB";
 		CBDesc.uiSizeInBytes = sizeof(float4x4);
@@ -145,6 +198,15 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 		CBDesc.BindFlags = BIND_UNIFORM_BUFFER;
 		CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
 		pDevice->CreateBuffer(CBDesc, nullptr, &m_pVsConstBuf);
+
+		//Create dynamic patch buffer
+		BufferDesc PatchCBDesc;
+		PatchCBDesc.Name = "ClipMap VS Patch CB";
+		PatchCBDesc.uiSizeInBytes = sizeof(PerPatchShaderData);
+		PatchCBDesc.Usage = USAGE_DYNAMIC;
+		PatchCBDesc.BindFlags = BIND_UNIFORM_BUFFER;
+		PatchCBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+		pDevice->CreateBuffer(PatchCBDesc, nullptr, &m_pVsPatchBuf);
 	}
 
 	// Create a pixel shader
@@ -167,6 +229,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	// type (SHADER_RESOURCE_VARIABLE_TYPE_STATIC) will be used. Static variables never
 	// change and are bound directly through the pipeline state object.
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVsConstBuf);
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "PerPatchData")->Set(m_pVsPatchBuf);
 
 	// Create a shader resource binding object and bind all static resources in it
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
@@ -181,9 +244,9 @@ void GroundMesh::InitVertexBuffer()
 	ClipMapTerrainVerticesData *pCurr = m_pVerticesData;
 
 	//Init Block
-	for (int i = 0; i < m_sizem; ++i)
+	for (uint i = 0; i < m_sizem; ++i)
 	{
-		for (int j = 0; j < m_sizem; ++j)
+		for (uint j = 0; j < m_sizem; ++j)
 		{
 			pCurr->XZ = float2((float)j, (float)i);
 			++pCurr;
@@ -243,13 +306,40 @@ uint16_t* GroundMesh::GeneratePatchIndices(uint16_t *pIndexdata, uint VertexOffs
 	return pIndexdata;
 }
 
-int GroundMesh::PatchIndexCount(const uint sizex, const uint sizez)
+int GroundMesh::PatchIndexCount(const uint sizex, const uint sizez) const
 {
 	uint strips = sizez - 1;
 	return strips * (2 * sizex - 1) + 1;
 }
 
 
+
+Diligent::float2 GroundMesh::GetOffsetLevel(const float2 &CamPosXZ, const uint Level) const
+{
+	if (Level == 0) // Must follow level 1 as trim region is fixed.
+	{
+		return GetOffsetLevel(CamPosXZ, 1) + float2(float(m_sizem << 1));
+	}
+	else
+	{
+		float2 ScalePos = CamPosXZ / float2(m_clip_scale); // Snap to grid in the appropriate space.
+
+		// Snap to grid of next level. I.e. we move the clipmap level in steps of two.
+		float2 SnappedPos = (ScalePos / float2(1 << (Level + 1))) * float2(1 << (Level + 1));
+		SnappedPos = float2(std::floorf(SnappedPos.x), std::floorf(SnappedPos.y));
+
+		// Apply offset so all levels align up neatly.
+		// If SnappedPos is equal for all levels,
+		// this causes top-left vertex of level N to always align up perfectly with top-left interior corner of level N + 1.
+		// This gives us a bottom-right trim region.
+
+		// Due to the flooring, SnappedPos might not always be equal for all levels.
+		// The flooring has the property that SnappedPos for level N + 1 is less-or-equal SnappedPos for level N.
+		// If less, the final position of level N + 1 will be offset by -2 ^ N, which can be compensated for with changing trim-region to top-left.
+		float2 pos = SnappedPos - float2((2 * (m_sizem - 1)) << Level);
+		return pos;
+	}
+}
 
 }
 

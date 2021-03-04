@@ -200,7 +200,7 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 
 	m_apClipMap.reset(new GroundMesh(64, 10, 0.25f));
 
-	m_apClipMap->InitClipMap(m_pDevice);
+	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
 }
 
 // Render a frame
@@ -246,6 +246,8 @@ void My_Terrain::Render()
 	// Verify the state of vertex and index buffers
 	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(drawAttrs);
+
+	m_apClipMap->Render(m_pImmediateContext);
 }
 
 void My_Terrain::Update(double CurrTime, double ElapsedTime)
@@ -259,6 +261,8 @@ void My_Terrain::Update(double CurrTime, double ElapsedTime)
 
 	// Compute world-view-projection matrix
 	m_TerrainWorldMatrix = float4x4::Identity();// CubeModelTransform;
+
+	m_apClipMap->Update(&m_Camera);
 }
 
 void MakePlane(int rows, int columns, TerrainVertexAttrData *vertices, int *indices)
@@ -320,6 +324,9 @@ void My_Terrain::CreateTerrainBuffer()
 
 	m_TerrainData.VertexNum = vertexNum;
 	m_TerrainData.IdxNum = indexNum;
+
+	delete[] vertexBuf;
+	delete[] indexBuf;
 }
 
 void My_Terrain::WindowResize(Uint32 Width, Uint32 Height)
