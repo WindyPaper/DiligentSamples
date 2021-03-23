@@ -52,23 +52,24 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 	// Set the pipeline state in the immediate context
 	pContext->SetPipelineState(m_pPSO);
 	
+	// Map the buffer and write current world-view-projection matrix
+	MapHelper<float4x4> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+	*CBConstants = m_TerrainViewProjMat;
+
+	//Level 0
 	for (unsigned int z = 0; z < 4; z++)
 	{
 		for (unsigned int x = 0; x < 4; x++)
 		{
 			// Set uniform
 			{
-				// Map the buffer and write current world-view-projection matrix
-				MapHelper<float4x4> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-				*CBConstants = m_TerrainViewProjMat;
-
 				MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
 				PerPatchConstData->Level = 0;
 				PerPatchConstData->Scale = m_clip_scale;
 				PerPatchConstData->Offset = m_LevelOffsets[0] + float2(x * (m_sizem - 1), z * (m_sizem - 1));
 				PerPatchConstData->Offset *= m_clip_scale;
 			}
-			
+
 			// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
 			// makes sure that resources are transitioned to required states.
 			pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -79,6 +80,40 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 			// Verify the state of vertex and index buffers
 			drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
 			pContext->DrawIndexed(drawAttrs);
+		}
+	}
+
+	for (int LvIdx = 1; LvIdx < m_level; ++LvIdx)
+	{
+		for (unsigned int z = 0; z < 4; z++)
+		{
+			for (unsigned int x = 0; x < 4; x++)
+			{
+				if (z != 0 && z != 3 && x != 0 && x != 3)
+				{
+					continue;
+				}
+
+				// Set uniform
+				{					
+					MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+					PerPatchConstData->Level = LvIdx;
+					PerPatchConstData->Scale = m_clip_scale * (1 << LvIdx);
+					PerPatchConstData->Offset = m_LevelOffsets[LvIdx] + float2(x * (m_sizem - 1), z * (m_sizem - 1)) * (1 << LvIdx);
+					PerPatchConstData->Offset *= m_clip_scale;
+				}
+
+				// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+				// makes sure that resources are transitioned to required states.
+				pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+				DrawIndexedAttribs drawAttrs;
+				drawAttrs.IndexType = VT_UINT16; // Index type
+				drawAttrs.NumIndices = m_IndexNum;
+				// Verify the state of vertex and index buffers
+				drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+				pContext->DrawIndexed(drawAttrs);
+			}
 		}
 	}
 }
@@ -148,7 +183,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	// Use the depth buffer format from the swap chain
 	PSOCreateInfo.GraphicsPipeline.DSVFormat = pSwapChain->GetDesc().DepthBufferFormat;
 	// Primitive topology defines what kind of primitives will be rendered by this pipeline state
-	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	// Wireframe
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
@@ -167,7 +202,6 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	// clang-format on
 	PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
 	PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);
-	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	// clang-format on
 
