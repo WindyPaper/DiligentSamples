@@ -2,6 +2,7 @@
 #include "TextureLoader.h"
 #include "TextureUtilities.h"
 #include "RenderDevice.h"
+#include "Image.h"
 
 namespace Diligent
 {
@@ -37,6 +38,10 @@ namespace Diligent
 
 		// Set texture SRV in the SRB
 		//m_SRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(m_TextureSRV);
+		
+		//TODO: optimize interface
+		CreateImageFromFile(FileName.c_str(), &m_apImageRawData);
+
 	}
 
 }

@@ -7,6 +7,7 @@
 #include "RefCntAutoPtr.hpp"
 #include "BasicMath.hpp"
 #include "Texture.h"
+#include "Image.h"
 
 namespace Diligent 
 {
@@ -26,6 +27,7 @@ public:
 
 private:
 	RefCntAutoPtr<ITexture> m_apTex;
+	RefCntAutoPtr<Image> m_apImageRawData;
 };
 
 }

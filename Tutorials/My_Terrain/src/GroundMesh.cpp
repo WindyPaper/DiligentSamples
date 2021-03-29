@@ -130,7 +130,8 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 void GroundMesh::Update(const FirstPersonCamera *pCam)
 {
 	const float3 &pos = pCam->GetPos();
-	UpdateLevelOffset(float2(pos.x, pos.z));
+	//UpdateLevelOffset(float2(pos.x, pos.z));
+	UpdateLevelOffset(float2(0.0f, 0.0f));
 
 	m_TerrainViewProjMat = Matrix4x4<float>::Identity() * pCam->GetViewMatrix() * pCam->GetProjMatrix();
 }

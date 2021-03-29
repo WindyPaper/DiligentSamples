@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "AdvancedMath.hpp"
 
+#define MAX_LOD_COUNT 16
+
 #define MAX_HEIGHTMAP_SIZE 65535
 #define LEAF_RENDER_NODE_SIZE 8
 #define LOD_COUNT  8
@@ -30,13 +32,13 @@ namespace Diligent
 			pData = NULL;
 		}
 
-		void GetZArea(const uint32_t& x, const uint32_t& y, const uint16_t& sizex, const uint16_t& sizey, int16_t& o_minz, int16_t& o_maxz)
+		void GetZArea(const uint32_t& x, const uint32_t& y, const uint16_t& size, uint16_t& o_minz, uint16_t& o_maxz) const
 		{
 			o_minz = 0;
 			o_maxz = 10;
 		}
 
-		uint16_t GetZ(const uint32_t& x, const uint32_t& y)
+		uint16_t GetZ(const uint32_t& x, const uint32_t& y) const
 		{
 			return 10;
 		}
@@ -44,7 +46,10 @@ namespace Diligent
 
 	struct CDLODNode
 	{
-		BoundBox aabb;
+		//BoundBox aabb;
+		int rx, ry, size;
+		int LODLevel;
+		uint16_t rminz, rmaxz;
 
 		CDLODNode* pTL;
 		CDLODNode* pTR;
@@ -54,6 +59,12 @@ namespace Diligent
 		uint16_t flag;
 
 		CDLODNode() :
+			rx(0),
+			ry(0),
+			size(0),
+			LODLevel(0),
+			rminz(0),
+			rmaxz(0),
 			pTL(NULL),
 			pTR(NULL),
 			pBL(NULL),
@@ -62,13 +73,17 @@ namespace Diligent
 		{
 
 		}
+
+		void Create(const int rx, const int ry, const int size, const int LodLevel, const HeightMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx);
 	};
 
 	class CDLODTree
 	{
 	public:
-		CDLODTree();
+		explicit CDLODTree(const HeightMap &heightmap, const Dimension &TerrainDim);
 		~CDLODTree();
+
+		void Create();
 
 	private:
 		Dimension mTerrainDimension;
@@ -78,7 +93,7 @@ namespace Diligent
 		uint16_t mTopNodeNumX;
 		uint16_t mTopNodeNumY;
 
-
+		CDLODNode *mpNodeDataArray;
 	};
 }
 
