@@ -67,43 +67,64 @@ namespace Diligent
 		//if not choose any childs, select self
 		//bool bHasSelectChild = false;
 
-		
-		BoxVisibility BoxVis = BoxVisibility::FullyVisible;
+		BoundBox bbox = this->GetBBox(SelectInfo.RasSizeX, SelectInfo.RasSizeY, SelectInfo.TerrainDimension);
+
+		BoxVisibility BoxVis = BoxVisibility::FullyVisible;		
 		if (!bFullInFrustum)
-		{
-			BoundBox bbox = this->GetBBox(SelectInfo.RasSizeX, SelectInfo.RasSizeY, SelectInfo.TerrainDimension);
+		{			
 			BoxVis = GetBoxVisibility(SelectInfo.frustum, bbox);
 
 			if (BoxVis == BoxVisibility::Invisible)
 			{
-				return OUT_OF_FRUSTUM;
+				return LODNodeState::OUT_OF_FRUSTUM;
 			}
 		}
 
 		//LOD distance
-
+		float LODDistance = SelectInfo.LODRange[this->LODLevel];
+		if (!bbox.IntersectSphereSq(SelectInfo.CamPos, LODDistance * LODDistance))
+		{
+			return LODNodeState::OUT_OF_LOD_RANGE;
+		}
 
 		//Child Visible
-		LODNodeState TLState = UNDEFINED;
-		LODNodeState TRState = UNDEFINED;
-		LODNodeState BLState = UNDEFINED;
-		LODNodeState BRState = UNDEFINED;
+		LODNodeState TLState = LODNodeState::UNDEFINED;
+		LODNodeState TRState = LODNodeState::UNDEFINED;
+		LODNodeState BLState = LODNodeState::UNDEFINED;
+		LODNodeState BRState = LODNodeState::UNDEFINED;
 		if (this->LODLevel < LOD_COUNT)
 		{
-			bool NodeFullVisible = BoxVis == BoxVisibility::FullyVisible;
-			TLState = this->pTL->SelectNode(SelectInfo, NodeFullVisible);
-			TRState = this->pTR->SelectNode(SelectInfo, NodeFullVisible);
-			BLState = this->pBL->SelectNode(SelectInfo, NodeFullVisible);
-			BRState = this->pBR->SelectNode(SelectInfo, NodeFullVisible);
+			float NextLODDistance = SelectInfo.LODRange[this->LODLevel + 1];
+			if (!bbox.IntersectSphereSq(SelectInfo.CamPos, NextLODDistance * NextLODDistance))
+			{
+				bool NodeFullVisible = BoxVis == BoxVisibility::FullyVisible;
+				TLState = this->pTL->SelectNode(SelectInfo, NodeFullVisible);
+				TRState = this->pTR->SelectNode(SelectInfo, NodeFullVisible);
+				BLState = this->pBL->SelectNode(SelectInfo, NodeFullVisible);
+				BRState = this->pBR->SelectNode(SelectInfo, NodeFullVisible);
+			}			
 		}
 		else		
 		{
 			//Leaf
 			SelectInfo.SelectionNodes.push_back(this);
-			return SELECTED;
+			return LODNodeState::SELECTED;
 		}
 
-		return SELECTED;
+		auto SelectChildNodeFunc = [&](LODNodeState state, CDLODNode* pNode)
+		{
+			if (state == LODNodeState::OUT_OF_LOD_RANGE)
+			{
+				SelectInfo.SelectionNodes.push_back(pNode);
+			}
+		};
+		SelectChildNodeFunc(TLState, this->pTL);
+		SelectChildNodeFunc(TRState, this->pTR);
+		SelectChildNodeFunc(BLState, this->pBL);
+		SelectChildNodeFunc(BRState, this->pBR);
+
+
+		return LODNodeState::OUT_OF_LOD_RANGE;
 	}
 
 	Diligent::BoundBox CDLODNode::GetBBox(const uint16_t RasSizeX, const uint16_t RasSizeY, const Dimension &TerrainDim)

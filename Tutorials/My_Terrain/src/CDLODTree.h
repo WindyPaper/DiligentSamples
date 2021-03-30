@@ -50,7 +50,7 @@ namespace Diligent
 		}
 	};	
 
-	enum LODNodeState
+	enum class LODNodeState
 	{
 		UNDEFINED,
 		OUT_OF_FRUSTUM,
