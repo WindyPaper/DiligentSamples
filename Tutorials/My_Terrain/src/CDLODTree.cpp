@@ -62,15 +62,78 @@ namespace Diligent
 	}
 
 
+	LODNodeState CDLODNode::SelectNode(SelectionInfo &SelectInfo, bool bFullInFrustum)
+	{
+		//if not choose any childs, select self
+		//bool bHasSelectChild = false;
+
+		
+		BoxVisibility BoxVis = BoxVisibility::FullyVisible;
+		if (!bFullInFrustum)
+		{
+			BoundBox bbox = this->GetBBox(SelectInfo.RasSizeX, SelectInfo.RasSizeY, SelectInfo.TerrainDimension);
+			BoxVis = GetBoxVisibility(SelectInfo.frustum, bbox);
+
+			if (BoxVis == BoxVisibility::Invisible)
+			{
+				return OUT_OF_FRUSTUM;
+			}
+		}
+
+		//LOD distance
+
+
+		//Child Visible
+		LODNodeState TLState = UNDEFINED;
+		LODNodeState TRState = UNDEFINED;
+		LODNodeState BLState = UNDEFINED;
+		LODNodeState BRState = UNDEFINED;
+		if (this->LODLevel < LOD_COUNT)
+		{
+			bool NodeFullVisible = BoxVis == BoxVisibility::FullyVisible;
+			TLState = this->pTL->SelectNode(SelectInfo, NodeFullVisible);
+			TRState = this->pTR->SelectNode(SelectInfo, NodeFullVisible);
+			BLState = this->pBL->SelectNode(SelectInfo, NodeFullVisible);
+			BRState = this->pBR->SelectNode(SelectInfo, NodeFullVisible);
+		}
+		else		
+		{
+			//Leaf
+			SelectInfo.SelectionNodes.push_back(this);
+			return SELECTED;
+		}
+
+		return SELECTED;
+	}
+
+	Diligent::BoundBox CDLODNode::GetBBox(const uint16_t RasSizeX, const uint16_t RasSizeY, const Dimension &TerrainDim)
+	{		
+		BoundBox bbox;
+		float Minx = (float)this->rx / (RasSizeX - 1) * TerrainDim.SizeX;
+		float Miny = (float)this->ry / (RasSizeY - 1) * TerrainDim.SizeX;
+		float Minz = (float)this->rminz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
+
+		float Maxx = (float)(this->rx + size) / (RasSizeX - 1) * TerrainDim.SizeX;
+		float Maxy = (float)(this->ry + size) / (RasSizeY - 1) * TerrainDim.SizeX;
+		float Maxz = (float)this->rmaxz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
+
+		bbox.Min = float3({ Minx, Miny, Minz });
+		bbox.Max = float3({ Maxx, Maxy, Maxz });
+
+		return bbox;
+
+	}
+
 	CDLODTree::CDLODTree(const HeightMap &heightmap, const Dimension &TerrainDim) :
 		mTopNodeArray(nullptr),
 		mTopNodeNumX(0),
 		mTopNodeNumY(0),
 		mHeightMap(heightmap),
-		mTerrainDimension(TerrainDim),
 		mpNodeDataArray(nullptr)
 	{
-
+		mSelectionInfo.RasSizeX = heightmap.width;
+		mSelectionInfo.RasSizeY = heightmap.height;
+		mSelectionInfo.TerrainDimension = TerrainDim;
 	}
 
 	CDLODTree::~CDLODTree()
@@ -146,5 +209,67 @@ namespace Diligent
 		assert(TotalNodeCount == CurrIdxNode);
 	}
 	
+
+	void CDLODTree::SelectLOD(const FirstPersonCamera &cam)
+	{
+		mSelectionInfo.CamPos = cam.GetPos();
+
+		//Update LOD distance range
+		if (mSelectionInfo.near != cam.GetProjAttribs().NearClipPlane &&
+			mSelectionInfo.far != cam.GetProjAttribs().FarClipPlane)
+		{
+			mSelectionInfo.near = cam.GetProjAttribs().NearClipPlane;
+			mSelectionInfo.far = cam.GetProjAttribs().FarClipPlane;
+
+			mSelectionInfo.LODRange.resize(LOD_COUNT);
+			std::vector<float> &LODRange = mSelectionInfo.LODRange;
+
+			//update LOD range
+			float total = 0.0f;
+			float distance = 1.0f;
+			for (int i = 0; i < LOD_COUNT; ++i)
+			{				
+				total += distance;
+				distance *= LOD_DISTANCE_RATIO;
+			}
+
+			float CamViewDistance = mSelectionInfo.far - mSelectionInfo.near;
+			float SectUnit = CamViewDistance / total;
+
+			float PrevPos = mSelectionInfo.near;
+			distance = 1.0f;
+			for (int i = 0; i < LOD_COUNT; ++i)
+			{
+				int index = LOD_COUNT - i - 1;
+				LODRange[index] = PrevPos + SectUnit * distance;
+				PrevPos = LODRange[index];
+				distance *= LOD_DISTANCE_RATIO;
+			}
+		}
+
+		ExtractViewFrustumPlanesFromMatrix(cam.GetViewMatrix(), mSelectionInfo.frustum, false);
+
+		for (int y = 0; y < mTopNodeNumY; ++y)
+		{
+			for (int x = 0; x < mTopNodeNumX; ++x)
+			{
+				CDLODNode *pNode = mTopNodeArray[y][x];
+				BoundBox bbox = pNode->GetBBox(mHeightMap.width, mHeightMap.height, mSelectionInfo.TerrainDimension);
+
+				BoxVisibility vis = GetBoxVisibility(mSelectionInfo.frustum, bbox);
+
+				//bool bBoxVis = false;
+				if (vis == BoxVisibility::FullyVisible)
+				{
+					pNode->SelectNode(mSelectionInfo, true);
+				}
+				else if (vis == BoxVisibility::Intersecting)
+				{
+					pNode->SelectNode(mSelectionInfo, false);
+				}
+				
+			}
+		}
+	}
 
 }

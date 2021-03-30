@@ -198,7 +198,7 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 
 	m_Camera.SetLookAt(float3(5, 0, 5));
 
-	m_apClipMap.reset(new GroundMesh(64, 10, 0.115f));
+	m_apClipMap.reset(new GroundMesh(8, 8, 0.115f));
 
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
 }

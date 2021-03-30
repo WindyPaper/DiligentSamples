@@ -4,16 +4,22 @@
 #pragma once
 
 #include <stdint.h>
+#include <vector>
+
 #include "AdvancedMath.hpp"
+#include "FirstPersonCamera.hpp"
 
 #define MAX_LOD_COUNT 16
 
 #define MAX_HEIGHTMAP_SIZE 65535
 #define LEAF_RENDER_NODE_SIZE 8
 #define LOD_COUNT  8
+#define LOD_DISTANCE_RATIO 2.0f
 
 namespace Diligent
 {
+	struct SelectionInfo;
+
 	struct HeightMap
 	{
 		uint16_t width;
@@ -42,6 +48,14 @@ namespace Diligent
 		{
 			return 10;
 		}
+	};	
+
+	enum LODNodeState
+	{
+		UNDEFINED,
+		OUT_OF_FRUSTUM,
+		OUT_OF_LOD_RANGE,
+		SELECTED
 	};
 
 	struct CDLODNode
@@ -75,6 +89,29 @@ namespace Diligent
 		}
 
 		void Create(const int rx, const int ry, const int size, const int LodLevel, const HeightMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx);
+		LODNodeState SelectNode(SelectionInfo &SelectionNodes, bool bFullInFrustum);
+		BoundBox GetBBox(const uint16_t RasSizeX, const uint16_t RasSizeY, const Dimension &TerrainDim);
+	};
+
+	struct SelectionInfo
+	{
+		std::vector<CDLODNode*> SelectionNodes;
+		uint16_t RasSizeX, RasSizeY;
+		Dimension TerrainDimension;
+		ViewFrustum frustum;
+		float3 CamPos;
+		std::vector<float> LODRange;
+
+		float near, far;
+
+		SelectionInfo() :
+			RasSizeX(0),
+			RasSizeY(0),
+			near(-1.0f),
+			far(-1.0f)
+		{
+
+		}
 	};
 
 	class CDLODTree
@@ -84,9 +121,10 @@ namespace Diligent
 		~CDLODTree();
 
 		void Create();
+		void SelectLOD(const FirstPersonCamera &cam);
 
 	private:
-		Dimension mTerrainDimension;
+		//Dimension mTerrainDimension;
 		HeightMap mHeightMap;
 
 		CDLODNode*** mTopNodeArray;
@@ -94,6 +132,8 @@ namespace Diligent
 		uint16_t mTopNodeNumY;
 
 		CDLODNode *mpNodeDataArray;
+
+		SelectionInfo mSelectionInfo;
 	};
 }
 
