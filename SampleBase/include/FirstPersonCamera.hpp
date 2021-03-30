@@ -34,6 +34,16 @@
 namespace Diligent
 {
 
+struct ProjectionAttribs
+{
+	Float32           NearClipPlane = 1.f;
+	Float32           FarClipPlane = 6000.f;
+	Float32           AspectRatio = 1.f;
+	Float32           FOV = PI_F / 4.f;
+	SURFACE_TRANSFORM PreTransform = SURFACE_TRANSFORM_IDENTITY;
+	bool              IsGL = false;
+};
+
 class FirstPersonCamera
 {
 public:
@@ -67,17 +77,8 @@ public:
 
     float3 GetPos() const { return m_Pos; }
     float  GetCurrentSpeed() const { return m_fCurrentSpeed; }
-
-    struct ProjectionAttribs
-    {
-        Float32           NearClipPlane = 1.f;
-        Float32           FarClipPlane  = 1000.f;
-        Float32           AspectRatio   = 1.f;
-        Float32           FOV           = PI_F / 4.f;
-        SURFACE_TRANSFORM PreTransform  = SURFACE_TRANSFORM_IDENTITY;
-        bool              IsGL          = false;
-    };
-    const ProjectionAttribs& GetProjAttribs() { return m_ProjAttribs; }
+    
+    const ProjectionAttribs& GetProjAttribs() const { return m_ProjAttribs; }
 
     void SetReferenceAxes(const float3& ReferenceRightAxis, const float3& ReferenceUpAxis, bool IsRightHanded = false);
 
