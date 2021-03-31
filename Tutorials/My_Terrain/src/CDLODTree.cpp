@@ -1,9 +1,12 @@
 #include "CDLODTree.h"
 #include <assert.h>
 #include <algorithm>
+#include "DebugCanvas.h"
 
 namespace Diligent
 {
+	extern DebugCanvas gDebugCanvas;
+
 	void CDLODNode::Create(const int rx, const int ry, const int size, const int LodLevel, const HeightMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx)
 	{
 		this->rx = rx;
@@ -131,12 +134,12 @@ namespace Diligent
 	{		
 		BoundBox bbox;
 		float Minx = (float)this->rx / (RasSizeX - 1) * TerrainDim.SizeX;
-		float Miny = (float)this->ry / (RasSizeY - 1) * TerrainDim.SizeX;
-		float Minz = (float)this->rminz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
+		float Miny = (float)this->rminz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
+		float Minz = (float)this->ry / (RasSizeY - 1) * TerrainDim.SizeX;		
 
 		float Maxx = (float)(this->rx + size) / (RasSizeX - 1) * TerrainDim.SizeX;
-		float Maxy = (float)(this->ry + size) / (RasSizeY - 1) * TerrainDim.SizeX;
-		float Maxz = (float)this->rmaxz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
+		float Maxy = (float)this->rmaxz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
+		float Maxz = (float)(this->ry + size) / (RasSizeY - 1) * TerrainDim.SizeX;		
 
 		bbox.Min = float3({ Minx, Miny, Minz }) + TerrainDim.Min;
 		bbox.Max = float3({ Maxx, Maxy, Maxz }) + TerrainDim.Min;
@@ -230,6 +233,8 @@ namespace Diligent
 
 	void CDLODTree::SelectLOD(const FirstPersonCamera &cam)
 	{
+		gDebugCanvas.ClearAABB();
+
 		mSelectionInfo.SelectionNodes.clear();
 		mSelectionInfo.CamPos = cam.GetPos();
 
@@ -274,6 +279,7 @@ namespace Diligent
 			{
 				CDLODNode *pNode = mTopNodeArray[y][x];
 				BoundBox bbox = pNode->GetBBox(mHeightMap.width, mHeightMap.height, mSelectionInfo.TerrainDimension);
+				gDebugCanvas.AddDebugBox(bbox);
 
 				BoxVisibility vis = GetBoxVisibility(mSelectionInfo.frustum, bbox);
 

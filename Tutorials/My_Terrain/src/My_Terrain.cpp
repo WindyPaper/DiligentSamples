@@ -28,9 +28,11 @@
 #include "My_Terrain.hpp"
 #include "MapHelper.hpp"
 #include "GroundMesh.h"
+#include "DebugCanvas.h"
 
 namespace Diligent
-{
+{	
+	DebugCanvas gDebugCanvas;
 
 SampleBase* CreateSample()
 {
@@ -137,9 +139,8 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
     // clang-format on
 
     ShaderCreateInfo ShaderCI;
-	RefCntAutoPtr<IShaderSourceInputStreamFactory> pShaderSourceFactory;
-	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &pShaderSourceFactory);
-	ShaderCI.pShaderSourceStreamFactory = pShaderSourceFactory;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
     // Tell the system that the shader source code is in HLSL.
     // For OpenGL, the engine will convert this into GLSL under the hood.
     ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
@@ -221,12 +222,7 @@ void My_Terrain::Render()
 	m_pImmediateContext->SetIndexBuffer(m_TerrainData.pIdxBuf, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 	// Set uniform
-	{
-		// Get pretransform matrix that rotates the scene according the surface orientation
-		//auto SrfPreTransform = GetSurfacePretransformMatrix(float3{ 0, 0, 1 });
-		//const auto  CameraView = m_Camera.GetViewMatrix() * SrfPreTransform;
-		//const auto& Proj = m_Camera.GetProjMatrix();
-
+	{		
 		// Map the buffer and write current world-view-projection matrix
 		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);		
 
@@ -248,6 +244,9 @@ void My_Terrain::Render()
     m_pImmediateContext->DrawIndexed(drawAttrs);
 
 	m_apClipMap->Render(m_pImmediateContext);
+
+	//render debug view
+	gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
 }
 
 void My_Terrain::Update(double CurrTime, double ElapsedTime)

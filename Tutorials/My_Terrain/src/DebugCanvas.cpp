@@ -18,21 +18,17 @@ namespace Diligent
 	}
 
 
-	void DebugCanvas::Draw(IRenderDevice *pDevice, ISwapChain *pSwapChain, IDeviceContext *pContext, const FirstPersonCamera *cam)
+	void DebugCanvas::Draw(IRenderDevice *pDevice, ISwapChain *pSwapChain, IDeviceContext *pContext, IShaderSourceInputStreamFactory *pShaderFactory, const FirstPersonCamera *cam)
 	{
 		if (mbInitGPUBuffer == false)
 		{
 			CreateVertexBuffer(pDevice);
 			CreateIndexBuffer(pDevice);
-			
+			CreateInstance(pDevice);
+			CreatePipelineState(pDevice, pSwapChain->GetDesc().ColorBufferFormat, pSwapChain->GetDesc().DepthBufferFormat, pShaderFactory);
+			mbInitGPUBuffer = true;
 		}
-
-		auto* pRTV = pSwapChain->GetCurrentBackBufferRTV();
-		auto* pDSV = pSwapChain->GetDepthBufferDSV();
-		// Clear the back buffer
-		const float ClearColor[] = { 0.350f, 0.350f, 0.350f, 1.0f };
-		pContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		pContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		UpdateInstanceBuffer(pContext);		
 
 		{
 			// Map the buffer and write current world-view-projection matrix
@@ -71,33 +67,33 @@ namespace Diligent
 
 		// Cube vertices
 
-		//      (-1,+1,+1)________________(+1,+1,+1)
+		//      (0,+1,+1)________________(+1,+1,+1)
 		//               /|              /|
 		//              / |             / |
 		//             /  |            /  |
 		//            /   |           /   |
-		//(-1,-1,+1) /____|__________/(+1,-1,+1)
+		//(0,0,+1) /____|__________/(+1,0,+1)
 		//           |    |__________|____|
-		//           |   /(-1,+1,-1) |    /(+1,+1,-1)
+		//           |   /(0,+1,0) |    /(+1,+1,0)
 		//           |  /            |   /
 		//           | /             |  /
 		//           |/              | /
 		//           /_______________|/
-		//        (-1,-1,-1)       (+1,-1,-1)
+		//        (0,0,0)       (+1,0,0)
 		//
 
 		// clang-format off
 		Vertex CubeVerts[8] =
 		{
-			{float3(-1,-1,-1)},
-			{float3(-1,+1,-1)},
-			{float3(+1,+1,-1)},
-			{float3(+1,-1,-1)},
+			{float3(0,0,0)},
+			{float3(0,+1,0)},
+			{float3(+1,+1,0)},
+			{float3(+1,0,0)},
 
-			{float3(-1,-1,+1)},
-			{float3(-1,+1,+1)},
+			{float3(0,0,+1)},
+			{float3(0,+1,+1)},
 			{float3(+1,+1,+1)},
-			{float3(+1,-1,+1)},
+			{float3(+1,0,+1)},
 		};
 		// clang-format on
 
@@ -140,7 +136,15 @@ namespace Diligent
 
 	void DebugCanvas::CreateInstance(IRenderDevice *pDevice)
 	{
-
+		// Create instance data buffer that will store transformation matrices
+		BufferDesc InstBuffDesc;
+		InstBuffDesc.Name = "Instance data buffer";
+		// Use default usage as this buffer will only be updated when grid size changes
+		InstBuffDesc.Usage = USAGE_DEFAULT;
+		InstBuffDesc.BindFlags = BIND_VERTEX_BUFFER;
+		InstBuffDesc.uiSizeInBytes = sizeof(AABBInstanceData) * MAX_AABB_COUNT;
+		pDevice->CreateBuffer(InstBuffDesc, nullptr, &mInstanceBuffer);
+		//PopulateInstanceBuffer();
 	}
 
 	void DebugCanvas::CreatePipelineState(IRenderDevice* pDevice, TEXTURE_FORMAT RTVFormat, TEXTURE_FORMAT DSVFormat, IShaderSourceInputStreamFactory* pShaderSourceFactory)
@@ -211,9 +215,8 @@ namespace Diligent
 			// Per-vertex data - first buffer slot
 			// Attribute 0 - vertex position
 			LayoutElement{0, 0, 3, VT_FLOAT32, False},
-			// Attribute 1 - texture coordinates
+			
 			LayoutElement{1, 1, 4, VT_FLOAT32, False, INPUT_ELEMENT_FREQUENCY_PER_INSTANCE},
-
 			LayoutElement{2, 1, 4, VT_FLOAT32, False, INPUT_ELEMENT_FREQUENCY_PER_INSTANCE},
 			
 		};
@@ -228,6 +231,45 @@ namespace Diligent
 		ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;	
 
 		pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &mPSO);
+
+		// Create dynamic uniform buffer that will store our transformation matrix
+		// Dynamic buffers can be frequently updated by the CPU
+		CreateUniformBuffer(pDevice, sizeof(float4x4), "VS constants CB", &mVSConstants);
+
+		// Since we did not explcitly specify the type for 'Constants' variable, default
+		// type (SHADER_RESOURCE_VARIABLE_TYPE_STATIC) will be used. Static variables
+		// never change and are bound directly to the pipeline state object.
+		mPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(mVSConstants);
+
+		// Since we are using mutable variable, we must create a shader resource binding object
+		// http://diligentgraphics.com/2016/03/23/resource-binding-model-in-diligent-engine-2-0/
+		mPSO->CreateShaderResourceBinding(&mSRB, true);
+	}
+
+	void DebugCanvas::AddDebugBox(const BoundBox& aabb)
+	{
+		mAABBs.push_back(aabb);
+	}
+
+	void DebugCanvas::UpdateInstanceBuffer(IDeviceContext* pContext)
+	{
+		int AABBNum = mAABBs.size();
+
+		std::vector<AABBInstanceData> InstData(AABBNum);
+
+		for (int i = 0; i < AABBNum; ++i)
+		{
+			const BoundBox& bbox = mAABBs[i];
+
+			InstData[i].offset = bbox.Min;
+			InstData[i].offset.w = 0.0f;
+
+			InstData[i].scale = bbox.Max - bbox.Min;
+			InstData[i].scale.w = 1.0f;
+		}
+
+		Uint32 DataSize = static_cast<Uint32>(sizeof(AABBInstanceData) * InstData.size());
+		pContext->UpdateBuffer(mInstanceBuffer, 0, DataSize, &InstData[0], RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	}
 
 }

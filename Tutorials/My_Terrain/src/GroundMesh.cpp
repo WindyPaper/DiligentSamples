@@ -17,8 +17,8 @@ Diligent::GroundMesh::GroundMesh(const uint SizeM, const uint Level, const float
 {
 	HeightMap heightmap;
 	Dimension TerrainDim;
-	TerrainDim.Min = float3({ -5690.0f, -7090.0f, 1150.00f });
-	TerrainDim.Size = float3({ 11380.0f, 12180.0f, 1500.0f });
+	TerrainDim.Min = float3({ -5690.0f, 1150.00f, -7090.0f });
+	TerrainDim.Size = float3({ 11380.0f, 1500.0f, 12180.0f });
 	mpCDLODTree = new CDLODTree(heightmap, TerrainDim);
 	mpCDLODTree->Create();
 }

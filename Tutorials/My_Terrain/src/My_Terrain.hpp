@@ -72,6 +72,7 @@ protected:
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
+	RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
 
 	/*RefCntAutoPtr<IBuffer> m_pVertexBuf;
 	RefCntAutoPtr<IBuffer> m_pIndexBuf;*/
