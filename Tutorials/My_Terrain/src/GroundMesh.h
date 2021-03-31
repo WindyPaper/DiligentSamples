@@ -11,6 +11,8 @@
 #include "RefCntAutoPtr.hpp"
 #include "RenderDevice.h"
 
+#include "CDLODTree.h"
+
 namespace Diligent
 {
 	class FirstPersonCamera;
@@ -85,6 +87,9 @@ namespace Diligent
 		float4x4 m_TerrainViewProjMat;
 
 		PerPatchShaderData m_PatchInstanceConst[16];//test for lv 0
+
+		//------------------CDLOD
+		CDLODTree *mpCDLODTree;
 	};
 }
 

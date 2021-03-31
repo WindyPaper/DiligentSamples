@@ -223,14 +223,14 @@ void My_Terrain::Render()
 	// Set uniform
 	{
 		// Get pretransform matrix that rotates the scene according the surface orientation
-		auto SrfPreTransform = GetSurfacePretransformMatrix(float3{ 0, 0, 1 });
-		const auto  CameraView = m_Camera.GetViewMatrix() * SrfPreTransform;
-		const auto& Proj = m_Camera.GetProjMatrix();
+		//auto SrfPreTransform = GetSurfacePretransformMatrix(float3{ 0, 0, 1 });
+		//const auto  CameraView = m_Camera.GetViewMatrix() * SrfPreTransform;
+		//const auto& Proj = m_Camera.GetProjMatrix();
 
 		// Map the buffer and write current world-view-projection matrix
 		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);		
 
-		*CBConstants = m_TerrainWorldMatrix * CameraView * Proj;
+		*CBConstants = m_TerrainWorldMatrix * m_Camera.GetViewProjMatrix();
 	}
 
     // Set the pipeline state in the immediate context
@@ -332,7 +332,7 @@ void My_Terrain::CreateTerrainBuffer()
 void My_Terrain::WindowResize(Uint32 Width, Uint32 Height)
 {
 	float NearPlane = 0.1f;
-	float FarPlane = 250.f;
+	float FarPlane = 8000.f;
 	float AspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());

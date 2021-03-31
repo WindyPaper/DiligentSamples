@@ -6,15 +6,21 @@ namespace Diligent
 {
 
 Diligent::GroundMesh::GroundMesh(const uint SizeM, const uint Level, const float ClipScale) :
-	m_sizem(SizeM),
+	m_sizem(SizeM + 1),
 	m_level(Level),
 	m_clip_scale(ClipScale),
 	m_pVerticesData(NULL),
 	m_pIndicesData(NULL),
 	m_VertexNum(0),
-	m_IndexNum(0)
+	m_IndexNum(0),
+	mpCDLODTree(nullptr)
 {
-
+	HeightMap heightmap;
+	Dimension TerrainDim;
+	TerrainDim.Min = float3({ -5690.0f, -7090.0f, 1150.00f });
+	TerrainDim.Size = float3({ 11380.0f, 12180.0f, 1500.0f });
+	mpCDLODTree = new CDLODTree(heightmap, TerrainDim);
+	mpCDLODTree->Create();
 }
 
 Diligent::GroundMesh::~GroundMesh()
@@ -29,6 +35,12 @@ Diligent::GroundMesh::~GroundMesh()
 	{
 		delete[] m_pIndicesData;
 		m_pIndicesData = NULL;
+	}
+
+	if (mpCDLODTree)
+	{
+		delete mpCDLODTree;
+		mpCDLODTree = nullptr;
 	}
 }
 
@@ -57,64 +69,93 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 	*CBConstants = m_TerrainViewProjMat;
 
 	//Level 0
-	for (unsigned int z = 0; z < 4; z++)
+	//for (unsigned int z = 0; z < 4; z++)
+	//{
+	//	for (unsigned int x = 0; x < 4; x++)
+	//	{
+	//		// Set uniform
+	//		{
+	//			MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+	//			PerPatchConstData->Level = 0;
+	//			PerPatchConstData->Scale = m_clip_scale;
+	//			PerPatchConstData->Offset = m_LevelOffsets[0] + float2(x * (m_sizem - 1), z * (m_sizem - 1));
+	//			PerPatchConstData->Offset *= m_clip_scale;
+	//		}
+
+	//		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+	//		// makes sure that resources are transitioned to required states.
+	//		pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	//		DrawIndexedAttribs drawAttrs;
+	//		drawAttrs.IndexType = VT_UINT16; // Index type
+	//		drawAttrs.NumIndices = m_IndexNum;
+	//		// Verify the state of vertex and index buffers
+	//		drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+	//		pContext->DrawIndexed(drawAttrs);
+	//	}
+	//}
+
+	//for (int LvIdx = 1; LvIdx < m_level; ++LvIdx)
+	//{
+	//	for (unsigned int z = 0; z < 4; z++)
+	//	{
+	//		for (unsigned int x = 0; x < 4; x++)
+	//		{
+	//			if (z != 0 && z != 3 && x != 0 && x != 3)
+	//			{
+	//				continue;
+	//			}
+
+	//			// Set uniform
+	//			{					
+	//				MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+	//				PerPatchConstData->Level = LvIdx;
+	//				PerPatchConstData->Scale = m_clip_scale * (1 << LvIdx);
+	//				PerPatchConstData->Offset = m_LevelOffsets[LvIdx] + float2(x * (m_sizem - 1), z * (m_sizem - 1)) * (1 << LvIdx);
+	//				PerPatchConstData->Offset *= m_clip_scale;
+	//			}
+
+	//			// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+	//			// makes sure that resources are transitioned to required states.
+	//			pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	//			DrawIndexedAttribs drawAttrs;
+	//			drawAttrs.IndexType = VT_UINT16; // Index type
+	//			drawAttrs.NumIndices = m_IndexNum;
+	//			// Verify the state of vertex and index buffers
+	//			drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+	//			pContext->DrawIndexed(drawAttrs);
+	//		}
+	//	}
+	//}
+
+	const SelectionInfo &SelectInfo = mpCDLODTree->GetSelectInfo();
+	LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
+
+	for (int i = 0; i < SelectInfo.SelectionNodes.size(); ++i)
 	{
-		for (unsigned int x = 0; x < 4; x++)
+		CDLODNode *pNode = SelectInfo.SelectionNodes[i];
+
+		// Set uniform
 		{
-			// Set uniform
-			{
-				MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-				PerPatchConstData->Level = 0;
-				PerPatchConstData->Scale = m_clip_scale;
-				PerPatchConstData->Offset = m_LevelOffsets[0] + float2(x * (m_sizem - 1), z * (m_sizem - 1));
-				PerPatchConstData->Offset *= m_clip_scale;
-			}
-
-			// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
-			// makes sure that resources are transitioned to required states.
-			pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-			DrawIndexedAttribs drawAttrs;
-			drawAttrs.IndexType = VT_UINT16; // Index type
-			drawAttrs.NumIndices = m_IndexNum;
-			// Verify the state of vertex and index buffers
-			drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
-			pContext->DrawIndexed(drawAttrs);
+			int ShaderLODLevel = LOD_COUNT - pNode->LODLevel - 1;
+			MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+			PerPatchConstData->Level = ShaderLODLevel;
+			PerPatchConstData->Scale = (ShaderLODLevel + 1);
+			PerPatchConstData->Offset = float2({ (float)pNode->rx, (float)pNode->ry }) / PerPatchConstData->Scale;// *PerPatchConstData->Scale;
+			//PerPatchConstData->Offset *= m_clip_scale;
 		}
-	}
 
-	for (int LvIdx = 1; LvIdx < m_level; ++LvIdx)
-	{
-		for (unsigned int z = 0; z < 4; z++)
-		{
-			for (unsigned int x = 0; x < 4; x++)
-			{
-				if (z != 0 && z != 3 && x != 0 && x != 3)
-				{
-					continue;
-				}
+		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+		// makes sure that resources are transitioned to required states.
+		pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-				// Set uniform
-				{					
-					MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-					PerPatchConstData->Level = LvIdx;
-					PerPatchConstData->Scale = m_clip_scale * (1 << LvIdx);
-					PerPatchConstData->Offset = m_LevelOffsets[LvIdx] + float2(x * (m_sizem - 1), z * (m_sizem - 1)) * (1 << LvIdx);
-					PerPatchConstData->Offset *= m_clip_scale;
-				}
-
-				// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
-				// makes sure that resources are transitioned to required states.
-				pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-				DrawIndexedAttribs drawAttrs;
-				drawAttrs.IndexType = VT_UINT16; // Index type
-				drawAttrs.NumIndices = m_IndexNum;
-				// Verify the state of vertex and index buffers
-				drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
-				pContext->DrawIndexed(drawAttrs);
-			}
-		}
+		DrawIndexedAttribs drawAttrs;
+		drawAttrs.IndexType = VT_UINT16; // Index type
+		drawAttrs.NumIndices = m_IndexNum;
+		// Verify the state of vertex and index buffers
+		drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+		pContext->DrawIndexed(drawAttrs);
 	}
 }
 
@@ -134,6 +175,8 @@ void GroundMesh::Update(const FirstPersonCamera *pCam)
 	UpdateLevelOffset(float2(0.0f, 0.0f));
 
 	m_TerrainViewProjMat = Matrix4x4<float>::Identity() * pCam->GetViewMatrix() * pCam->GetProjMatrix();
+
+	mpCDLODTree->SelectLOD(*pCam);
 }
 
 void GroundMesh::CommitToGPUDeviceBuffer(IRenderDevice *pDevice)

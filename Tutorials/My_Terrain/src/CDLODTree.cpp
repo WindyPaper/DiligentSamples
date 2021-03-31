@@ -36,26 +36,26 @@ namespace Diligent
 			this->rmaxz = this->pTL->rmaxz;
 
 			//Top Right
-			if (rx + size < heightmap_rx_size)
+			if (rx + ChildSize < heightmap_rx_size)
 			{
 				this->pTR = &pAllNodes[RefCurrUseNodeIdx++];
-				this->pTR->Create(rx + size, ry, ChildSize, LODLevel + 1, heightmap, pAllNodes, RefCurrUseNodeIdx);				
+				this->pTR->Create(rx + ChildSize, ry, ChildSize, LODLevel + 1, heightmap, pAllNodes, RefCurrUseNodeIdx);
 				SelectMinMaxFunc(this->pTR);
 			}
 
 			//Bottom Left
-			if (ry + size < heightmap_ry_size)
+			if (ry + ChildSize < heightmap_ry_size)
 			{
 				this->pBL = &pAllNodes[RefCurrUseNodeIdx++];				
-				this->pBL->Create(rx + size, ry, ChildSize, LODLevel + 1, heightmap, pAllNodes, RefCurrUseNodeIdx);
+				this->pBL->Create(rx, ry + ChildSize, ChildSize, LODLevel + 1, heightmap, pAllNodes, RefCurrUseNodeIdx);
 				SelectMinMaxFunc(this->pBL);
 			}
 
 			//Bottom Right
-			if ((rx + size < heightmap_rx_size) && (ry + size < heightmap_ry_size))
+			if ((rx + ChildSize < heightmap_rx_size) && (ry + ChildSize < heightmap_ry_size))
 			{
 				this->pBR = &pAllNodes[RefCurrUseNodeIdx++];
-				this->pBR->Create(rx + size, ry + size, ChildSize, LODLevel + 1, heightmap, pAllNodes, RefCurrUseNodeIdx);
+				this->pBR->Create(rx + ChildSize, ry + ChildSize, ChildSize, LODLevel + 1, heightmap, pAllNodes, RefCurrUseNodeIdx);
 				SelectMinMaxFunc(this->pBR);
 			}
 		}
@@ -138,8 +138,8 @@ namespace Diligent
 		float Maxy = (float)(this->ry + size) / (RasSizeY - 1) * TerrainDim.SizeX;
 		float Maxz = (float)this->rmaxz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
 
-		bbox.Min = float3({ Minx, Miny, Minz });
-		bbox.Max = float3({ Maxx, Maxy, Maxz });
+		bbox.Min = float3({ Minx, Miny, Minz }) + TerrainDim.Min;
+		bbox.Max = float3({ Maxx, Maxy, Maxz }) + TerrainDim.Min;
 
 		return bbox;
 
@@ -160,15 +160,13 @@ namespace Diligent
 	CDLODTree::~CDLODTree()
 	{
 		if (mTopNodeArray)
-		{
-			for (int j = 0; j < mTopNodeNumY; ++j)
+		{			
+			for (int i = 0; i < mTopNodeNumX; ++i)
 			{
-				for (int i = 0; i < mTopNodeNumX; ++i)
-				{
-					delete mTopNodeArray[i][j];
-				}
+				delete[] mTopNodeArray[i];
 			}
-
+			
+			delete[] mTopNodeArray;
 			mTopNodeArray = nullptr;
 		}
 
@@ -189,9 +187,7 @@ namespace Diligent
 		//float TerrainZ = mTerrainDimension.SizeZ;
 
 		int TopNodeSize = LEAF_RENDER_NODE_SIZE;
-		int TotalNodeCount = 0;
-		int TopCountX = 0;
-		int TopCountY = 0;
+		int TotalNodeCount = 0;		
 
 		for (int i = 0; i < LOD_COUNT; ++i)
 		{
@@ -207,20 +203,20 @@ namespace Diligent
 
 			if (i == (LOD_COUNT - 1)) //TOP
 			{
-				TopCountX = LevelLodNumX;
-				TopCountY = LevelLodNumY;
+				mTopNodeNumX = LevelLodNumX;
+				mTopNodeNumY = LevelLodNumY;
 			}
 		}
 
 		//Construct tree
 		mpNodeDataArray = new CDLODNode[TotalNodeCount];
-		mTopNodeArray = new CDLODNode**[TopCountY];
+		mTopNodeArray = new CDLODNode**[mTopNodeNumY];
 
 		int CurrIdxNode = 0;
-		for (int y = 0; y < TopCountY; ++y)
+		for (int y = 0; y < mTopNodeNumY; ++y)
 		{
-			mTopNodeArray[y] = new CDLODNode*[TopCountX];
-			for (int x = 0; x < TopCountX; ++x)
+			mTopNodeArray[y] = new CDLODNode*[mTopNodeNumX];
+			for (int x = 0; x < mTopNodeNumX; ++x)
 			{
 				mTopNodeArray[y][x] = &mpNodeDataArray[CurrIdxNode++];
 				mTopNodeArray[y][x]->Create(x * TopNodeSize, y * TopNodeSize, TopNodeSize, 0, mHeightMap, mpNodeDataArray, CurrIdxNode);
@@ -228,11 +224,13 @@ namespace Diligent
 		}
 
 		assert(TotalNodeCount == CurrIdxNode);
+		LOG_INFO_MESSAGE("CDLOD Tree Memory: ", sizeof(CDLODNode) * TotalNodeCount / 1024.0f, " KB");
 	}
 	
 
 	void CDLODTree::SelectLOD(const FirstPersonCamera &cam)
 	{
+		mSelectionInfo.SelectionNodes.clear();
 		mSelectionInfo.CamPos = cam.GetPos();
 
 		//Update LOD distance range
@@ -268,7 +266,7 @@ namespace Diligent
 			}
 		}
 
-		ExtractViewFrustumPlanesFromMatrix(cam.GetViewMatrix(), mSelectionInfo.frustum, false);
+		ExtractViewFrustumPlanesFromMatrix(cam.GetViewProjMatrix(), mSelectionInfo.frustum, false);
 
 		for (int y = 0; y < mTopNodeNumY; ++y)
 		{
@@ -282,15 +280,28 @@ namespace Diligent
 				//bool bBoxVis = false;
 				if (vis == BoxVisibility::FullyVisible)
 				{
-					pNode->SelectNode(mSelectionInfo, true);
+					LODNodeState state = pNode->SelectNode(mSelectionInfo, true);
+					if (state == LODNodeState::OUT_OF_LOD_RANGE)
+					{
+						mSelectionInfo.SelectionNodes.push_back(pNode);
+					}
 				}
 				else if (vis == BoxVisibility::Intersecting)
 				{
-					pNode->SelectNode(mSelectionInfo, false);
+					LODNodeState state = pNode->SelectNode(mSelectionInfo, false);
+					if (state == LODNodeState::OUT_OF_LOD_RANGE)
+					{
+						mSelectionInfo.SelectionNodes.push_back(pNode);
+					}
 				}
 				
 			}
 		}
+	}
+
+	const Diligent::SelectionInfo & CDLODTree::GetSelectInfo() const
+	{
+		return mSelectionInfo;
 	}
 
 }

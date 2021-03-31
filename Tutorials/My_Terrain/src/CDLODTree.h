@@ -13,7 +13,7 @@
 
 #define MAX_HEIGHTMAP_SIZE 65535
 #define LEAF_RENDER_NODE_SIZE 8
-#define LOD_COUNT  8
+#define LOD_COUNT  7
 #define LOD_DISTANCE_RATIO 2.0f
 
 namespace Diligent
@@ -122,6 +122,8 @@ namespace Diligent
 
 		void Create();
 		void SelectLOD(const FirstPersonCamera &cam);
+
+		const SelectionInfo &GetSelectInfo() const;
 
 	private:
 		//Dimension mTerrainDimension;

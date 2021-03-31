@@ -69,6 +69,7 @@ public:
     const float4x4& GetViewMatrix()  const { return m_ViewMatrix;  }
     const float4x4& GetWorldMatrix() const { return m_WorldMatrix; }
     const float4x4& GetProjMatrix()  const { return m_ProjMatrix;  }
+	const float4x4 GetViewProjMatrix() const { return m_ViewMatrix * m_ProjMatrix; }
 
     float3 GetWorldRight() const { return float3(m_ViewMatrix._11, m_ViewMatrix._21, m_ViewMatrix._31); }
     float3 GetWorldUp()    const { return float3(m_ViewMatrix._12, m_ViewMatrix._22, m_ViewMatrix._32); }
