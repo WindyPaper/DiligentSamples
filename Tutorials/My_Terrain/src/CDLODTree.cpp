@@ -7,7 +7,7 @@ namespace Diligent
 {
 	extern DebugCanvas gDebugCanvas;
 
-	void CDLODNode::Create(const int rx, const int ry, const int size, const int LodLevel, const HeightMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx)
+	void CDLODNode::Create(const int rx, const int ry, const int size, const int LodLevel, TerrainHeightMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx)
 	{
 		this->rx = rx;
 		this->ry = ry;
@@ -149,7 +149,7 @@ namespace Diligent
 
 	}
 
-	CDLODTree::CDLODTree(const HeightMap &heightmap, const Dimension &TerrainDim) :
+	CDLODTree::CDLODTree(const TerrainHeightMap &heightmap, const Dimension &TerrainDim) :
 		mTopNodeArray(nullptr),
 		mTopNodeNumX(0),
 		mTopNodeNumY(0),

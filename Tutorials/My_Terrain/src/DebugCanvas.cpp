@@ -238,21 +238,24 @@ namespace Diligent
 	{
 		int AABBNum = mAABBs.size();
 
-		std::vector<AABBInstanceData> InstData(AABBNum);
-
-		for (int i = 0; i < AABBNum; ++i)
+		if (AABBNum > 0)
 		{
-			const BoundBox& bbox = mAABBs[i];
+			std::vector<AABBInstanceData> InstData(AABBNum);
 
-			InstData[i].offset = bbox.Min;
-			InstData[i].offset.w = 0.0f;
+			for (int i = 0; i < AABBNum; ++i)
+			{
+				const BoundBox& bbox = mAABBs[i];
 
-			InstData[i].scale = bbox.Max - bbox.Min;
-			InstData[i].scale.w = 1.0f;
+				InstData[i].offset = bbox.Min;
+				InstData[i].offset.w = 0.0f;
+
+				InstData[i].scale = bbox.Max - bbox.Min;
+				InstData[i].scale.w = 1.0f;
+			}
+
+			Uint32 DataSize = static_cast<Uint32>(sizeof(AABBInstanceData) * InstData.size());
+			pContext->UpdateBuffer(mInstanceBuffer, 0, DataSize, &InstData[0], RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 		}
-
-		Uint32 DataSize = static_cast<Uint32>(sizeof(AABBInstanceData) * InstData.size());
-		pContext->UpdateBuffer(mInstanceBuffer, 0, DataSize, &InstData[0], RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	}
 
 }

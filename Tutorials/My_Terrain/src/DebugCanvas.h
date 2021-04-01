@@ -11,11 +11,11 @@
 
 namespace Diligent
 {
-	class IRenderDevice;
+	struct IRenderDevice;
 	class ISwapChain;
 	class IDeviceContext;
 	class FirstPersonCamera;
-	class IShaderSourceInputStreamFactory;
+	struct IShaderSourceInputStreamFactory;
 
 	struct AABBInstanceData
 	{

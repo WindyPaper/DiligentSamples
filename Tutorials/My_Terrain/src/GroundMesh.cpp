@@ -1,6 +1,7 @@
 #include "GroundMesh.h"
 #include "FirstPersonCamera.hpp"
 #include "MapHelper.hpp"
+#include "TerrainHeightMap.h"
 
 namespace Diligent
 {
@@ -15,12 +16,7 @@ Diligent::GroundMesh::GroundMesh(const uint SizeM, const uint Level, const float
 	m_IndexNum(0),
 	mpCDLODTree(nullptr)
 {
-	HeightMap heightmap;
-	Dimension TerrainDim;
-	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 500.0f, 12180.0f });
-	mpCDLODTree = new CDLODTree(heightmap, TerrainDim);
-	mpCDLODTree->Create();
+	
 }
 
 Diligent::GroundMesh::~GroundMesh()
@@ -162,6 +158,15 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 
 void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 {
+	TerrainHeightMap heightmap;
+	heightmap.LoadHeightMap("./heightmap.jpg", pDevice);
+
+	Dimension TerrainDim;
+	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
+	TerrainDim.Size = float3({ 11380.0f, 500.0f, 12180.0f });
+	mpCDLODTree = new CDLODTree(heightmap, TerrainDim);
+	mpCDLODTree->Create();
+
 	InitVertexBuffer();
 	InitIndicesBuffer();
 
