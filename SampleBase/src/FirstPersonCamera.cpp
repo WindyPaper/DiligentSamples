@@ -144,14 +144,14 @@ void FirstPersonCamera::SetReferenceAxes(const float3& ReferenceRightAxis, const
 
 void FirstPersonCamera::SetLookAt(const float3& LookAt)
 {
-    float3 ViewDir = LookAt - m_Pos;
+    float3 ViewDir = normalize(LookAt - m_Pos);
 
     ViewDir = ViewDir * GetReferenceRotiation();
 
     m_fYawAngle = atan2f(ViewDir.x, ViewDir.z);
 
     float fXZLen  = sqrtf(ViewDir.z * ViewDir.z + ViewDir.x * ViewDir.x);
-    m_fPitchAngle = -atan2f(ViewDir.y, fXZLen);
+    m_fPitchAngle = atan2f(ViewDir.y, fXZLen);
 }
 
 void FirstPersonCamera::SetRotation(float Yaw, float Pitch)
