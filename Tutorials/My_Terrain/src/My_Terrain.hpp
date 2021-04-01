@@ -68,6 +68,7 @@ public:
 	virtual void WindowResize(Uint32 Width, Uint32 Height);
 
 protected:
+	void UpdateUI();
 	void CreateTerrainBuffer();
 
 private:

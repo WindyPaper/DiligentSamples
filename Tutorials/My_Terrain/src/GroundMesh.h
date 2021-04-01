@@ -31,9 +31,8 @@ namespace Diligent
 
 	struct PerPatchShaderData
 	{
-		float2 Offset;
-		float Scale;
-		float Level;
+		float4 Scale;
+		float4 Offset;		
 	};
 
 	class GroundMesh
@@ -45,7 +44,7 @@ namespace Diligent
 		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain);		
 		void Render(IDeviceContext *pContext);
 
-		void Update(const FirstPersonCamera *pCam);
+		void Update(const FirstPersonCamera *pCam);		
 
 	protected:
 		void InitVertexBuffer();

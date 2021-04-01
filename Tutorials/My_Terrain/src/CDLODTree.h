@@ -15,6 +15,7 @@
 #define LEAF_RENDER_NODE_SIZE 8
 #define LOD_COUNT  7
 #define LOD_DISTANCE_RATIO 2.0f
+#define LOD_MESH_GRID_SIZE 8
 
 namespace Diligent
 {
@@ -41,12 +42,12 @@ namespace Diligent
 		void GetZArea(const uint32_t& x, const uint32_t& y, const uint16_t& size, uint16_t& o_minz, uint16_t& o_maxz) const
 		{
 			o_minz = 0;
-			o_maxz = 10;
+			o_maxz = 50;
 		}
 
 		uint16_t GetZ(const uint32_t& x, const uint32_t& y) const
 		{
-			return 10;
+			return 50;
 		}
 	};	
 
@@ -93,9 +94,15 @@ namespace Diligent
 		BoundBox GetBBox(const uint16_t RasSizeX, const uint16_t RasSizeY, const Dimension &TerrainDim);
 	};
 
+	struct SelectNodeData
+	{
+		CDLODNode *pNode;
+		BoundBox aabb;
+	};
+
 	struct SelectionInfo
 	{
-		std::vector<CDLODNode*> SelectionNodes;
+		std::vector<SelectNodeData> SelectionNodes;
 		uint16_t RasSizeX, RasSizeY;
 		Dimension TerrainDimension;
 		ViewFrustum frustum;
@@ -112,7 +119,7 @@ namespace Diligent
 		{
 
 		}
-	};
+	};	
 
 	class CDLODTree
 	{

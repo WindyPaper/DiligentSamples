@@ -95,10 +95,10 @@ namespace Diligent
 		LODNodeState TRState = LODNodeState::UNDEFINED;
 		LODNodeState BLState = LODNodeState::UNDEFINED;
 		LODNodeState BRState = LODNodeState::UNDEFINED;
-		if (this->LODLevel < LOD_COUNT)
+		if (this->LODLevel != (LOD_COUNT - 1))
 		{
 			float NextLODDistance = SelectInfo.LODRange[this->LODLevel + 1];
-			if (!bbox.IntersectSphereSq(SelectInfo.CamPos, NextLODDistance * NextLODDistance))
+			if (bbox.IntersectSphereSq(SelectInfo.CamPos, NextLODDistance * NextLODDistance))
 			{
 				bool NodeFullVisible = BoxVis == BoxVisibility::FullyVisible;
 				TLState = this->pTL->SelectNode(SelectInfo, NodeFullVisible);
@@ -110,7 +110,7 @@ namespace Diligent
 		else		
 		{
 			//Leaf
-			SelectInfo.SelectionNodes.push_back(this);
+			SelectInfo.SelectionNodes.push_back(SelectNodeData({ this, bbox }));
 			return LODNodeState::SELECTED;
 		}
 
@@ -118,7 +118,8 @@ namespace Diligent
 		{
 			if (state == LODNodeState::OUT_OF_LOD_RANGE)
 			{
-				SelectInfo.SelectionNodes.push_back(pNode);
+				BoundBox ChildBBox = pNode->GetBBox(SelectInfo.RasSizeX, SelectInfo.RasSizeY, SelectInfo.TerrainDimension);
+				SelectInfo.SelectionNodes.push_back(SelectNodeData({ pNode, ChildBBox }));
 			}
 		};
 		SelectChildNodeFunc(TLState, this->pTL);
@@ -278,8 +279,7 @@ namespace Diligent
 			for (int x = 0; x < mTopNodeNumX; ++x)
 			{
 				CDLODNode *pNode = mTopNodeArray[y][x];
-				BoundBox bbox = pNode->GetBBox(mHeightMap.width, mHeightMap.height, mSelectionInfo.TerrainDimension);
-				gDebugCanvas.AddDebugBox(bbox);
+				BoundBox bbox = pNode->GetBBox(mHeightMap.width, mHeightMap.height, mSelectionInfo.TerrainDimension);				
 
 				BoxVisibility vis = GetBoxVisibility(mSelectionInfo.frustum, bbox);
 
@@ -289,7 +289,7 @@ namespace Diligent
 					LODNodeState state = pNode->SelectNode(mSelectionInfo, true);
 					if (state == LODNodeState::OUT_OF_LOD_RANGE)
 					{
-						mSelectionInfo.SelectionNodes.push_back(pNode);
+						mSelectionInfo.SelectionNodes.push_back(SelectNodeData({ pNode, bbox }));
 					}
 				}
 				else if (vis == BoxVisibility::Intersecting)
@@ -297,11 +297,17 @@ namespace Diligent
 					LODNodeState state = pNode->SelectNode(mSelectionInfo, false);
 					if (state == LODNodeState::OUT_OF_LOD_RANGE)
 					{
-						mSelectionInfo.SelectionNodes.push_back(pNode);
+						mSelectionInfo.SelectionNodes.push_back(SelectNodeData({ pNode, bbox }));
 					}
 				}
 				
 			}
+		}
+
+		//Add debug aabb
+		for (int i = 0; i < mSelectionInfo.SelectionNodes.size(); ++i)
+		{
+			gDebugCanvas.AddDebugBox(mSelectionInfo.SelectionNodes[i].aabb);
 		}
 	}
 

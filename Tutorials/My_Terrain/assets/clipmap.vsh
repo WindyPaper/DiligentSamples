@@ -1,13 +1,12 @@
 cbuffer Constants
 {
-    float4x4 g_WorldViewProj;
+    float4x4 g_ViewProj;
 };
 
 cbuffer PerPatchData
 {
-    float2 offset;
-    float scale;
-    float level;
+    float4 Scale;
+    float4 Offset;
 };
 
 // Vertex shader takes two inputs: vertex position and color.
@@ -29,8 +28,7 @@ struct PSInput
 void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
-    float2 LocalPosXZ = float2(VSIn.Pos.x, VSIn.Pos.y) * scale;
-    float2 WPosXZ = LocalPosXZ + offset;
-    float4 WPos = float4(WPosXZ.x, 0.0, WPosXZ.y, 1.0);    
-    PSIn.Pos = mul(g_WorldViewProj, WPos);
+    float2 WPosXZ = float2(VSIn.Pos.x, VSIn.Pos.y) * Scale.xy;
+    float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + Offset.xyz;
+    PSIn.Pos = mul(g_ViewProj, float4(WPos, 1.0f));
 }

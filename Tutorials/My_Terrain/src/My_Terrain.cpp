@@ -29,6 +29,9 @@
 #include "MapHelper.hpp"
 #include "GroundMesh.h"
 #include "DebugCanvas.h"
+#include "imgui.h"
+#include "imGuIZMO.h"
+#include "ImGuiUtils.hpp"
 
 namespace Diligent
 {	
@@ -192,14 +195,14 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 
 	CreateTerrainBuffer();
 
-	m_Camera.SetPos(float3(-5.0f, 5.0f, 5.f));		
+	m_Camera.SetPos(float3(0.0f, 20.0f, -5.f));		
 	m_Camera.SetRotationSpeed(0.005f);
 	m_Camera.SetMoveSpeed(5.f);
 	m_Camera.SetSpeedUpScales(5.f, 10.f);
 
-	m_Camera.SetLookAt(float3(5, 0, 5));
+	m_Camera.SetLookAt(float3(0, 0, 0));
 
-	m_apClipMap.reset(new GroundMesh(8, 8, 0.115f));
+	m_apClipMap.reset(new GroundMesh(LOD_MESH_GRID_SIZE, LOD_COUNT, 0.115f));
 
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
 }
@@ -226,7 +229,7 @@ void My_Terrain::Render()
 		// Map the buffer and write current world-view-projection matrix
 		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);		
 
-		*CBConstants = m_TerrainWorldMatrix * m_Camera.GetViewProjMatrix();
+		*CBConstants = m_Camera.GetViewProjMatrix();
 	}
 
     // Set the pipeline state in the immediate context
@@ -251,6 +254,7 @@ void My_Terrain::Render()
 
 void My_Terrain::Update(double CurrTime, double ElapsedTime)
 {
+	UpdateUI();
     SampleBase::Update(CurrTime, ElapsedTime);
 
 	m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));	
@@ -259,7 +263,7 @@ void My_Terrain::Update(double CurrTime, double ElapsedTime)
 	//float4x4 CubeModelTransform = float4x4::RotationY(static_cast<float>(CurrTime) * 1.0f) * float4x4::RotationX(-PI_F * 0.1f);	
 
 	// Compute world-view-projection matrix
-	m_TerrainWorldMatrix = float4x4::Identity();// CubeModelTransform;
+	//m_TerrainWorldMatrix = float4x4::Identity();// CubeModelTransform;
 
 	m_apClipMap->Update(&m_Camera);
 }
@@ -331,10 +335,25 @@ void My_Terrain::CreateTerrainBuffer()
 void My_Terrain::WindowResize(Uint32 Width, Uint32 Height)
 {
 	float NearPlane = 0.1f;
-	float FarPlane = 8000.f;
+	float FarPlane = 10000.f;
 	float AspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
+	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
+}
+
+void My_Terrain::UpdateUI()
+{
+	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("Camera Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{		
+		float3 CamPos = m_Camera.GetPos();
+		ImGui::Text("Cam pos %.2f, %.2f, %.2f", CamPos.x, CamPos.y, CamPos.z);
+		float3 CamForward = m_Camera.GetWorldAhead();
+		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
+		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
+	}
+	ImGui::End();
 }
 
 } // namespace Diligent

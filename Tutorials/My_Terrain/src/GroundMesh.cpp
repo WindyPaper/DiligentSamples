@@ -17,8 +17,8 @@ Diligent::GroundMesh::GroundMesh(const uint SizeM, const uint Level, const float
 {
 	HeightMap heightmap;
 	Dimension TerrainDim;
-	TerrainDim.Min = float3({ -5690.0f, 1150.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 1500.0f, 12180.0f });
+	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
+	TerrainDim.Size = float3({ 11380.0f, 500.0f, 12180.0f });
 	mpCDLODTree = new CDLODTree(heightmap, TerrainDim);
 	mpCDLODTree->Create();
 }
@@ -134,16 +134,17 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 
 	for (int i = 0; i < SelectInfo.SelectionNodes.size(); ++i)
 	{
-		CDLODNode *pNode = SelectInfo.SelectionNodes[i];
+		SelectNodeData NodeData = SelectInfo.SelectionNodes[i];
 
 		// Set uniform
 		{
-			int ShaderLODLevel = LOD_COUNT - pNode->LODLevel - 1;
+			int ShaderLODLevel = LOD_COUNT - NodeData.pNode->LODLevel - 1;
 			MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-			PerPatchConstData->Level = ShaderLODLevel;
-			PerPatchConstData->Scale = (ShaderLODLevel + 1);
-			PerPatchConstData->Offset = float2({ (float)pNode->rx, (float)pNode->ry }) / PerPatchConstData->Scale;// *PerPatchConstData->Scale;
-			//PerPatchConstData->Offset *= m_clip_scale;
+			PerPatchConstData->Scale = float4((NodeData.aabb.Max.x - NodeData.aabb.Min.x) / LOD_MESH_GRID_SIZE,
+				(NodeData.aabb.Max.z - NodeData.aabb.Min.z) / LOD_MESH_GRID_SIZE,
+				ShaderLODLevel, 0.0f);			
+			PerPatchConstData->Offset = float4(NodeData.aabb.Min.x, 
+				(NodeData.aabb.Max.y + NodeData.aabb.Min.y) / 2.0f, NodeData.aabb.Min.z, 0.0f);
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
@@ -174,7 +175,7 @@ void GroundMesh::Update(const FirstPersonCamera *pCam)
 	//UpdateLevelOffset(float2(pos.x, pos.z));
 	UpdateLevelOffset(float2(0.0f, 0.0f));
 
-	m_TerrainViewProjMat = Matrix4x4<float>::Identity() * pCam->GetViewMatrix() * pCam->GetProjMatrix();
+	m_TerrainViewProjMat = pCam->GetViewProjMatrix();
 
 	mpCDLODTree->SelectLOD(*pCam);
 }
