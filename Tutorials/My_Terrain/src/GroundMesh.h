@@ -53,7 +53,7 @@ namespace Diligent
 
 		void UpdateLevelOffset(const float2& CamPosXZ);
 
-		void InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain);
+		void InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension& dim);
 
 		uint16_t* GeneratePatchIndices(uint16_t *pIndexdata, uint VertexOffset, uint SizeX, uint SizeZ);
 
@@ -74,6 +74,7 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_pVertexGPUBuffer;
 		RefCntAutoPtr<IBuffer> m_pIndexGPUBuffer;
 		RefCntAutoPtr<IBuffer> m_pVsConstBuf;
+		RefCntAutoPtr<IBuffer> m_pVSTerrainInfoBuf;
 		RefCntAutoPtr<IBuffer> m_pVsPatchBuf;
 		RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 
@@ -86,6 +87,8 @@ namespace Diligent
 		float4x4 m_TerrainViewProjMat;
 
 		PerPatchShaderData m_PatchInstanceConst[16];//test for lv 0
+
+		TerrainHeightMap m_Heightmap;
 
 		//------------------CDLOD
 		CDLODTree *mpCDLODTree;

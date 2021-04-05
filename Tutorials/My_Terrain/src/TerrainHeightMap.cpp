@@ -58,12 +58,13 @@ namespace Diligent
 		uint8_t MaxData = 0;
 
 		const uint8_t *pHeightData = reinterpret_cast<uint8_t*>(m_apImageRawData->GetData()->GetDataPtr());
+		int MidLength = (m_apImageRawData->GetDesc().Width - 1) * (m_apImageRawData->GetDesc().Height - 1);
 
 		for (int j = y; j < y + size; ++j)
 		{
 			for (int i = x; i < x + size; ++i)
 			{
-				int idx = j * width + i;
+				int idx = std::min(MidLength, j * width + i);
 				MinData = std::min(pHeightData[idx], MinData);
 				MaxData = std::max(pHeightData[idx], MaxData);
 			}

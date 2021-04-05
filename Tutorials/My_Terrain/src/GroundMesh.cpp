@@ -126,7 +126,7 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 	//}
 
 	const SelectionInfo &SelectInfo = mpCDLODTree->GetSelectInfo();
-	LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
+	//LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
 
 	for (int i = 0; i < SelectInfo.SelectionNodes.size(); ++i)
 	{
@@ -140,7 +140,7 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 				(NodeData.aabb.Max.z - NodeData.aabb.Min.z) / LOD_MESH_GRID_SIZE,
 				ShaderLODLevel, 0.0f);			
 			PerPatchConstData->Offset = float4(NodeData.aabb.Min.x, 
-				(NodeData.aabb.Max.y + NodeData.aabb.Min.y) / 2.0f, NodeData.aabb.Min.z, 0.0f);
+				(NodeData.aabb.Max.y + NodeData.aabb.Min.y) / 2.0f, NodeData.aabb.Min.z, 0.0f);			
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
@@ -157,21 +157,23 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 }
 
 void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
-{
-	TerrainHeightMap heightmap;
-	heightmap.LoadHeightMap("./heightmap.jpg", pDevice);
+{	
+	m_Heightmap.LoadHeightMap("./wm_heightmap.png", pDevice);
 
 	Dimension TerrainDim;
 	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 500.0f, 12180.0f });
-	mpCDLODTree = new CDLODTree(heightmap, TerrainDim);
+	TerrainDim.Size = float3({ 11380.0f, 50.0f, 12180.0f });
+	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
 
 	InitVertexBuffer();
 	InitIndicesBuffer();
 
 	CommitToGPUDeviceBuffer(pDevice);
-	InitPSO(pDevice, pSwapChain);
+	InitPSO(pDevice, pSwapChain, TerrainDim);
+
+	//init shader value
+	m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_Texture")->Set(m_Heightmap.GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void GroundMesh::Update(const FirstPersonCamera *pCam)
@@ -212,11 +214,14 @@ void GroundMesh::CommitToGPUDeviceBuffer(IRenderDevice *pDevice)
 	pDevice->CreateBuffer(IdxBufDesc, &IdxData, &m_pIndexGPUBuffer);
 }
 
-void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
+void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension& dim)
 {	
 	// Pipeline state object encompasses configuration of all GPU stages
 
 	GraphicsPipelineStateCreateInfo PSOCreateInfo;
+
+	PipelineStateDesc& PSODesc = PSOCreateInfo.PSODesc;
+	PipelineResourceLayoutDesc& ResourceLayout = PSODesc.ResourceLayout;
 
 	// Pipeline state name is used by the engine to report issues.
 	// It is always a good idea to give objects descriptive names.
@@ -236,7 +241,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	// Wireframe
-	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
@@ -283,6 +288,16 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 		CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
 		pDevice->CreateBuffer(CBDesc, nullptr, &m_pVsConstBuf);
 
+		BufferDesc TerrainDesc;
+		TerrainDesc.Name = "ClipMap VS Terrain info CB";
+		TerrainDesc.uiSizeInBytes = sizeof(Dimension);
+		TerrainDesc.Usage = USAGE_IMMUTABLE;
+		TerrainDesc.BindFlags = BIND_UNIFORM_BUFFER;
+		BufferData TerrainInitData;
+		TerrainInitData.pData = &dim;
+		TerrainInitData.DataSize = TerrainDesc.uiSizeInBytes;
+		pDevice->CreateBuffer(TerrainDesc, &TerrainInitData, &m_pVSTerrainInfoBuf);
+
 		//Create dynamic patch buffer
 		BufferDesc PatchCBDesc;
 		PatchCBDesc.Name = "ClipMap VS Patch CB";
@@ -304,6 +319,32 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 		pDevice->CreateShader(ShaderCI, &pPS);
 	}
 
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_VERTEX, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
+	};
+	// clang-format on
+	ResourceLayout.Variables = Vars;
+	ResourceLayout.NumVariables = _countof(Vars);
+
+	// Define immutable sampler for g_Texture. Immutable samplers should be used whenever possible
+	// clang-format off
+	SamplerDesc SamLinearClampDesc
+	{
+		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+		TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP
+	};
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{SHADER_TYPE_VERTEX, "g_Texture", SamLinearClampDesc}
+	};
+	// clang-format on
+	ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+
 	// Finally, create the pipeline state
 	PSOCreateInfo.pVS = pVS;
 	PSOCreateInfo.pPS = pPS;
@@ -313,7 +354,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	// type (SHADER_RESOURCE_VARIABLE_TYPE_STATIC) will be used. Static variables never
 	// change and are bound directly through the pipeline state object.
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVsConstBuf);
-	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "PerPatchData")->Set(m_pVsPatchBuf);
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "TerrainDimension")->Set(m_pVSTerrainInfoBuf);
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "PerPatchData")->Set(m_pVsPatchBuf);	
 
 	// Create a shader resource binding object and bind all static resources in it
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
