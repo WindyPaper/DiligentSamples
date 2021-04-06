@@ -7,7 +7,7 @@ namespace Diligent
 {
 	extern DebugCanvas gDebugCanvas;
 
-	void CDLODNode::Create(const int rx, const int ry, const int size, const int LodLevel, TerrainHeightMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx)
+	void CDLODNode::Create(const int rx, const int ry, const int size, const int LodLevel, TerrainMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx)
 	{
 		this->rx = rx;
 		this->ry = ry;
@@ -21,7 +21,7 @@ namespace Diligent
 		{
 			assert(LodLevel == LOD_COUNT - 1);
 
-			heightmap.GetZArea(rx, ry, size, this->rminz, this->rmaxz);
+			heightmap.GetYArea(rx, ry, size, this->rminz, this->rmaxz);
 		}
 		else
 		{
@@ -101,10 +101,10 @@ namespace Diligent
 			if (bbox.IntersectSphereSq(SelectInfo.CamPos, NextLODDistance * NextLODDistance))
 			{
 				bool NodeFullVisible = BoxVis == BoxVisibility::FullyVisible;
-				TLState = this->pTL->SelectNode(SelectInfo, NodeFullVisible);
-				TRState = this->pTR->SelectNode(SelectInfo, NodeFullVisible);
-				BLState = this->pBL->SelectNode(SelectInfo, NodeFullVisible);
-				BRState = this->pBR->SelectNode(SelectInfo, NodeFullVisible);
+				if(this->pTL) TLState = this->pTL->SelectNode(SelectInfo, NodeFullVisible);
+				if(this->pTR) TRState = this->pTR->SelectNode(SelectInfo, NodeFullVisible);
+				if(this->pBL) BLState = this->pBL->SelectNode(SelectInfo, NodeFullVisible);
+				if(this->pBR) BRState = this->pBR->SelectNode(SelectInfo, NodeFullVisible);
 			}			
 		}
 		else		
@@ -135,12 +135,12 @@ namespace Diligent
 	{		
 		BoundBox bbox;
 		float Minx = (float)this->rx / (RasSizeX - 1) * TerrainDim.SizeX;
-		float Miny = (float)this->rminz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
-		float Minz = (float)this->ry / (RasSizeY - 1) * TerrainDim.SizeX;		
+		float Miny = (float)this->rminz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeY;
+		float Minz = (float)this->ry / (RasSizeY - 1) * TerrainDim.SizeZ;		
 
 		float Maxx = (float)(this->rx + size) / (RasSizeX - 1) * TerrainDim.SizeX;
-		float Maxy = (float)this->rmaxz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeZ;
-		float Maxz = (float)(this->ry + size) / (RasSizeY - 1) * TerrainDim.SizeX;		
+		float Maxy = (float)this->rmaxz / MAX_HEIGHTMAP_SIZE * TerrainDim.SizeY;
+		float Maxz = (float)(this->ry + size) / (RasSizeY - 1) * TerrainDim.SizeZ;
 
 		bbox.Min = float3({ Minx, Miny, Minz }) + TerrainDim.Min;
 		bbox.Max = float3({ Maxx, Maxy, Maxz }) + TerrainDim.Min;
@@ -149,7 +149,7 @@ namespace Diligent
 
 	}
 
-	CDLODTree::CDLODTree(const TerrainHeightMap &heightmap, const Dimension &TerrainDim) :
+	CDLODTree::CDLODTree(const TerrainMap &heightmap, const Dimension &TerrainDim) :
 		mTopNodeArray(nullptr),
 		mTopNodeNumX(0),
 		mTopNodeNumY(0),

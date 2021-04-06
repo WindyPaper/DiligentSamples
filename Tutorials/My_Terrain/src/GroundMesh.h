@@ -88,7 +88,7 @@ namespace Diligent
 
 		PerPatchShaderData m_PatchInstanceConst[16];//test for lv 0
 
-		TerrainHeightMap m_Heightmap;
+		TerrainMap m_Heightmap;
 
 		//------------------CDLOD
 		CDLODTree *mpCDLODTree;

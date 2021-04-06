@@ -17,13 +17,13 @@
 #define LOD_DISTANCE_RATIO 2.0f
 #define LOD_MESH_GRID_SIZE 8
 
-#include "TerrainHeightMap.h"
+#include "TerrainMap.h"
 
 namespace Diligent
 {
 	struct SelectionInfo;
 
-	//struct TerrainHeightMap
+	//struct TerrainMap
 	//{
 	//	uint16_t width;
 	//	uint16_t height;
@@ -32,7 +32,7 @@ namespace Diligent
 	//	char* pData;
 
 	//	//for test
-	//	TerrainHeightMap()
+	//	TerrainMap()
 	//	{
 	//		width = 1024;
 	//		height = 1024;
@@ -41,13 +41,13 @@ namespace Diligent
 	//		pData = NULL;
 	//	}
 
-	//	void GetZArea(const uint32_t& x, const uint32_t& y, const uint16_t& size, uint16_t& o_minz, uint16_t& o_maxz) const
+	//	void GetYArea(const uint32_t& x, const uint32_t& y, const uint16_t& size, uint16_t& o_minz, uint16_t& o_maxz) const
 	//	{
 	//		o_minz = 0;
 	//		o_maxz = 50;
 	//	}
 
-	//	uint16_t GetZ(const uint32_t& x, const uint32_t& y) const
+	//	uint16_t GetY(const uint32_t& x, const uint32_t& y) const
 	//	{
 	//		return 50;
 	//	}
@@ -91,7 +91,7 @@ namespace Diligent
 
 		}
 
-		void Create(const int rx, const int ry, const int size, const int LodLevel, TerrainHeightMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx);
+		void Create(const int rx, const int ry, const int size, const int LodLevel, TerrainMap &heightmap, CDLODNode *pAllNodes, int &RefCurrUseNodeIdx);
 		LODNodeState SelectNode(SelectionInfo &SelectionNodes, bool bFullInFrustum);
 		BoundBox GetBBox(const uint16_t RasSizeX, const uint16_t RasSizeY, const Dimension &TerrainDim);
 	};
@@ -126,7 +126,7 @@ namespace Diligent
 	class CDLODTree
 	{
 	public:
-		explicit CDLODTree(const TerrainHeightMap &heightmap, const Dimension &TerrainDim);
+		explicit CDLODTree(const TerrainMap &heightmap, const Dimension &TerrainDim);
 		~CDLODTree();
 
 		void Create();
@@ -136,7 +136,7 @@ namespace Diligent
 
 	private:
 		//Dimension mTerrainDimension;
-		TerrainHeightMap mHeightMap;
+		TerrainMap mHeightMap;
 
 		CDLODNode*** mTopNodeArray;
 		uint16_t mTopNodeNumX;

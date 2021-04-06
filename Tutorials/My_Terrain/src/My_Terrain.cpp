@@ -249,7 +249,7 @@ void My_Terrain::Render()
 	m_apClipMap->Render(m_pImmediateContext);
 
 	//render debug view
-	gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
+	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
 }
 
 void My_Terrain::Update(double CurrTime, double ElapsedTime)
@@ -335,7 +335,7 @@ void My_Terrain::CreateTerrainBuffer()
 void My_Terrain::WindowResize(Uint32 Width, Uint32 Height)
 {
 	float NearPlane = 0.1f;
-	float FarPlane = 10000.f;
+	float FarPlane = 100000.f;
 	float AspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());

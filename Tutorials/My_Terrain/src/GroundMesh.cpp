@@ -1,7 +1,7 @@
 #include "GroundMesh.h"
 #include "FirstPersonCamera.hpp"
 #include "MapHelper.hpp"
-#include "TerrainHeightMap.h"
+#include "TerrainMap.h"
 
 namespace Diligent
 {
@@ -158,11 +158,12 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 
 void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 {	
-	m_Heightmap.LoadHeightMap("./wm_heightmap.png", pDevice);
+	//m_Heightmap.LoadHeightMap("./wm_heightmap.png", pDevice);
+	m_Heightmap.LoadMap("./wm_diffuse_map.png", "./wm_heightmap.png", pDevice);
 
 	Dimension TerrainDim;
 	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 50.0f, 12180.0f });
+	TerrainDim.Size = float3({ 11380.0f, 1000.0f, 12180.0f });
 	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
 
@@ -173,7 +174,16 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	InitPSO(pDevice, pSwapChain, TerrainDim);
 
 	//init shader value
-	m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_Texture")->Set(m_Heightmap.GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	IShaderResourceVariable *g_TextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_Texture");
+	if (g_TextureVar)
+	{
+		g_TextureVar->Set(m_Heightmap.GetHeightMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	}
+	IShaderResourceVariable *g_DiffuseTextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_DiffTexture");
+	if (g_DiffuseTextureVar)
+	{
+		g_DiffuseTextureVar->Set(m_Heightmap.GetDiffuseMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	}
 }
 
 void GroundMesh::Update(const FirstPersonCamera *pCam)
@@ -241,7 +251,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
 
 	// Wireframe
-	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
@@ -288,13 +298,22 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
 		pDevice->CreateBuffer(CBDesc, nullptr, &m_pVsConstBuf);
 
+		struct GPUDIM
+		{
+			float4 Min;
+			float4 Size;
+		};
+		GPUDIM gdim;
+		gdim.Min = dim.Min;
+		gdim.Size = dim.Size;
+
 		BufferDesc TerrainDesc;
 		TerrainDesc.Name = "ClipMap VS Terrain info CB";
-		TerrainDesc.uiSizeInBytes = sizeof(Dimension);
+		TerrainDesc.uiSizeInBytes = sizeof(GPUDIM);
 		TerrainDesc.Usage = USAGE_IMMUTABLE;
 		TerrainDesc.BindFlags = BIND_UNIFORM_BUFFER;
 		BufferData TerrainInitData;
-		TerrainInitData.pData = &dim;
+		TerrainInitData.pData = &gdim;
 		TerrainInitData.DataSize = TerrainDesc.uiSizeInBytes;
 		pDevice->CreateBuffer(TerrainDesc, &TerrainInitData, &m_pVSTerrainInfoBuf);
 
@@ -324,7 +343,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	// clang-format off
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
+		{SHADER_TYPE_VERTEX, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_DiffTexture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
 	};
 	// clang-format on
 	ResourceLayout.Variables = Vars;
@@ -337,9 +357,15 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
 		TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP
 	};
+	SamplerDesc SamAnisoClampDesc
+	{
+		FILTER_TYPE_ANISOTROPIC, FILTER_TYPE_ANISOTROPIC, FILTER_TYPE_ANISOTROPIC,
+		TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP
+	};
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_Texture", SamLinearClampDesc}
+		{SHADER_TYPE_VERTEX, "g_Texture", SamLinearClampDesc},
+		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoClampDesc}
 	};
 	// clang-format on
 	ResourceLayout.ImmutableSamplers = ImtblSamplers;
