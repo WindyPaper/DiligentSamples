@@ -3,8 +3,8 @@ SamplerState g_Texture_sampler; // By convention, texture samplers must use the 
 
 struct Dimension
 {
-	float3 Min;
-	float3 Size;
+	float4 Min;
+	float4 Size;
 };
 
 cbuffer TerrainDimension
@@ -44,11 +44,12 @@ void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
     float2 WPosXZ = float2(VSIn.Pos.x, VSIn.Pos.y) * Scale.xy;
-    float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + Offset.xyz;
+    float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
 
     WPos.y = 0.0f;    
-    float2 TerrainMapUV = WPos.xz / (g_TerrainInfo.Min.xz + g_TerrainInfo.Size.xz);
-    WPos.y = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).x * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y; 
+    float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz;
+    WPos.y = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).x * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
+    //WPos.y = 0.0f;
 
     PSIn.Pos = mul(g_ViewProj, float4(WPos, 1.0f));
     PSIn.UV = TerrainMapUV;
