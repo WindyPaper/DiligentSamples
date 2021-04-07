@@ -30,6 +30,8 @@
 #include "SampleBase.hpp"
 #include "FirstPersonCamera.hpp"
 
+//RIGHT HAND COORDINATION
+
 namespace Diligent
 {
 class GroundMesh;

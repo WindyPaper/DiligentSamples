@@ -51,15 +51,9 @@ namespace Diligent
 		void InitIndicesBuffer();
 		void CommitToGPUDeviceBuffer(IRenderDevice *pDevice);
 
-		void UpdateLevelOffset(const float2& CamPosXZ);
-
 		void InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension& dim);
 
-		uint16_t* GeneratePatchIndices(uint16_t *pIndexdata, uint VertexOffset, uint SizeX, uint SizeZ);
-
-		int PatchIndexCount(const uint sizex, const uint sizez) const;
-
-		float2 GetOffsetLevel(const float2 &CamPosXZ, const uint Level) const;
+		DrawIndexedAttribs GetDrawIndex(const uint16_t start, const uint16_t num);
 
 	private:
 		uint m_sizem;
@@ -89,6 +83,12 @@ namespace Diligent
 		PerPatchShaderData m_PatchInstanceConst[16];//test for lv 0
 
 		TerrainMap m_Heightmap;
+
+		//MESH
+		uint32_t m_indexEndTL;
+		uint32_t m_indexEndTR;
+		uint32_t m_indexEndBL;
+		uint32_t m_indexEndBR;
 
 		//------------------CDLOD
 		CDLODTree *mpCDLODTree;

@@ -21,37 +21,7 @@
 
 namespace Diligent
 {
-	struct SelectionInfo;
-
-	//struct TerrainMap
-	//{
-	//	uint16_t width;
-	//	uint16_t height;
-	//	uint16_t pitch;
-
-	//	char* pData;
-
-	//	//for test
-	//	TerrainMap()
-	//	{
-	//		width = 1024;
-	//		height = 1024;
-	//		pitch = 8;
-
-	//		pData = NULL;
-	//	}
-
-	//	void GetYArea(const uint32_t& x, const uint32_t& y, const uint16_t& size, uint16_t& o_minz, uint16_t& o_maxz) const
-	//	{
-	//		o_minz = 0;
-	//		o_maxz = 50;
-	//	}
-
-	//	uint16_t GetY(const uint32_t& x, const uint32_t& y) const
-	//	{
-	//		return 50;
-	//	}
-	//};	
+	struct SelectionInfo;	
 
 	enum class LODNodeState
 	{
@@ -63,7 +33,6 @@ namespace Diligent
 
 	struct CDLODNode
 	{
-		//BoundBox aabb;
 		int rx, ry, size;
 		int LODLevel;
 		uint16_t rminz, rmaxz;
@@ -96,10 +65,66 @@ namespace Diligent
 		BoundBox GetBBox(const uint16_t RasSizeX, const uint16_t RasSizeY, const Dimension &TerrainDim);
 	};
 
+	//quad area
+	struct SelectNodeAreaFlag
+	{
+		enum AreaFlag : uint8_t
+		{
+			TL_ON = 1,
+			TR_ON = 1 << 1,
+			BL_ON = 1 << 2,
+			BR_ON = 1 << 3,
+			
+			FULL = 255
+		};
+
+		uint8_t flag;
+
+		SelectNodeAreaFlag()
+		{
+			memset(this, 0, sizeof(SelectNodeAreaFlag));
+		}
+
+		SelectNodeAreaFlag(bool full)
+		{
+			if (full)
+			{
+				SetFull();
+			}
+			else
+			{
+				memset(this, 0, sizeof(SelectNodeAreaFlag));
+			}			
+		}
+
+		SelectNodeAreaFlag(bool tl, bool tr, bool bl, bool br)
+		{
+			SetFlag(tl, tr, bl, br);
+		}
+
+		void SetFlag(bool tl, bool tr, bool bl, bool br)
+		{
+			if (tl == true && tr == true && bl == true && br == true)
+			{
+				SetFull();
+			}
+			else
+			{
+				flag |= (tl) | (tr << 1) | (bl << 2) | (br << 3);
+			}						
+		}
+
+		void SetFull()
+		{
+			flag = FULL;
+		}
+	};
+
 	struct SelectNodeData
 	{
 		CDLODNode *pNode;
 		BoundBox aabb;
+		SelectNodeAreaFlag AreaFlag;
 	};
 
 	struct SelectionInfo

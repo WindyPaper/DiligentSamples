@@ -7,14 +7,18 @@ namespace Diligent
 {
 
 Diligent::GroundMesh::GroundMesh(const uint SizeM, const uint Level, const float ClipScale) :
-	m_sizem(SizeM + 1),
+	m_sizem(SizeM),
 	m_level(Level),
 	m_clip_scale(ClipScale),
 	m_pVerticesData(NULL),
 	m_pIndicesData(NULL),
 	m_VertexNum(0),
 	m_IndexNum(0),
-	mpCDLODTree(nullptr)
+	mpCDLODTree(nullptr),
+	m_indexEndTL(0),
+	m_indexEndTR(0),
+	m_indexEndBL(0),
+	m_indexEndBR(0)
 {
 	
 }
@@ -40,14 +44,14 @@ Diligent::GroundMesh::~GroundMesh()
 	}
 }
 
-void Diligent::GroundMesh::UpdateLevelOffset(const float2& CamPosXZ)
-{
-	m_LevelOffsets.resize(m_level);
-	for (int i = 0; i < m_LevelOffsets.size(); ++i)
-	{
-		m_LevelOffsets[i] = GetOffsetLevel(CamPosXZ, i);
-	}
-}
+//void Diligent::GroundMesh::UpdateLevelOffset(const float2& CamPosXZ)
+//{
+//	m_LevelOffsets.resize(m_level);
+//	for (int i = 0; i < m_LevelOffsets.size(); ++i)
+//	{
+//		m_LevelOffsets[i] = GetOffsetLevel(CamPosXZ, i);
+//	}
+//}
 
 void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 {
@@ -59,78 +63,18 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 
 	// Set the pipeline state in the immediate context
 	pContext->SetPipelineState(m_pPSO);
-	
+
 	// Map the buffer and write current world-view-projection matrix
 	MapHelper<float4x4> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
 	*CBConstants = m_TerrainViewProjMat;
 
-	//Level 0
-	//for (unsigned int z = 0; z < 4; z++)
-	//{
-	//	for (unsigned int x = 0; x < 4; x++)
-	//	{
-	//		// Set uniform
-	//		{
-	//			MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-	//			PerPatchConstData->Level = 0;
-	//			PerPatchConstData->Scale = m_clip_scale;
-	//			PerPatchConstData->Offset = m_LevelOffsets[0] + float2(x * (m_sizem - 1), z * (m_sizem - 1));
-	//			PerPatchConstData->Offset *= m_clip_scale;
-	//		}
-
-	//		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
-	//		// makes sure that resources are transitioned to required states.
-	//		pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	//		DrawIndexedAttribs drawAttrs;
-	//		drawAttrs.IndexType = VT_UINT16; // Index type
-	//		drawAttrs.NumIndices = m_IndexNum;
-	//		// Verify the state of vertex and index buffers
-	//		drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
-	//		pContext->DrawIndexed(drawAttrs);
-	//	}
-	//}
-
-	//for (int LvIdx = 1; LvIdx < m_level; ++LvIdx)
-	//{
-	//	for (unsigned int z = 0; z < 4; z++)
-	//	{
-	//		for (unsigned int x = 0; x < 4; x++)
-	//		{
-	//			if (z != 0 && z != 3 && x != 0 && x != 3)
-	//			{
-	//				continue;
-	//			}
-
-	//			// Set uniform
-	//			{					
-	//				MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-	//				PerPatchConstData->Level = LvIdx;
-	//				PerPatchConstData->Scale = m_clip_scale * (1 << LvIdx);
-	//				PerPatchConstData->Offset = m_LevelOffsets[LvIdx] + float2(x * (m_sizem - 1), z * (m_sizem - 1)) * (1 << LvIdx);
-	//				PerPatchConstData->Offset *= m_clip_scale;
-	//			}
-
-	//			// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
-	//			// makes sure that resources are transitioned to required states.
-	//			pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	//			DrawIndexedAttribs drawAttrs;
-	//			drawAttrs.IndexType = VT_UINT16; // Index type
-	//			drawAttrs.NumIndices = m_IndexNum;
-	//			// Verify the state of vertex and index buffers
-	//			drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
-	//			pContext->DrawIndexed(drawAttrs);
-	//		}
-	//	}
-	//}
-
 	const SelectionInfo &SelectInfo = mpCDLODTree->GetSelectInfo();
-	//LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
+	LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
 
 	for (int i = 0; i < SelectInfo.SelectionNodes.size(); ++i)
 	{
-		SelectNodeData NodeData = SelectInfo.SelectionNodes[i];
+		const SelectNodeData &NodeData = SelectInfo.SelectionNodes[i];
+
 
 		// Set uniform
 		{
@@ -138,22 +82,59 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 			MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
 			PerPatchConstData->Scale = float4((NodeData.aabb.Max.x - NodeData.aabb.Min.x) / LOD_MESH_GRID_SIZE,
 				(NodeData.aabb.Max.z - NodeData.aabb.Min.z) / LOD_MESH_GRID_SIZE,
-				ShaderLODLevel, 0.0f);			
-			PerPatchConstData->Offset = float4(NodeData.aabb.Min.x, 
-				(NodeData.aabb.Max.y + NodeData.aabb.Min.y) / 2.0f, NodeData.aabb.Min.z, 0.0f);			
+				ShaderLODLevel, 0.0f);
+			PerPatchConstData->Offset = float4(NodeData.aabb.Min.x,
+				(NodeData.aabb.Max.y + NodeData.aabb.Min.y) / 2.0f, NodeData.aabb.Min.z, 0.0f);
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
 		// makes sure that resources are transitioned to required states.
 		pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-		DrawIndexedAttribs drawAttrs;
-		drawAttrs.IndexType = VT_UINT16; // Index type
-		drawAttrs.NumIndices = m_IndexNum;
-		// Verify the state of vertex and index buffers
-		drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
-		pContext->DrawIndexed(drawAttrs);
+		if (NodeData.AreaFlag.flag == SelectNodeAreaFlag::FULL)
+		{
+			pContext->DrawIndexed(GetDrawIndex(0, m_IndexNum));
+		}
+		else
+		{
+			uint16_t QuadIndexNum = m_IndexNum / 4;
+			//Top Left
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::TL_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(0, QuadIndexNum));
+			}
+
+			//Top Right
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::TR_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(m_indexEndTL, QuadIndexNum));
+			}
+
+			//Bottom Left
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::BL_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(m_indexEndTR, QuadIndexNum));
+			}
+
+			//Bottom Right
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::BR_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(m_indexEndBL, QuadIndexNum));
+			}
+		}		
 	}
+}
+
+DrawIndexedAttribs GroundMesh::GetDrawIndex(const uint16_t start, const uint16_t num)
+{
+	DrawIndexedAttribs drawAttrs;
+	drawAttrs.IndexType = VT_UINT16; // Index type
+	drawAttrs.FirstIndexLocation = start;
+	drawAttrs.NumIndices = num;
+	// Verify the state of vertex and index buffers
+	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+
+	return drawAttrs;
 }
 
 void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
@@ -163,7 +144,7 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 
 	Dimension TerrainDim;
 	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 1000.0f, 12180.0f });
+	TerrainDim.Size = float3({ 11380.0f, 3000.0f, 12180.0f });
 	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
 
@@ -188,9 +169,9 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 
 void GroundMesh::Update(const FirstPersonCamera *pCam)
 {
-	const float3 &pos = pCam->GetPos();
+	//const float3 &pos = pCam->GetPos();
 	//UpdateLevelOffset(float2(pos.x, pos.z));
-	UpdateLevelOffset(float2(0.0f, 0.0f));
+	//UpdateLevelOffset(float2(0.0f, 0.0f));
 
 	m_TerrainViewProjMat = pCam->GetViewProjMatrix();
 
@@ -248,10 +229,11 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	// Use the depth buffer format from the swap chain
 	PSOCreateInfo.GraphicsPipeline.DSVFormat = pSwapChain->GetDesc().DepthBufferFormat;
 	// Primitive topology defines what kind of primitives will be rendered by this pipeline state
-	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 	// Wireframe
-	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
@@ -390,15 +372,16 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 
 void GroundMesh::InitVertexBuffer()
 {
-	uint VertexNum = m_sizem * m_sizem;
+	uint VertexSizeM = m_sizem + 1;
+	uint VertexNum = VertexSizeM * VertexSizeM;
 		
 	m_pVerticesData = new ClipMapTerrainVerticesData[VertexNum];
 	ClipMapTerrainVerticesData *pCurr = m_pVerticesData;
 
 	//Init Block
-	for (uint i = 0; i < m_sizem; ++i)
+	for (uint i = 0; i < VertexSizeM; ++i)
 	{
-		for (uint j = 0; j < m_sizem; ++j)
+		for (uint j = 0; j < VertexSizeM; ++j)
 		{
 			pCurr->XZ = float2((float)j, (float)i);
 			++pCurr;
@@ -409,88 +392,84 @@ void GroundMesh::InitVertexBuffer()
 }
 
 void GroundMesh::InitIndicesBuffer()
-{	
-	uint vertex_buffer_offset = 0;
-	
-	m_block.Count = PatchIndexCount(m_sizem, m_sizem);
-
-	uint NumIndex = m_block.Count;
+{		
+	uint NumIndex = m_sizem * m_sizem * 2 * 3;
 	m_IndexNum = NumIndex;
+
 	m_pIndicesData = new uint16_t[NumIndex];
 	memset(m_pIndicesData, 0, sizeof(uint16_t) * NumIndex);
 
 	uint16_t *pCurr = m_pIndicesData;
+	
+	int index = 0;
 
-	m_block.Offset = (uint)(pCurr - m_pIndicesData);
-	pCurr = GeneratePatchIndices(pCurr, vertex_buffer_offset, m_sizem, m_sizem);
+	int VertDim = m_sizem + 1;
+	int halfd = (VertDim / 2);
+	int fulld = m_sizem;
 
-	vertex_buffer_offset += m_sizem * m_sizem;
-}
-
-uint16_t* GroundMesh::GeneratePatchIndices(uint16_t *pIndexdata, uint VertexOffset, uint SizeX, uint SizeZ)
-{
-	uint VertexPos = VertexOffset;
-
-	uint Strips = SizeZ - 1;
-
-	// After even indices in a strip, always step to next strip.
-	// After odd indices in a strip, step back again and one to the right or left.
-	// Which direction we take depends on which strip we're generating.
-	// This creates a zig-zag pattern.
-	for (uint z = 0; z < Strips; z++)
+	// Top left part
+	for (int y = 0; y < halfd; y++)
 	{
-		int StepEven = SizeX;
-		int StepOdd = ((z & 1) ? -1 : 1) - StepEven;
-
-		// We don't need the last odd index.
-		// The first index of the next strip will complete this strip.
-		for (uint x = 0; x < 2 * SizeX - 1; x++)
+		for (int x = 0; x < halfd; x++)
 		{
-			*pIndexdata++ = VertexPos;
-			VertexPos += (x & 1) ? StepOdd : StepEven;
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);     
+			pCurr[index++] = (uint16_t)(x + VertDim * y);
+
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);
 		}
 	}
-	// There is no new strip, so complete the block here.
-	*pIndexdata++ = VertexPos;
+	m_indexEndTL = index;
 
-	// Return updated index buffer pointer.
-	// More explicit than taking reference to pointer.
-	return pIndexdata;
-}
-
-int GroundMesh::PatchIndexCount(const uint sizex, const uint sizez) const
-{
-	uint strips = sizez - 1;
-	return strips * (2 * sizex - 1) + 1;
-}
-
-
-
-Diligent::float2 GroundMesh::GetOffsetLevel(const float2 &CamPosXZ, const uint Level) const
-{
-	if (Level == 0) // Must follow level 1 as trim region is fixed.
+	// Top right part
+	for (int y = 0; y < halfd; y++)
 	{
-		return GetOffsetLevel(CamPosXZ, 1) + float2(float(m_sizem << 1));
+		for (int x = halfd; x < fulld; x++)
+		{
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);     
+			pCurr[index++] = (uint16_t)(x + VertDim * y);
+
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);
+		}
 	}
-	else
+	m_indexEndTR = index;
+
+	// Bottom left part
+	for (int y = halfd; y < fulld; y++)
 	{
-		float2 ScalePos = CamPosXZ / float2(m_clip_scale); // Snap to grid in the appropriate space.
+		for (int x = 0; x < halfd; x++)
+		{
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);     
+			pCurr[index++] = (uint16_t)(x + VertDim * y);
 
-		// Snap to grid of next level. I.e. we move the clipmap level in steps of two.
-		float2 SnappedPos = (ScalePos / float2(1 << (Level + 1))) * float2(1 << (Level + 1));
-		SnappedPos = float2(std::floorf(SnappedPos.x), std::floorf(SnappedPos.y));
-
-		// Apply offset so all levels align up neatly.
-		// If SnappedPos is equal for all levels,
-		// this causes top-left vertex of level N to always align up perfectly with top-left interior corner of level N + 1.
-		// This gives us a bottom-right trim region.
-
-		// Due to the flooring, SnappedPos might not always be equal for all levels.
-		// The flooring has the property that SnappedPos for level N + 1 is less-or-equal SnappedPos for level N.
-		// If less, the final position of level N + 1 will be offset by -2 ^ N, which can be compensated for with changing trim-region to top-left.
-		float2 pos = SnappedPos - float2((2 * (m_sizem - 1)) << Level);
-		return pos;
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);
+		}
 	}
+	m_indexEndBL = index;
+
+	// Bottom right part
+	for (int y = halfd; y < fulld; y++)
+	{
+		for (int x = halfd; x < fulld; x++)
+		{
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);     
+			pCurr[index++] = (uint16_t)(x + VertDim * y);
+
+			pCurr[index++] = (uint16_t)(x + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * (y + 1)); 
+			pCurr[index++] = (uint16_t)((x + 1) + VertDim * y);
+		}
+	}
+	m_indexEndBR = index;
 }
 
 }

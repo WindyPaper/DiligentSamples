@@ -249,7 +249,7 @@ void My_Terrain::Render()
 	m_apClipMap->Render(m_pImmediateContext);
 
 	//render debug view
-	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
+	gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
 }
 
 void My_Terrain::Update(double CurrTime, double ElapsedTime)

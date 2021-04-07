@@ -110,25 +110,31 @@ namespace Diligent
 		else		
 		{
 			//Leaf
-			SelectInfo.SelectionNodes.push_back(SelectNodeData({ this, bbox }));
+			SelectInfo.SelectionNodes.push_back(SelectNodeData({ this, bbox, SelectNodeAreaFlag(true) }));
 			return LODNodeState::SELECTED;
 		}
 
-		auto SelectChildNodeFunc = [&](LODNodeState state, CDLODNode* pNode)
+		bool tl, tr, bl, br;
+		auto SelectChildNodeFunc = [&](LODNodeState state, CDLODNode* pNode, bool &flag)
 		{
-			if (state == LODNodeState::OUT_OF_LOD_RANGE)
+			flag = true;
+			if (state == LODNodeState::SELECTED || state == LODNodeState::OUT_OF_FRUSTUM)
 			{
-				BoundBox ChildBBox = pNode->GetBBox(SelectInfo.RasSizeX, SelectInfo.RasSizeY, SelectInfo.TerrainDimension);
-				SelectInfo.SelectionNodes.push_back(SelectNodeData({ pNode, ChildBBox }));
+				flag = false;
 			}
 		};
-		SelectChildNodeFunc(TLState, this->pTL);
-		SelectChildNodeFunc(TRState, this->pTR);
-		SelectChildNodeFunc(BLState, this->pBL);
-		SelectChildNodeFunc(BRState, this->pBR);
+		SelectChildNodeFunc(TLState, this->pTL, tl);
+		SelectChildNodeFunc(TRState, this->pTR, tr);
+		SelectChildNodeFunc(BLState, this->pBL, bl);
+		SelectChildNodeFunc(BRState, this->pBR, br);
 
+		if (tl | tr | bl | br)
+		{
+			SelectInfo.SelectionNodes.push_back(SelectNodeData({ this, bbox, SelectNodeAreaFlag(tl, tr, bl, br) }));
+			return LODNodeState::SELECTED;
+		}
 
-		return LODNodeState::OUT_OF_LOD_RANGE;
+		return LODNodeState::OUT_OF_FRUSTUM;
 	}
 
 	Diligent::BoundBox CDLODNode::GetBBox(const uint16_t RasSizeX, const uint16_t RasSizeY, const Dimension &TerrainDim)
@@ -286,19 +292,11 @@ namespace Diligent
 				//bool bBoxVis = false;
 				if (vis == BoxVisibility::FullyVisible)
 				{
-					LODNodeState state = pNode->SelectNode(mSelectionInfo, true);
-					if (state == LODNodeState::OUT_OF_LOD_RANGE)
-					{
-						mSelectionInfo.SelectionNodes.push_back(SelectNodeData({ pNode, bbox }));
-					}
+					pNode->SelectNode(mSelectionInfo, true);
 				}
 				else if (vis == BoxVisibility::Intersecting)
 				{
-					LODNodeState state = pNode->SelectNode(mSelectionInfo, false);
-					if (state == LODNodeState::OUT_OF_LOD_RANGE)
-					{
-						mSelectionInfo.SelectionNodes.push_back(SelectNodeData({ pNode, bbox }));
-					}
+					pNode->SelectNode(mSelectionInfo, false);
 				}
 				
 			}
