@@ -16,6 +16,7 @@
 #define LOD_COUNT  8
 #define LOD_DISTANCE_RATIO 2.0f
 #define LOD_MESH_GRID_SIZE 8
+#define MORPH_START_RATIO 0.667f
 
 #include "TerrainMap.h"
 
@@ -135,6 +136,8 @@ namespace Diligent
 		ViewFrustum frustum;
 		float3 CamPos;
 		std::vector<float> LODRange;
+		std::vector<float> MorphStart;
+		std::vector<float> MorphEnd;
 
 		float near, far;
 
@@ -158,6 +161,9 @@ namespace Diligent
 		void SelectLOD(const FirstPersonCamera &cam);
 
 		const SelectionInfo &GetSelectInfo() const;
+
+	protected:
+		void UpdateLODRangeAndMorph(const FirstPersonCamera &cam);
 
 	private:
 		//Dimension mTerrainDimension;

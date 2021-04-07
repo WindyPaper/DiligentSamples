@@ -35,6 +35,12 @@ namespace Diligent
 		float4 Offset;		
 	};
 
+	struct GPUConstBuffer
+	{
+		float4x4 ViewProj;
+		float4 MeshGridUnit;
+	};
+
 	class GroundMesh
 	{
 	public:

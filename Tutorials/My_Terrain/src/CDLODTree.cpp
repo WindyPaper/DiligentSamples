@@ -242,41 +242,7 @@ namespace Diligent
 	{
 		gDebugCanvas.ClearAABB();
 
-		mSelectionInfo.SelectionNodes.clear();
-		mSelectionInfo.CamPos = cam.GetPos();
-
-		//Update LOD distance range
-		if (mSelectionInfo.near != cam.GetProjAttribs().NearClipPlane &&
-			mSelectionInfo.far != cam.GetProjAttribs().FarClipPlane)
-		{
-			mSelectionInfo.near = cam.GetProjAttribs().NearClipPlane;
-			mSelectionInfo.far = cam.GetProjAttribs().FarClipPlane;
-
-			mSelectionInfo.LODRange.resize(LOD_COUNT);
-			std::vector<float> &LODRange = mSelectionInfo.LODRange;
-
-			//update LOD range
-			float total = 0.0f;
-			float distance = 1.0f;
-			for (int i = 0; i < LOD_COUNT; ++i)
-			{				
-				total += distance;
-				distance *= LOD_DISTANCE_RATIO;
-			}
-
-			float CamViewDistance = mSelectionInfo.far - mSelectionInfo.near;
-			float SectUnit = CamViewDistance / total;
-
-			float PrevPos = mSelectionInfo.near;
-			distance = 1.0f;
-			for (int i = 0; i < LOD_COUNT; ++i)
-			{
-				int index = LOD_COUNT - i - 1;
-				LODRange[index] = PrevPos + SectUnit * distance;
-				PrevPos = LODRange[index];
-				distance *= LOD_DISTANCE_RATIO;
-			}
-		}
+		UpdateLODRangeAndMorph(cam);
 
 		ExtractViewFrustumPlanesFromMatrix(cam.GetViewProjMatrix(), mSelectionInfo.frustum, false);
 
@@ -312,6 +278,58 @@ namespace Diligent
 	const Diligent::SelectionInfo & CDLODTree::GetSelectInfo() const
 	{
 		return mSelectionInfo;
+	}
+
+	void CDLODTree::UpdateLODRangeAndMorph(const FirstPersonCamera &cam)
+	{
+		mSelectionInfo.SelectionNodes.clear();
+		mSelectionInfo.CamPos = cam.GetPos();
+
+		//Update LOD distance range
+		if (mSelectionInfo.near != cam.GetProjAttribs().NearClipPlane &&
+			mSelectionInfo.far != cam.GetProjAttribs().FarClipPlane)
+		{
+			mSelectionInfo.near = cam.GetProjAttribs().NearClipPlane;
+			mSelectionInfo.far = cam.GetProjAttribs().FarClipPlane;
+
+			mSelectionInfo.LODRange.resize(LOD_COUNT);
+			mSelectionInfo.MorphStart.resize(LOD_COUNT);
+			mSelectionInfo.MorphEnd.resize(LOD_COUNT);
+			std::vector<float> &LODRange = mSelectionInfo.LODRange;
+			std::vector<float> &MorphStart = mSelectionInfo.MorphStart;
+			std::vector<float> &MorphEnd = mSelectionInfo.MorphEnd;
+
+			//update LOD range
+			float total = 0.0f;
+			float distance = 1.0f;
+			for (int i = 0; i < LOD_COUNT; ++i)
+			{
+				total += distance;
+				distance *= LOD_DISTANCE_RATIO;
+			}
+
+			float CamViewDistance = mSelectionInfo.far - mSelectionInfo.near;
+			float SectUnit = CamViewDistance / total;
+
+			float PrevPos = mSelectionInfo.near;
+			distance = 1.0f;
+			for (int i = 0; i < LOD_COUNT; ++i)
+			{
+				int index = LOD_COUNT - i - 1; //reverse
+				LODRange[index] = PrevPos + SectUnit * distance;
+				PrevPos = LODRange[index];
+				distance *= LOD_DISTANCE_RATIO;
+			}
+
+			PrevPos = mSelectionInfo.near;
+			for (int i = 0; i < LOD_COUNT; ++i)
+			{
+				int index = LOD_COUNT - i - 1;
+				MorphEnd[i] = LODRange[index];
+				MorphStart[i] = PrevPos + (MorphEnd[i] - PrevPos) * MORPH_START_RATIO;
+				PrevPos = MorphStart[i];
+			}
+		}
 	}
 
 }

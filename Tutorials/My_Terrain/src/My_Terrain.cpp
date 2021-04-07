@@ -249,7 +249,7 @@ void My_Terrain::Render()
 	m_apClipMap->Render(m_pImmediateContext);
 
 	//render debug view
-	gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
+	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
 }
 
 void My_Terrain::Update(double CurrTime, double ElapsedTime)
@@ -257,13 +257,7 @@ void My_Terrain::Update(double CurrTime, double ElapsedTime)
 	UpdateUI();
     SampleBase::Update(CurrTime, ElapsedTime);
 
-	m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));	
-
-	// Apply rotation
-	//float4x4 CubeModelTransform = float4x4::RotationY(static_cast<float>(CurrTime) * 1.0f) * float4x4::RotationX(-PI_F * 0.1f);	
-
-	// Compute world-view-projection matrix
-	//m_TerrainWorldMatrix = float4x4::Identity();// CubeModelTransform;
+	m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));
 
 	m_apClipMap->Update(&m_Camera);
 }

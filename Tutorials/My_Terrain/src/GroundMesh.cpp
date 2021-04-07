@@ -65,8 +65,9 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 	pContext->SetPipelineState(m_pPSO);
 
 	// Map the buffer and write current world-view-projection matrix
-	MapHelper<float4x4> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-	*CBConstants = m_TerrainViewProjMat;
+	MapHelper<GPUConstBuffer> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+	CBConstants->ViewProj = m_TerrainViewProjMat;
+	//CBConstants->MeshGridUnit.x = LOD_MESH_GRID_SIZE;
 
 	const SelectionInfo &SelectInfo = mpCDLODTree->GetSelectInfo();
 	LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
@@ -143,7 +144,7 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	m_Heightmap.LoadMap("./wm_diffuse_map.png", "./wm_heightmap.png", pDevice);
 
 	Dimension TerrainDim;
-	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
+	TerrainDim.Min = float3({ -5690.0f, -3000.00f, -7090.0f });
 	TerrainDim.Size = float3({ 11380.0f, 3000.0f, 12180.0f });
 	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
@@ -232,8 +233,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 	// Wireframe
-	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
-	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
@@ -271,10 +272,10 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		ShaderCI.FilePath = "clipmap.vsh";
 		pDevice->CreateShader(ShaderCI, &pVS);
 
-		//Create dynamic const buffer
+		//Create dynamic const buffer		
 		BufferDesc CBDesc;
 		CBDesc.Name = "ClipMap VS Constants CB";
-		CBDesc.uiSizeInBytes = sizeof(float4x4);
+		CBDesc.uiSizeInBytes = sizeof(GPUConstBuffer);
 		CBDesc.Usage = USAGE_DYNAMIC;
 		CBDesc.BindFlags = BIND_UNIFORM_BUFFER;
 		CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;

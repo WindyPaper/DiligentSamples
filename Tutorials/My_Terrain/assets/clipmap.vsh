@@ -15,6 +15,8 @@ cbuffer TerrainDimension
 cbuffer Constants
 {
     float4x4 g_ViewProj;
+    float4 g_MorphK;
+
 };
 
 cbuffer PerPatchData
@@ -37,6 +39,13 @@ struct PSInput
     float2 UV  : TEX_COORD;
 };
 
+// morphs vertex xy from from high to low detailed mesh position
+float2 MorphVertex( float2 InPos, float2 vertex )
+{
+   float2 fracPart = (frac( InPos.xy / 2.0f ) * 2.0f) * Scale.xy;
+   return vertex.xy - fracPart * g_MorphK.x;
+}
+
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
 // shader output variable name must match exactly the name of the pixel shader input variable.
 // If the variable has structure type (like in this example), the structure declarations must also be indentical.
@@ -44,6 +53,10 @@ void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
     float2 WPosXZ = float2(VSIn.Pos.x, VSIn.Pos.y) * Scale.xy;
+
+    //vertex morph
+    WPosXZ = MorphVertex(VSIn.Pos.xy, WPosXZ);
+
     float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
 
     WPos.y = 0.0f;    
