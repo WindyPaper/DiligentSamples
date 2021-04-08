@@ -332,4 +332,17 @@ namespace Diligent
 		}
 	}
 
+	void SelectionInfo::GetMorphFromLevel(const int level, float *pOut) const
+	{
+		float start = MorphStart[level];
+		float end = MorphEnd[level];
+
+		const float ErrorFudge = 0.01f;
+		end = lerp(end, start, ErrorFudge);
+
+		float dis = end - start;
+		pOut[0] = end / dis;
+		pOut[1] = 1.0f / dis;
+	}
+
 }

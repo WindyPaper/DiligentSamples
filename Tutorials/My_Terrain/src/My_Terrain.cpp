@@ -193,7 +193,7 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 	// Create a shader resource binding object and bind all static resources in it
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
 
-	CreateTerrainBuffer();
+	CreateGridBuffer();
 
 	m_Camera.SetPos(float3(0.0f, 20.0f, -5.f));		
 	m_Camera.SetRotationSpeed(0.005f);
@@ -246,7 +246,7 @@ void My_Terrain::Render()
 	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(drawAttrs);
 
-	m_apClipMap->Render(m_pImmediateContext);
+	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos());
 
 	//render debug view
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
@@ -282,7 +282,7 @@ void MakePlane(int rows, int columns, TerrainVertexAttrData *vertices, int *indi
 	}
 }
 
-void My_Terrain::CreateTerrainBuffer()
+void My_Terrain::CreateGridBuffer()
 {
 	int row = 10;
 	int column = 10;

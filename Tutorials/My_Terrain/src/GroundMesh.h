@@ -38,7 +38,8 @@ namespace Diligent
 	struct GPUConstBuffer
 	{
 		float4x4 ViewProj;
-		float4 MeshGridUnit;
+		float4 MorphKInfo; //[0]:end/dis, [1] 1/dis
+		float4 CameraPos;
 	};
 
 	class GroundMesh
@@ -48,7 +49,7 @@ namespace Diligent
 		~GroundMesh();
 
 		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain);		
-		void Render(IDeviceContext *pContext);
+		void Render(IDeviceContext *pContext, const float3 &CamPos);
 
 		void Update(const FirstPersonCamera *pCam);		
 

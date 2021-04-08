@@ -71,7 +71,7 @@ public:
 
 protected:
 	void UpdateUI();
-	void CreateTerrainBuffer();
+	void CreateGridBuffer();
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;

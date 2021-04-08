@@ -16,7 +16,7 @@
 #define LOD_COUNT  8
 #define LOD_DISTANCE_RATIO 2.0f
 #define LOD_MESH_GRID_SIZE 8
-#define MORPH_START_RATIO 0.667f
+#define MORPH_START_RATIO 0.66f
 
 #include "TerrainMap.h"
 
@@ -149,6 +149,8 @@ namespace Diligent
 		{
 
 		}
+
+		void GetMorphFromLevel(const int level, float *pOut) const;
 	};	
 
 	class CDLODTree

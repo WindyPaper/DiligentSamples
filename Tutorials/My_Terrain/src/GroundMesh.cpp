@@ -53,7 +53,7 @@ Diligent::GroundMesh::~GroundMesh()
 //	}
 //}
 
-void Diligent::GroundMesh::Render(IDeviceContext *pContext)
+void Diligent::GroundMesh::Render(IDeviceContext *pContext, const float3 &CamPos)
 {
 	// Bind vertex and index buffers
 	Uint32   offset = 0;
@@ -63,10 +63,7 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 
 	// Set the pipeline state in the immediate context
 	pContext->SetPipelineState(m_pPSO);
-
-	// Map the buffer and write current world-view-projection matrix
-	MapHelper<GPUConstBuffer> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
-	CBConstants->ViewProj = m_TerrainViewProjMat;
+	
 	//CBConstants->MeshGridUnit.x = LOD_MESH_GRID_SIZE;
 
 	const SelectionInfo &SelectInfo = mpCDLODTree->GetSelectInfo();
@@ -79,6 +76,10 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 
 		// Set uniform
 		{
+			// Map the buffer and write current world-view-projection matrix
+			MapHelper<GPUConstBuffer> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+			CBConstants->ViewProj = m_TerrainViewProjMat;
+
 			int ShaderLODLevel = LOD_COUNT - NodeData.pNode->LODLevel - 1;
 			MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
 			PerPatchConstData->Scale = float4((NodeData.aabb.Max.x - NodeData.aabb.Min.x) / LOD_MESH_GRID_SIZE,
@@ -86,6 +87,11 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext)
 				ShaderLODLevel, 0.0f);
 			PerPatchConstData->Offset = float4(NodeData.aabb.Min.x,
 				(NodeData.aabb.Max.y + NodeData.aabb.Min.y) / 2.0f, NodeData.aabb.Min.z, 0.0f);
+
+			float MorphInfo[2];
+			SelectInfo.GetMorphFromLevel(ShaderLODLevel, MorphInfo);
+			CBConstants->MorphKInfo = float4({ MorphInfo[0], MorphInfo[1], 0.0f, 0.0f });
+			CBConstants->CameraPos = CamPos;
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
@@ -233,8 +239,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 	// Wireframe
-	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
-	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
+	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
