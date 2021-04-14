@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.6)
 project(My_Water CXX)
 
 set(SOURCE
-    src/My_Terrain.cpp
+    src/My_Water.cpp
     src/GroundMesh.cpp
     src/CDLODTree.cpp
     src/DebugCanvas.cpp
@@ -11,7 +11,7 @@ set(SOURCE
 )
 
 set(INCLUDE
-    src/My_Terrain.hpp
+    src/My_Water.hpp
     src/GroundMesh.h
     src/CDLODTree.h
     src/DebugCanvas.h

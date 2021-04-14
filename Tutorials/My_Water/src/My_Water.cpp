@@ -25,10 +25,12 @@
  *  of the possibility of such damages.
  */
 
-#include "My_Terrain.hpp"
+#include "My_Water.hpp"
+#include "ShaderMacroHelper.hpp"
 #include "MapHelper.hpp"
 #include "GroundMesh.h"
 #include "DebugCanvas.h"
+
 #include "imgui.h"
 #include "imGuIZMO.h"
 #include "ImGuiUtils.hpp"
@@ -39,7 +41,7 @@ namespace Diligent
 
 SampleBase* CreateSample()
 {
-    return new My_Terrain();
+    return new My_Water();
 }
 
 // For this tutorial, we will use simple vertex shader
@@ -94,7 +96,7 @@ void main(in  PSInput  PSIn,
 )";
 
 
-void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
+void My_Water::Initialize(const SampleInitInfo& InitInfo)
 {
     SampleBase::Initialize(InitInfo);
 
@@ -205,10 +207,13 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 	m_apClipMap.reset(new GroundMesh(LOD_MESH_GRID_SIZE, LOD_COUNT, 0.115f));
 
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
+
+	CreateConstantsBuffer();
+	CreateComputePSO();
 }
 
 // Render a frame
-void My_Terrain::Render()
+void My_Water::Render()
 {
     // Clear the back buffer
     const float ClearColor[] = {0.350f, 0.350f, 0.350f, 1.0f};
@@ -252,7 +257,7 @@ void My_Terrain::Render()
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
 }
 
-void My_Terrain::Update(double CurrTime, double ElapsedTime)
+void My_Water::Update(double CurrTime, double ElapsedTime)
 {
 	UpdateUI();
     SampleBase::Update(CurrTime, ElapsedTime);
@@ -282,7 +287,7 @@ void MakePlane(int rows, int columns, TerrainVertexAttrData *vertices, int *indi
 	}
 }
 
-void My_Terrain::CreateGridBuffer()
+void My_Water::CreateGridBuffer()
 {
 	int row = 10;
 	int column = 10;
@@ -326,7 +331,7 @@ void My_Terrain::CreateGridBuffer()
 	delete[] indexBuf;
 }
 
-void My_Terrain::WindowResize(Uint32 Width, Uint32 Height)
+void My_Water::WindowResize(Uint32 Width, Uint32 Height)
 {
 	float NearPlane = 0.1f;
 	float FarPlane = 100000.f;
@@ -336,7 +341,7 @@ void My_Terrain::WindowResize(Uint32 Width, Uint32 Height)
 	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
 }
 
-void My_Terrain::UpdateUI()
+void My_Water::UpdateUI()
 {
 	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
 	if (ImGui::Begin("Camera Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
@@ -346,8 +351,69 @@ void My_Terrain::UpdateUI()
 		float3 CamForward = m_Camera.GetWorldAhead();
 		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
+
+		ImGui::gizmo3D("Directional Light", m_LightManager.DirLight.dir, ImGui::GetTextLineHeight() * 10);
 	}
 	ImGui::End();
+}
+
+void My_Water::CreateComputePSO()
+{
+	ShaderCreateInfo ShaderCI;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("THREAD_GROUP_SIZE", m_CSGroupSize);
+	Macros.Finalize();
+
+	RefCntAutoPtr<IShader> pH0CS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "Water H0";
+		ShaderCI.FilePath = "water_h0.csh";
+		//Macros.AddShaderMacro("UPDATE_SPEED", 1);
+		ShaderCI.Macros = Macros;
+		m_pDevice->CreateShader(ShaderCI, &pH0CS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "Reset particle lists PSO";
+	PSOCreateInfo.pCS = pH0CS;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apH0PSO);
+	m_apH0PSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants")->Set(m_apConstants);
+}
+
+void My_Water::CreateConstantsBuffer()
+{
+	BufferDesc ConstBufferDesc;
+	ConstBufferDesc.Name = "Water Constants buffer";
+	ConstBufferDesc.Usage = USAGE_DYNAMIC;
+	ConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	ConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	ConstBufferDesc.uiSizeInBytes = sizeof(WaterIFFTUniform);
+	m_pDevice->CreateBuffer(ConstBufferDesc, nullptr, &m_apConstants);
 }
 
 } // namespace Diligent

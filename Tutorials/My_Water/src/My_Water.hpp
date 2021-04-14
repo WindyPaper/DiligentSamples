@@ -29,6 +29,7 @@
 
 #include "SampleBase.hpp"
 #include "FirstPersonCamera.hpp"
+#include "LightManager.h"
 
 //RIGHT HAND COORDINATION
 
@@ -48,6 +49,11 @@ struct TerrainVertexAttrData
 	}
 };
 
+struct WaterIFFTUniform
+{
+	float4 t;
+};
+
 struct TerrainData
 {
 	RefCntAutoPtr<IBuffer> pVertexBuf;
@@ -57,7 +63,7 @@ struct TerrainData
 	int IdxNum = 0;
 };
 
-class My_Terrain final : public SampleBase
+class My_Water final : public SampleBase
 {
 public:
     virtual void Initialize(const SampleInitInfo& InitInfo) override final;
@@ -72,6 +78,8 @@ public:
 protected:
 	void UpdateUI();
 	void CreateGridBuffer();
+	void CreateConstantsBuffer();
+	void CreateComputePSO();
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -91,6 +99,13 @@ private:
 	MouseState        m_LastMouseState;
 
 	std::shared_ptr<GroundMesh> m_apClipMap;
+
+	LightManager m_LightManager;
+
+	//PSO
+	RefCntAutoPtr<IPipelineState> m_apH0PSO;
+	RefCntAutoPtr<IBuffer> m_apConstants;
+	int m_CSGroupSize;
 };
 
 } // namespace Diligent
