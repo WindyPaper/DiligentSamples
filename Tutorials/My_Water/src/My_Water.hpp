@@ -67,6 +67,9 @@ struct WaterData
 	RefCntAutoPtr<ITexture> NoiseTextures[NOISE_TEX_NUM];
 
 	void Init(IRenderDevice* pDevice);
+
+protected:
+	Uint8 BitReverseValue(const Uint8 FFTN);
 };
 
 struct TerrainData

@@ -60,6 +60,30 @@ void WaterData::Init(IRenderDevice* pDevice)
 	}
 }
 
+Uint8 WaterData::BitReverseValue(const Uint8 FFTN)
+{
+	//Index 1==0b0001 => 0b1000
+	//Index 7==0b0111 => 0b1110
+	//etc
+	assert(FFTN < 256);
+
+	static unsigned char lookup[16] = {
+	0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe,
+	0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf, };
+
+	return (lookup[FFTN & 0b1111] << 4) | lookup[FFTN >> 4];
+
+	// Detailed breakdown of the math
+	//  + lookup reverse of bottom nibble
+	//  |       + grab bottom nibble
+	//  |       |        + move bottom result into top nibble
+	//  |       |        |     + combine the bottom and top results 
+	//  |       |        |     | + lookup reverse of top nibble
+	//  |       |        |     | |       + grab top nibble
+	//  V       V        V     V V       V
+	// (lookup[n&0b1111] << 4) | lookup[n>>4]
+}
+
 void My_Water::Initialize(const SampleInitInfo& InitInfo)
 {
     SampleBase::Initialize(InitInfo);

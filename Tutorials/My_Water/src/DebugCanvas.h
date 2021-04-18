@@ -28,7 +28,7 @@ namespace Diligent
 	public:
 		enum
 		{
-			MAX_AABB_COUNT = 4086
+			MAX_AABB_COUNT = 4096
 		};
 
 		DebugCanvas();
@@ -38,6 +38,7 @@ namespace Diligent
 		void ClearAABB() { mAABBs.clear(); }
 
 		void Draw(IRenderDevice* pDevice, ISwapChain* pSwapChain, IDeviceContext* pContext, IShaderSourceInputStreamFactory* pShaderFactory, const FirstPersonCamera* cam);
+		//void DrawDebugTexture(IRenderDevice* pDevice, ISwapChain* pSwapChain, IDeviceContext* pContext, IShaderSourceInputStreamFactory* pShaderFactory);
 
 	protected:
 		void CreateVertexBuffer(IRenderDevice* pDevice);
