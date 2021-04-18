@@ -31,6 +31,11 @@
 #include "GroundMesh.h"
 #include "DebugCanvas.h"
 
+#include "TextureLoader.h"
+#include "TextureUtilities.h"
+#include "RenderDevice.h"
+#include "Image.h"
+
 #include "imgui.h"
 #include "imGuIZMO.h"
 #include "ImGuiUtils.hpp"
@@ -44,57 +49,16 @@ SampleBase* CreateSample()
     return new My_Water();
 }
 
-// For this tutorial, we will use simple vertex shader
-// that creates a procedural triangle
-
-// Diligent Engine can use HLSL source on all supported platforms.
-// It will convert HLSL to GLSL in OpenGL mode, while Vulkan backend will compile it directly to SPIRV.
-
-static const char* VSSource = R"(
-struct PSInput 
-{ 
-    float4 Pos   : SV_POSITION; 
-    float3 Color : COLOR; 
-};
-
-void main(in  uint    VertId : SV_VertexID,
-          out PSInput PSIn) 
+void WaterData::Init(IRenderDevice* pDevice)
 {
-    float4 Pos[3];
-    Pos[0] = float4(-0.5, -0.5, 0.0, 1.0);
-    Pos[1] = float4( 0.0, +0.5, 0.0, 1.0);
-    Pos[2] = float4(+0.5, -0.5, 0.0, 1.0);
+	for (int i = 0; i < NOISE_TEX_NUM; ++i)
+	{
+		TextureLoadInfo loadInfo;
 
-    float3 Col[3];
-    Col[0] = float3(1.0, 1.0, 1.0); // red
-    Col[1] = float3(1.0, 1.0, 1.0); // green
-    Col[2] = float3(1.0, 1.0, 1.0); // blue
-
-    PSIn.Pos   = Pos[VertId];
-    PSIn.Color = Col[VertId];
+		std::string FileName = "./WaterNoiseTexture/Noise256_" + std::to_string(i) + ".jpg";
+		CreateTextureFromFile(FileName.c_str(), loadInfo, pDevice, &NoiseTextures[i]);
+	}
 }
-)";
-
-// Pixel shader simply outputs interpolated vertex color
-static const char* PSSource = R"(
-struct PSInput 
-{ 
-    float4 Pos   : SV_POSITION; 
-    float3 Color : COLOR; 
-};
-
-struct PSOutput
-{ 
-    float4 Color : SV_TARGET; 
-};
-
-void main(in  PSInput  PSIn,
-          out PSOutput PSOut)
-{
-    PSOut.Color = float4(PSIn.Color.rgb, 1.0);
-}
-)";
-
 
 void My_Water::Initialize(const SampleInitInfo& InitInfo)
 {
@@ -208,6 +172,9 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
 
+	//water
+	mWaterData.Init(m_pDevice);
+	m_CSGroupSize = 32;
 	CreateConstantsBuffer();
 	CreateComputePSO();
 }
@@ -252,6 +219,10 @@ void My_Water::Render()
     m_pImmediateContext->DrawIndexed(drawAttrs);
 
 	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos());
+
+
+	//water
+	WaterRender();
 
 	//render debug view
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
@@ -399,21 +370,94 @@ void My_Water::CreateComputePSO()
 	PSODesc.ResourceLayout.Variables = Vars;
 	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
 
-	PSODesc.Name = "Reset particle lists PSO";
+	PSODesc.Name = "H0 Compute shader";
 	PSOCreateInfo.pCS = pH0CS;
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apH0PSO);
-	m_apH0PSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants")->Set(m_apConstants);
+
+	IShaderResourceVariable* pConst = m_apH0PSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
+	if(pConst)
+		pConst->Set(m_apConstants);
+	m_apH0PSO->CreateShaderResourceBinding(&m_apH0ResDataSRB, true);
+
+	//init texture
+	for (int i = 0; i < WaterData::NOISE_TEX_NUM; ++i)
+	{
+		std::string VarName = "g_NoiseTexture" + std::to_string(i);
+		IShaderResourceVariable *pTex = m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, VarName.c_str());
+		if(pTex)
+			pTex->Set(mWaterData.NoiseTextures[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	}	
+	//init data
+	{
+		/*
+		wind.x = 1
+		wind.y = 1
+		wind.speed = 80
+		alignment = 0
+		fft.resolution = 256
+		fft.amplitude = 2
+		fft.L = 1000
+		fft.capillarwavesSuppression = 0.1
+		*/
+		/*MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, 1000, 2, 80);
+		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);*/
+	}
+	//init h0 buffer view
+	RefCntAutoPtr<IBufferView> H0UAV, H0MinuskUVA;
+	{
+		BufferViewDesc ViewDesc;
+		ViewDesc.ViewType = BUFFER_VIEW_UNORDERED_ACCESS;
+		ViewDesc.Format.ValueType = VT_FLOAT32;
+		ViewDesc.Format.NumComponents = 4;
+		m_apH0Buffer->CreateView(ViewDesc, &H0UAV);
+		m_apH0MinuskBuffer->CreateView(ViewDesc, &H0MinuskUVA);
+	}
+	IShaderResourceVariable* UAVH0 = m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "buffer_h0k");
+	if (UAVH0)
+		UAVH0->Set(H0UAV);
+	IShaderResourceVariable* UAVH0Minusk = m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "buffer_h0minusk");
+	if (UAVH0Minusk)
+		UAVH0Minusk->Set(H0MinuskUVA);
 }
 
 void My_Water::CreateConstantsBuffer()
 {
 	BufferDesc ConstBufferDesc;
-	ConstBufferDesc.Name = "Water Constants buffer";
+	ConstBufferDesc.Name = "Water H0 Constants buffer";
 	ConstBufferDesc.Usage = USAGE_DYNAMIC;
 	ConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
 	ConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
-	ConstBufferDesc.uiSizeInBytes = sizeof(WaterIFFTUniform);
+	ConstBufferDesc.uiSizeInBytes = sizeof(WaterFFTH0Uniform);
 	m_pDevice->CreateBuffer(ConstBufferDesc, nullptr, &m_apConstants);
+	
+	//h0 h0-1 buffer
+	BufferDesc BuffDesc;
+	BuffDesc.Name = "Particle attribs buffer";
+	BuffDesc.Usage = USAGE_DEFAULT;
+	BuffDesc.ElementByteStride = sizeof(float4);
+	BuffDesc.Mode = BUFFER_MODE_FORMATTED;
+	BuffDesc.uiSizeInBytes = BuffDesc.ElementByteStride * static_cast<Uint32>(WATER_FFT_N * WATER_FFT_N);
+	BuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0Buffer);
+	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0MinuskBuffer);
+}
+
+void My_Water::WaterRender()
+{	
+	 //m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Constant")
+	m_pImmediateContext->SetPipelineState(m_apH0PSO);
+
+	{
+		MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, 1000, 2, 80);
+		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);
+	}
+
+	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs DispAttr;
+	m_pImmediateContext->DispatchCompute(DispAttr);
 }
 
 } // namespace Diligent

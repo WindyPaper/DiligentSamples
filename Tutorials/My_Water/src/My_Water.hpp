@@ -33,6 +33,8 @@
 
 //RIGHT HAND COORDINATION
 
+#define WATER_FFT_N 32
+
 namespace Diligent
 {
 class GroundMesh;
@@ -49,9 +51,22 @@ struct TerrainVertexAttrData
 	}
 };
 
-struct WaterIFFTUniform
+struct WaterFFTH0Uniform
 {
-	float4 t;
+	float4 N_L_Amplitude_Intensity; //pack
+	float4 WindDir_LL_Alignment; //pack
+};
+
+struct WaterData
+{
+	enum WaterDataEnum
+	{
+		NOISE_TEX_NUM = 4
+	};
+
+	RefCntAutoPtr<ITexture> NoiseTextures[NOISE_TEX_NUM];
+
+	void Init(IRenderDevice* pDevice);
 };
 
 struct TerrainData
@@ -81,6 +96,8 @@ protected:
 	void CreateConstantsBuffer();
 	void CreateComputePSO();
 
+	void WaterRender();
+
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
 	RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
@@ -102,9 +119,13 @@ private:
 
 	LightManager m_LightManager;
 
-	//PSO
+	//Water
+	WaterData mWaterData;
 	RefCntAutoPtr<IPipelineState> m_apH0PSO;
+	RefCntAutoPtr<IShaderResourceBinding> m_apH0ResDataSRB;
 	RefCntAutoPtr<IBuffer> m_apConstants;
+	RefCntAutoPtr<IBuffer> m_apH0Buffer;
+	RefCntAutoPtr<IBuffer> m_apH0MinuskBuffer;
 	int m_CSGroupSize;
 };
 
