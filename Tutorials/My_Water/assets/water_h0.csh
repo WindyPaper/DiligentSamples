@@ -65,7 +65,8 @@ void main(uint3 Gid  : SV_GroupID,
     float2 WindDirection = g_Constants.WindDir_LL_Alignment.xy;
     float l = g_Constants.WindDir_LL_Alignment.z;
 
-    float2 k = float2(2.0 * M_PI * ImageIndexInt.x / L, 2.0 * M_PI * ImageIndexInt.y / L);
+    float2 kl = ImageIndexInt - float(N)/2.0;;
+    float2 k = float2(2.0 * M_PI * kl.x / L, 2.0 * M_PI * kl.y / L);
     float L_ = (WindIntensity * WindIntensity) / g;
     float mag = length(k);
     mag = max(0.0001, mag);
