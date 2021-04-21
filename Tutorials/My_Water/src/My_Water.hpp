@@ -57,6 +57,11 @@ struct WaterFFTH0Uniform
 	float4 WindDir_LL_Alignment; //pack
 };
 
+struct WaterFFTHKTUniform
+{
+	float4 N_L_Time_Padding; //pack
+};
+
 struct WaterData
 {
 	enum WaterDataEnum
@@ -102,6 +107,10 @@ protected:
 	void WaterRender();
 
 private:
+	void CreateH0PSO();
+	void CreateHKTPSO();
+
+private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
 	RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
 
@@ -124,11 +133,22 @@ private:
 
 	//Water
 	WaterData mWaterData;
+
+	//H0 & H0Minusk
 	RefCntAutoPtr<IPipelineState> m_apH0PSO;
 	RefCntAutoPtr<IShaderResourceBinding> m_apH0ResDataSRB;
 	RefCntAutoPtr<IBuffer> m_apConstants;
 	RefCntAutoPtr<IBuffer> m_apH0Buffer;
 	RefCntAutoPtr<IBuffer> m_apH0MinuskBuffer;
+
+	//Hkt
+	RefCntAutoPtr<IPipelineState> m_apHKTPSO;
+	RefCntAutoPtr<IShaderResourceBinding> m_apHKTDataSRB;
+	RefCntAutoPtr<IBuffer> m_apHKTDX;
+	RefCntAutoPtr<IBuffer> m_apHKTDY;
+	RefCntAutoPtr<IBuffer> m_apHKTDZ;
+	RefCntAutoPtr<IBuffer> m_apHKTConstData;
+
 	int m_CSGroupSize;
 };
 

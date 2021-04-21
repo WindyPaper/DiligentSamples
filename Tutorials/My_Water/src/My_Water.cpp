@@ -354,6 +354,75 @@ void My_Water::UpdateUI()
 
 void My_Water::CreateComputePSO()
 {
+	CreateH0PSO();
+}
+
+void My_Water::CreateConstantsBuffer()
+{
+	BufferDesc ConstBufferDesc;
+	ConstBufferDesc.Name = "Water H0 Constants buffer";
+	ConstBufferDesc.Usage = USAGE_DYNAMIC;
+	ConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	ConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	ConstBufferDesc.uiSizeInBytes = sizeof(WaterFFTH0Uniform);
+	m_pDevice->CreateBuffer(ConstBufferDesc, nullptr, &m_apConstants);
+
+	BufferDesc HKTConstBufferDesc;
+	HKTConstBufferDesc.Name = "Water HKT Constants buffer";
+	HKTConstBufferDesc.Usage = USAGE_DYNAMIC;
+	HKTConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	HKTConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	HKTConstBufferDesc.uiSizeInBytes = sizeof(WaterFFTHKTUniform);
+	m_pDevice->CreateBuffer(HKTConstBufferDesc, nullptr, &m_apHKTConstData);
+	
+	//h0 h0-1 buffer
+	BufferDesc BuffDesc;
+	BuffDesc.Name = "H0 H0Minusk buffer";
+	BuffDesc.Usage = USAGE_DEFAULT;
+	BuffDesc.ElementByteStride = sizeof(float4);
+	BuffDesc.Mode = BUFFER_MODE_FORMATTED;
+	BuffDesc.uiSizeInBytes = BuffDesc.ElementByteStride * static_cast<Uint32>(WATER_FFT_N * WATER_FFT_N);
+	BuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0Buffer);
+	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0MinuskBuffer);
+
+	//hkt buffer
+	BufferDesc HKTBuffDesc;
+	HKTBuffDesc.Name = "HKT buffer";
+	HKTBuffDesc.Usage = USAGE_DEFAULT;
+	HKTBuffDesc.ElementByteStride = sizeof(float4);
+	HKTBuffDesc.Mode = BUFFER_MODE_FORMATTED;
+	HKTBuffDesc.uiSizeInBytes = BuffDesc.ElementByteStride * static_cast<Uint32>(WATER_FFT_N * WATER_FFT_N);
+	HKTBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateBuffer(HKTBuffDesc, nullptr, &m_apHKTDX);
+	m_pDevice->CreateBuffer(HKTBuffDesc, nullptr, &m_apHKTDY);
+	m_pDevice->CreateBuffer(HKTBuffDesc, nullptr, &m_apHKTDZ);
+}
+
+void My_Water::WaterRender()
+{	
+	 //m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Constant")
+
+	//H0
+	m_pImmediateContext->SetPipelineState(m_apH0PSO);
+
+	{
+		MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, 1000, 2, 80);
+		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);
+	}
+
+	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs DispAttr;
+	m_pImmediateContext->DispatchCompute(DispAttr);
+
+	//HKT
+
+}
+
+void My_Water::CreateH0PSO()
+{
 	ShaderCreateInfo ShaderCI;
 	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
 	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
@@ -399,7 +468,7 @@ void My_Water::CreateComputePSO()
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apH0PSO);
 
 	IShaderResourceVariable* pConst = m_apH0PSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
-	if(pConst)
+	if (pConst)
 		pConst->Set(m_apConstants);
 	m_apH0PSO->CreateShaderResourceBinding(&m_apH0ResDataSRB, true);
 
@@ -408,9 +477,9 @@ void My_Water::CreateComputePSO()
 	{
 		std::string VarName = "g_NoiseTexture" + std::to_string(i);
 		IShaderResourceVariable *pTex = m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, VarName.c_str());
-		if(pTex)
+		if (pTex)
 			pTex->Set(mWaterData.NoiseTextures[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	}	
+	}
 	//init data
 	{
 		/*
@@ -445,43 +514,54 @@ void My_Water::CreateComputePSO()
 		UAVH0Minusk->Set(H0MinuskUVA);
 }
 
-void My_Water::CreateConstantsBuffer()
+void My_Water::CreateHKTPSO()
 {
-	BufferDesc ConstBufferDesc;
-	ConstBufferDesc.Name = "Water H0 Constants buffer";
-	ConstBufferDesc.Usage = USAGE_DYNAMIC;
-	ConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
-	ConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
-	ConstBufferDesc.uiSizeInBytes = sizeof(WaterFFTH0Uniform);
-	m_pDevice->CreateBuffer(ConstBufferDesc, nullptr, &m_apConstants);
-	
-	//h0 h0-1 buffer
-	BufferDesc BuffDesc;
-	BuffDesc.Name = "Particle attribs buffer";
-	BuffDesc.Usage = USAGE_DEFAULT;
-	BuffDesc.ElementByteStride = sizeof(float4);
-	BuffDesc.Mode = BUFFER_MODE_FORMATTED;
-	BuffDesc.uiSizeInBytes = BuffDesc.ElementByteStride * static_cast<Uint32>(WATER_FFT_N * WATER_FFT_N);
-	BuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
-	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0Buffer);
-	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0MinuskBuffer);
-}
+	ShaderCreateInfo ShaderCI;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
 
-void My_Water::WaterRender()
-{	
-	 //m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Constant")
-	m_pImmediateContext->SetPipelineState(m_apH0PSO);
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("THREAD_GROUP_SIZE", m_CSGroupSize);
+	Macros.Finalize();
 
+	RefCntAutoPtr<IShader> HKTShader;
+	ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+	ShaderCI.EntryPoint = "main";
+	ShaderCI.Desc.Name = "Water HKT";
+	ShaderCI.FilePath = "water_hkt.csh";
+	//Macros.AddShaderMacro("UPDATE_SPEED", 1);
+	ShaderCI.Macros = Macros;
+	m_pDevice->CreateShader(ShaderCI, &HKTShader);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
 	{
-		MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, 1000, 2, 80);
-		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);
-	}
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
 
-	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	PSODesc.Name = "HKT Compute shader";
+	PSOCreateInfo.pCS = HKTShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apHKTPSO);
 
-	DispatchComputeAttribs DispAttr;
-	m_pImmediateContext->DispatchCompute(DispAttr);
+	IShaderResourceVariable* pConst = m_apHKTPSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
+	if (pConst)
+		pConst->Set(m_apConstants);
+	m_apHKTPSO->CreateShaderResourceBinding(&m_apHKTDataSRB, true);
 }
 
 } // namespace Diligent
