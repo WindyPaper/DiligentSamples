@@ -197,6 +197,7 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
 
 	//water
+	mWaterTimer.Restart();
 	mWaterData.Init(m_pDevice);
 	m_CSGroupSize = 32;
 	CreateConstantsBuffer();
@@ -402,8 +403,9 @@ void My_Water::CreateConstantsBuffer()
 void My_Water::WaterRender()
 {	
 	 //m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Constant")
+	DispatchComputeAttribs DispAttr;
 
-	//H0
+	//H0 (Not necessary to render every frame)
 	m_pImmediateContext->SetPipelineState(m_apH0PSO);
 
 	{
@@ -412,13 +414,17 @@ void My_Water::WaterRender()
 		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);
 	}
 
-	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	DispatchComputeAttribs DispAttr;
+	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);	
 	m_pImmediateContext->DispatchCompute(DispAttr);
 
 	//HKT
-
+	m_pImmediateContext->SetPipelineState(m_apHKTPSO);
+	{
+		MapHelper<WaterFFTHKTUniform> GPUFFTHKTUniform(m_pImmediateContext, m_apHKTConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTHKTUniform->N_L_Time_Padding = float4(WATER_FFT_N, 1000, mWaterTimer.GetWaterTime(), 0);
+	}
+	m_pImmediateContext->CommitShaderResources(m_apHKTDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	m_pImmediateContext->DispatchCompute(DispAttr);
 }
 
 void My_Water::CreateH0PSO()
@@ -562,6 +568,29 @@ void My_Water::CreateHKTPSO()
 	if (pConst)
 		pConst->Set(m_apConstants);
 	m_apHKTPSO->CreateShaderResourceBinding(&m_apHKTDataSRB, true);
+}
+
+WaterTimer::WaterTimer()
+{
+	mSpeed = 1.0f;
+
+	Restart();
+}
+
+void WaterTimer::Restart()
+{
+	using namespace std::chrono;
+	mt = high_resolution_clock().now();
+}
+
+float WaterTimer::GetWaterTime()
+{
+	using namespace std::chrono;
+
+	std::chrono::high_resolution_clock::time_point CurrTime = high_resolution_clock::now();
+	auto time_span = duration_cast<duration<float>>(CurrTime - mt);
+	mt = CurrTime;
+	return time_span.count() * mSpeed;
 }
 
 } // namespace Diligent

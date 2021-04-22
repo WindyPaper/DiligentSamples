@@ -27,6 +27,8 @@
 
 #pragma once
 
+#include <chrono>
+
 #include "SampleBase.hpp"
 #include "FirstPersonCamera.hpp"
 #include "LightManager.h"
@@ -49,6 +51,19 @@ struct TerrainVertexAttrData
 	{
 
 	}
+};
+
+class WaterTimer
+{
+public:
+	WaterTimer();
+
+	void Restart();
+	float GetWaterTime();
+
+private:
+	std::chrono::high_resolution_clock::time_point mt;
+	float mSpeed;
 };
 
 struct WaterFFTH0Uniform
@@ -131,7 +146,8 @@ private:
 
 	LightManager m_LightManager;
 
-	//Water
+	//Water/////////
+	WaterTimer mWaterTimer;
 	WaterData mWaterData;
 
 	//H0 & H0Minusk
@@ -149,7 +165,10 @@ private:
 	RefCntAutoPtr<IBuffer> m_apHKTDZ;
 	RefCntAutoPtr<IBuffer> m_apHKTConstData;
 
+	//
+
 	int m_CSGroupSize;
+	//////////////////////////////////////////////////////////////////////////
 };
 
 } // namespace Diligent
