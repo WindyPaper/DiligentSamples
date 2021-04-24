@@ -27,15 +27,16 @@ cbuffer Constants
 
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 void main(uint3 Gid  : SV_GroupID,
-          uint3 GTid : SV_GroupThreadID)
+          uint3 GTid : SV_GroupThreadID,
+          uint3 DTid : SV_DispatchThreadID)
 {
 	float N = g_Constants.N_L_Time_padding.x;
     float L = g_Constants.N_L_Time_padding.y;
     float time = g_Constants.N_L_Time_padding.z;
 
-	uint2 ImageIndexInt = GTid.xy;
+	uint2 ImageIndexInt = DTid.xy; //GTid.xy;
 
-    uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
+    //uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
     // if (uiGlobalThreadIdx >= g_Constants.uiNumParticles)
     //     return;    
     float2 kl = ImageIndexInt - float(N)/2.0;;    

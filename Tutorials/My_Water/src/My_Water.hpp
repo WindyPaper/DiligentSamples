@@ -35,7 +35,7 @@
 
 //RIGHT HAND COORDINATION
 
-#define WATER_FFT_N 32
+#define WATER_FFT_N 256
 
 namespace Diligent
 {

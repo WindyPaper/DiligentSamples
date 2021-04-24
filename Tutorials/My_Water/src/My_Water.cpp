@@ -459,6 +459,11 @@ void My_Water::WaterRender()
 	 //m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Constant")
 	DispatchComputeAttribs DispAttr;
 
+	int DispatchXNum = WATER_FFT_N / m_CSGroupSize;
+	int DispatchYNum = WATER_FFT_N / m_CSGroupSize;
+	DispAttr.ThreadGroupCountX = DispatchXNum;
+	DispAttr.ThreadGroupCountY = DispatchYNum;
+
 	//H0 (Not necessary to render every frame)
 	m_pImmediateContext->SetPipelineState(m_apH0PSO);
 	{
