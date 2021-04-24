@@ -24,7 +24,9 @@ complex add(complex c0, complex c1)
 
 complex conj(complex c)
 {
-	complex c_conj = complex(c.real, -c.im);
+	complex c_conj;
+	c_conj.real = c.real;
+	c_conj.im = -c.im;
 	
 	return c_conj;
 }

@@ -26,6 +26,9 @@
  */
 
 #include "My_Water.hpp"
+
+#include <algorithm>
+
 #include "ShaderMacroHelper.hpp"
 #include "MapHelper.hpp"
 #include "GroundMesh.h"
@@ -60,6 +63,14 @@ void WaterData::Init(IRenderDevice* pDevice)
 	}
 }
 
+void WaterData::GenerateBitReversedData(int* OutData)
+{
+	for (int i = 0; i < WATER_FFT_N; ++i)
+	{
+		OutData[i] = BitReverseValue(i);
+	}
+}
+
 Uint8 WaterData::BitReverseValue(const Uint8 FFTN)
 {
 	//Index 1==0b0001 => 0b1000
@@ -67,11 +78,19 @@ Uint8 WaterData::BitReverseValue(const Uint8 FFTN)
 	//etc
 	assert(FFTN < 256);
 
+	Uint8 MaxBitCount = (Uint8)std::log2(255) + 1;
+	Uint8 BitCount = (Uint8)std::log2(FFTN) + 1;
+	Uint8 ShiftBitCount = MaxBitCount - BitCount;
+
 	static unsigned char lookup[16] = {
 	0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe,
 	0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf, };
 
-	return (lookup[FFTN & 0b1111] << 4) | lookup[FFTN >> 4];
+	Uint8 ReversedValue = (lookup[FFTN & 0b1111] << 4) | lookup[FFTN >> 4];
+	ReversedValue = ReversedValue >> ShiftBitCount;
+
+	return ReversedValue;
+
 
 	// Detailed breakdown of the math
 	//  + lookup reverse of bottom nibble
@@ -356,6 +375,8 @@ void My_Water::UpdateUI()
 void My_Water::CreateComputePSO()
 {
 	CreateH0PSO();
+	CreateTwiddlePSO();
+	CreateHKTPSO();
 }
 
 void My_Water::CreateConstantsBuffer()
@@ -387,6 +408,37 @@ void My_Water::CreateConstantsBuffer()
 	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0Buffer);
 	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0MinuskBuffer);
 
+	//twiddle buffer
+	int* pBitReversedData = new int[WATER_FFT_N];
+	memset(pBitReversedData, 0, sizeof(int) * WATER_FFT_N);
+	BufferDesc TwiddleBitReversedData;
+	TwiddleBitReversedData.Name = "Bit Reversed data";
+	TwiddleBitReversedData.Usage = USAGE_IMMUTABLE;
+	TwiddleBitReversedData.ElementByteStride = sizeof(int);
+	TwiddleBitReversedData.Mode = BUFFER_MODE_FORMATTED;
+	TwiddleBitReversedData.uiSizeInBytes = TwiddleBitReversedData.ElementByteStride * WATER_FFT_N;
+	TwiddleBitReversedData.BindFlags = BIND_SHADER_RESOURCE;
+	BufferData BitReversedBufferData(pBitReversedData, sizeof(int) * WATER_FFT_N);
+	m_pDevice->CreateBuffer(TwiddleBitReversedData, &BitReversedBufferData, &m_apBitReversedBuffer);
+
+	BufferDesc TwiddleIndices;
+	TwiddleIndices.Name = "TwiddleIndices buffer";
+	TwiddleIndices.Usage = USAGE_DEFAULT;
+	TwiddleIndices.ElementByteStride = sizeof(float4);
+	TwiddleIndices.Mode = BUFFER_MODE_FORMATTED;
+	TwiddleIndices.uiSizeInBytes = TwiddleIndices.ElementByteStride * static_cast<Uint32>(WATER_FFT_N * WATER_FFT_N);
+	TwiddleIndices.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateBuffer(TwiddleIndices, nullptr, &m_apTwiddleIndicesBuffer);
+	delete[] pBitReversedData;
+
+	BufferDesc TwiddleConstBufferDesc;
+	TwiddleConstBufferDesc.Name = "Water Twiddle Constants buffer";
+	TwiddleConstBufferDesc.Usage = USAGE_DYNAMIC;
+	TwiddleConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	TwiddleConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	TwiddleConstBufferDesc.uiSizeInBytes = sizeof(float4);
+	m_pDevice->CreateBuffer(TwiddleConstBufferDesc, nullptr, &m_apTwiddleConstBuffer);
+
 	//hkt buffer
 	BufferDesc HKTBuffDesc;
 	HKTBuffDesc.Name = "HKT buffer";
@@ -407,14 +459,21 @@ void My_Water::WaterRender()
 
 	//H0 (Not necessary to render every frame)
 	m_pImmediateContext->SetPipelineState(m_apH0PSO);
-
 	{
 		MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
 		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, 1000, 2, 80);
 		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);
 	}
-
 	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);	
+	m_pImmediateContext->DispatchCompute(DispAttr);
+
+	//Twiddle
+	m_pImmediateContext->SetPipelineState(m_apTwiddlePSO);
+	{
+		MapHelper<float4> GPUFFTTWiddleUniform(m_pImmediateContext, m_apTwiddleConstBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTTWiddleUniform->x = WATER_FFT_N;
+	}
+	m_pImmediateContext->CommitShaderResources(m_apTwiddleSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	m_pImmediateContext->DispatchCompute(DispAttr);
 
 	//HKT
@@ -560,6 +619,17 @@ void My_Water::CreateHKTPSO()
 	PSODesc.ResourceLayout.Variables = Vars;
 	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
 
+	//UAV SRV
+	RefCntAutoPtr<IBufferView> DXUAV, DYUAV, DZUAV;
+	{
+		BufferViewDesc ViewDesc;
+		ViewDesc.ViewType = BUFFER_VIEW_UNORDERED_ACCESS;
+		ViewDesc.Format.ValueType = VT_FLOAT32;
+		ViewDesc.Format.NumComponents = 4;
+		m_apHKTDX->CreateView(ViewDesc, &DXUAV);
+		m_apHKTDY->CreateView(ViewDesc, &DYUAV);
+		m_apHKTDZ->CreateView(ViewDesc, &DZUAV);
+	}
 	PSODesc.Name = "HKT Compute shader";
 	PSOCreateInfo.pCS = HKTShader;
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apHKTPSO);
@@ -567,7 +637,98 @@ void My_Water::CreateHKTPSO()
 	IShaderResourceVariable* pConst = m_apHKTPSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
 	if (pConst)
 		pConst->Set(m_apConstants);
+	
 	m_apHKTPSO->CreateShaderResourceBinding(&m_apHKTDataSRB, true);
+
+	IShaderResourceVariable* UAVDX = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "hkt_dx");
+	UAVDX->Set(DXUAV);
+	IShaderResourceVariable* UAVDY = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "hkt_dy");
+	UAVDY->Set(DYUAV);
+	IShaderResourceVariable* UAVDZ = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "hkt_dz");
+	UAVDZ->Set(DZUAV);
+
+	//Set h0 h0minusk buffer
+	RefCntAutoPtr<IBufferView> H0Data, H0MinusKData;
+	{
+		BufferViewDesc ViewDesc;
+		ViewDesc.ViewType = BUFFER_VIEW_SHADER_RESOURCE;
+		ViewDesc.Format.ValueType = VT_FLOAT32;
+		ViewDesc.Format.NumComponents = 4;
+		m_apH0Buffer->CreateView(ViewDesc, &H0Data);
+		m_apH0MinuskBuffer->CreateView(ViewDesc, &H0MinusKData);
+	}
+	IShaderResourceVariable* h0tex = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "h0k_buffer");
+	h0tex->Set(H0Data);
+	IShaderResourceVariable* h0minusktex = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "h0minusk_buffer");
+	h0minusktex->Set(H0MinusKData);
+}
+
+void My_Water::CreateTwiddlePSO()
+{
+	ShaderCreateInfo ShaderCI;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("THREAD_GROUP_SIZE", m_CSGroupSize);
+	Macros.Finalize();
+
+	RefCntAutoPtr<IShader> TwiddleShader;
+	ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+	ShaderCI.EntryPoint = "main";
+	ShaderCI.Desc.Name = "Water twiddle";
+	ShaderCI.FilePath = "water_twiddle.csh";
+	//Macros.AddShaderMacro("UPDATE_SPEED", 1);
+	ShaderCI.Macros = Macros;
+	m_pDevice->CreateShader(ShaderCI, &TwiddleShader);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc& PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "twiddle Compute shader";
+	PSOCreateInfo.pCS = TwiddleShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apTwiddlePSO);
+
+	IShaderResourceVariable* pConst = m_apTwiddlePSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
+	if (pConst)
+		pConst->Set(m_apTwiddleConstBuffer);
+	m_apTwiddlePSO->CreateShaderResourceBinding(&m_apTwiddleSRB, true);
+		
+	RefCntAutoPtr<IBufferView> pTwiddleIndicesDataUAV, pBitReversedSRV;
+	{
+		BufferViewDesc ViewDesc;
+		ViewDesc.ViewType = BUFFER_VIEW_UNORDERED_ACCESS;
+		ViewDesc.Format.ValueType = VT_FLOAT32;
+		ViewDesc.Format.NumComponents = 4;
+		m_apTwiddleIndicesBuffer->CreateView(ViewDesc, &pTwiddleIndicesDataUAV);
+		
+		ViewDesc.ViewType = BUFFER_VIEW_SHADER_RESOURCE;
+		ViewDesc.Format.ValueType = VT_INT32;
+		ViewDesc.Format.NumComponents = 1;
+		m_apBitReversedBuffer->CreateView(ViewDesc, &pBitReversedSRV);
+	}
+	IShaderResourceVariable* pTwiddleIndicesData = m_apTwiddleSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TwiddleIndices");
+	pTwiddleIndicesData->Set(pTwiddleIndicesDataUAV);
+	IShaderResourceVariable* pBitReversed = m_apTwiddleSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "bit_reversed");
+	pBitReversed->Set(pBitReversedSRV);
 }
 
 WaterTimer::WaterTimer()

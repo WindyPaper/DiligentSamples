@@ -88,6 +88,8 @@ struct WaterData
 
 	void Init(IRenderDevice* pDevice);
 
+	void GenerateBitReversedData(int* OutData);
+
 protected:
 	Uint8 BitReverseValue(const Uint8 FFTN);
 };
@@ -123,6 +125,7 @@ protected:
 
 private:
 	void CreateH0PSO();
+	void CreateTwiddlePSO();
 	void CreateHKTPSO();
 
 private:
@@ -157,6 +160,13 @@ private:
 	RefCntAutoPtr<IBuffer> m_apH0Buffer;
 	RefCntAutoPtr<IBuffer> m_apH0MinuskBuffer;
 
+	//Twiddle
+	RefCntAutoPtr<IPipelineState> m_apTwiddlePSO;
+	RefCntAutoPtr<IShaderResourceBinding> m_apTwiddleSRB;
+	RefCntAutoPtr<IBuffer> m_apBitReversedBuffer;
+	RefCntAutoPtr<IBuffer> m_apTwiddleIndicesBuffer;
+	RefCntAutoPtr<IBuffer> m_apTwiddleConstBuffer;
+
 	//Hkt
 	RefCntAutoPtr<IPipelineState> m_apHKTPSO;
 	RefCntAutoPtr<IShaderResourceBinding> m_apHKTDataSRB;
@@ -164,8 +174,7 @@ private:
 	RefCntAutoPtr<IBuffer> m_apHKTDY;
 	RefCntAutoPtr<IBuffer> m_apHKTDZ;
 	RefCntAutoPtr<IBuffer> m_apHKTConstData;
-
-	//
+	
 
 	int m_CSGroupSize;
 	//////////////////////////////////////////////////////////////////////////

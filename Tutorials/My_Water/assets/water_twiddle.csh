@@ -4,17 +4,13 @@
 static const float M_PI = 3.1415926535897932384626433832795;
 static const float g = 9.81;
 
-// Texture2D h0k_tex;
-// Texture2D h0minusk_tex;
+RWBuffer<float4> TwiddleIndices;
 
-// RWBuffer<float4> hkt_dx;
-// RWBuffer<float4> hkt_dy;
-// RWBuffer<float4> hkt_dz;
-RWBuffer<int> bit_reversed;
+Buffer<int> bit_reversed;
 
 struct WaterFFTHKTUniform
 {
-	float4 N_L_Time_padding; //pack
+	float4 N_padding; //pack
 };
 
 cbuffer Constants
@@ -30,49 +26,42 @@ cbuffer Constants
 void main(uint3 Gid  : SV_GroupID,
           uint3 GTid : SV_GroupThreadID)
 {
-	float N = g_Constants.N_L_Time_padding.x;
-    float L = g_Constants.N_L_Time_padding.y;
-    float time = g_Constants.N_L_Time_padding.z;
+	float N = g_Constants.N_padding.x;
 
 	uint2 ImageIndexInt = GTid.xy;
 
     uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
     // if (uiGlobalThreadIdx >= g_Constants.uiNumParticles)
     //     return;    
-    float2 kl = ImageIndexInt - float(N)/2.0;;    
+    float k = fmod(ImageIndexInt.y * (float(N)/ pow(2,ImageIndexInt.x+1)), N);
+	complex twiddle;
+	twiddle.real = cos(2.0*M_PI*k/float(N));
+	twiddle.im = sin(2.0*M_PI*k/float(N));
+	
+	int butterflyspan = int(pow(2, ImageIndexInt.x));
+	
+	int butterflywing;
+	
+	if (fmod(ImageIndexInt.y, pow(2, ImageIndexInt.x + 1)) < pow(2, ImageIndexInt.x))
+		butterflywing = 1;
+	else butterflywing = 0;
 
-    float2 k = float2(2.0 * M_PI * kl.x / L, 2.0 * M_PI * kl.y / L);
-    
-    float magnitude = length(k);
-	if (magnitude < 0.00001) magnitude = 0.00001;
-	
-	float w = sqrt(9.81 * magnitude);
-	
-	float4 h0tex_data = h0k_tex.Load(int(ImageIndexInt, 0));
-	float4 h0minusk_data = h0minusk_tex.Load(int(ImageIndexInt, 0));
-
-	complex fourier_amp = complex(h0tex_data.r, h0minusk_data.g);	
-	complex fourier_amp_conj = conj(complex(h0minusk_data.r, h0minusk_data.g));
-		
-	float cosinus = cos(w*time);
-	float sinus   = sin(w*time);
-		
-	// euler formula
-	complex exp_iwt = complex(cosinus, sinus);
-	complex exp_iwt_inv = complex(cosinus, -sinus);
-	
-	// dy
-	complex h_k_t_dy = add(mul(fourier_amp, exp_iwt), (mul(fourier_amp_conj, exp_iwt_inv)));
-	
-	// dx
-	complex dx = complex(0.0,-k.x/magnitude);
-	complex h_k_t_dx = mul(dx, h_k_t_dy);
-	
-	// dz
-	complex dy = complex(0.0,-k.y/magnitude);
-	complex h_k_t_dz = mul(dy, h_k_t_dy);
-		
-	hkt_dy[uiGlobalThreadIdx] = float4(h_k_t_dy.real, h_k_t_dy.im, 0, 1);
-	hkt_dx[uiGlobalThreadIdx] = float4(h_k_t_dx.real, h_k_t_dx.im, 0, 1);
-	hkt_dz[uiGlobalThreadIdx] = float4(h_k_t_dz.real, h_k_t_dz.im, 0, 1);
+	// first stage, bit reversed indices
+	if (ImageIndexInt.x == 0) {
+		// top butterfly wing
+		if (butterflywing == 1)
+			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, bit_reversed[int(ImageIndexInt.y)], bit_reversed[int(ImageIndexInt.y + 1)]);
+		// bot butterfly wing
+		else	
+			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, bit_reversed[int(ImageIndexInt.y - 1)], bit_reversed[int(ImageIndexInt.y)]);
+	}
+	// second to log2(N) stage
+	else {
+		// top butterfly wing
+		if (butterflywing == 1)
+			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, ImageIndexInt.y, ImageIndexInt.y + butterflyspan);
+		// bot butterfly wing
+		else
+			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, ImageIndexInt.y - butterflyspan, ImageIndexInt.y);
+	}
 }

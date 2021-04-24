@@ -67,7 +67,7 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext, const float3 &CamPos
 	//CBConstants->MeshGridUnit.x = LOD_MESH_GRID_SIZE;
 
 	const SelectionInfo &SelectInfo = mpCDLODTree->GetSelectInfo();
-	LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
+	//LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
 
 	for (int i = 0; i < SelectInfo.SelectionNodes.size(); ++i)
 	{
