@@ -4,12 +4,12 @@
 static const float M_PI = 3.1415926535897932384626433832795;
 static const float g = 9.81;
 
-Buffer<float4> h0k_buffer;
-Buffer<float4> h0minusk_buffer;
+Texture2D h0k_buffer;
+Texture2D h0minusk_buffer;
 
-RWBuffer<float4> hkt_dx;
-RWBuffer<float4> hkt_dy;
-RWBuffer<float4> hkt_dz;
+RWTexture2D<float4> hkt_dx;
+RWTexture2D<float4> hkt_dy;
+RWTexture2D<float4> hkt_dz;
 
 struct WaterFFTHKTUniform
 {
@@ -47,8 +47,8 @@ void main(uint3 Gid  : SV_GroupID,
 	
 	float w = sqrt(9.81 * magnitude);
 	
-	float4 h0tex_data = h0k_buffer[uiGlobalThreadIdx];//.Load(int3(ImageIndexInt, 0));
-	float4 h0minusk_data = h0minusk_buffer[uiGlobalThreadIdx];// .Load(int3(ImageIndexInt, 0));
+	float4 h0tex_data = h0k_buffer.Load(int3(ImageIndexInt, 0));
+	float4 h0minusk_data = h0minusk_buffer.Load(int3(ImageIndexInt, 0));
 
 	complex fourier_amp;
 	fourier_amp.real = h0tex_data.r;
@@ -76,7 +76,7 @@ void main(uint3 Gid  : SV_GroupID,
 	complex dy = { 0.0,-k.y/magnitude };
 	complex h_k_t_dz = mul(dy, h_k_t_dy);
 		
-	hkt_dy[uiGlobalThreadIdx] = float4(h_k_t_dy.real, h_k_t_dy.im, 0, 1);
-	hkt_dx[uiGlobalThreadIdx] = float4(h_k_t_dx.real, h_k_t_dx.im, 0, 1);
-	hkt_dz[uiGlobalThreadIdx] = float4(h_k_t_dz.real, h_k_t_dz.im, 0, 1);
+	hkt_dy[ImageIndexInt] = float4(h_k_t_dy.real, h_k_t_dy.im, 0, 1);
+	hkt_dx[ImageIndexInt] = float4(h_k_t_dx.real, h_k_t_dx.im, 0, 1);
+	hkt_dz[ImageIndexInt] = float4(h_k_t_dz.real, h_k_t_dz.im, 0, 1);
 }

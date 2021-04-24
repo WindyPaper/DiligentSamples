@@ -397,16 +397,17 @@ void My_Water::CreateConstantsBuffer()
 	HKTConstBufferDesc.uiSizeInBytes = sizeof(WaterFFTHKTUniform);
 	m_pDevice->CreateBuffer(HKTConstBufferDesc, nullptr, &m_apHKTConstData);
 	
-	//h0 h0-1 buffer
-	BufferDesc BuffDesc;
-	BuffDesc.Name = "H0 H0Minusk buffer";
-	BuffDesc.Usage = USAGE_DEFAULT;
-	BuffDesc.ElementByteStride = sizeof(float4);
-	BuffDesc.Mode = BUFFER_MODE_FORMATTED;
-	BuffDesc.uiSizeInBytes = BuffDesc.ElementByteStride * static_cast<Uint32>(WATER_FFT_N * WATER_FFT_N);
-	BuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
-	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0Buffer);
-	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apH0MinuskBuffer);
+	//h0 h0-1 buffer	
+	TextureDesc TexDesc;
+	TexDesc.Type = RESOURCE_DIM_TEX_2D;
+	TexDesc.Width = WATER_FFT_N;
+	TexDesc.Height = WATER_FFT_N;
+	TexDesc.MipLevels = 1;
+	TexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	TexDesc.Usage = USAGE_DEFAULT;
+	TexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(TexDesc, nullptr, &m_apH0Buffer);
+	m_pDevice->CreateTexture(TexDesc, nullptr, &m_apH0MinuskBuffer);
 
 	//twiddle buffer
 	int* pBitReversedData = new int[WATER_FFT_N];
@@ -440,16 +441,17 @@ void My_Water::CreateConstantsBuffer()
 	m_pDevice->CreateBuffer(TwiddleConstBufferDesc, nullptr, &m_apTwiddleConstBuffer);
 
 	//hkt buffer
-	BufferDesc HKTBuffDesc;
-	HKTBuffDesc.Name = "HKT buffer";
-	HKTBuffDesc.Usage = USAGE_DEFAULT;
-	HKTBuffDesc.ElementByteStride = sizeof(float4);
-	HKTBuffDesc.Mode = BUFFER_MODE_FORMATTED;
-	HKTBuffDesc.uiSizeInBytes = BuffDesc.ElementByteStride * static_cast<Uint32>(WATER_FFT_N * WATER_FFT_N);
-	HKTBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
-	m_pDevice->CreateBuffer(HKTBuffDesc, nullptr, &m_apHKTDX);
-	m_pDevice->CreateBuffer(HKTBuffDesc, nullptr, &m_apHKTDY);
-	m_pDevice->CreateBuffer(HKTBuffDesc, nullptr, &m_apHKTDZ);
+	TextureDesc HKTTexDesc;
+	HKTTexDesc.Type = RESOURCE_DIM_TEX_2D;
+	HKTTexDesc.Width = WATER_FFT_N;
+	HKTTexDesc.Height = WATER_FFT_N;
+	HKTTexDesc.MipLevels = 1;
+	HKTTexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	HKTTexDesc.Usage = USAGE_DEFAULT;
+	HKTTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDX);
+	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDY);
+	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDZ);
 }
 
 void My_Water::WaterRender()
@@ -560,23 +562,13 @@ void My_Water::CreateH0PSO()
 		/*MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
 		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, 1000, 2, 80);
 		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);*/
-	}
-	//init h0 buffer view
-	RefCntAutoPtr<IBufferView> H0UAV, H0MinuskUVA;
-	{
-		BufferViewDesc ViewDesc;
-		ViewDesc.ViewType = BUFFER_VIEW_UNORDERED_ACCESS;
-		ViewDesc.Format.ValueType = VT_FLOAT32;
-		ViewDesc.Format.NumComponents = 4;
-		m_apH0Buffer->CreateView(ViewDesc, &H0UAV);
-		m_apH0MinuskBuffer->CreateView(ViewDesc, &H0MinuskUVA);
-	}
+	}	
 	IShaderResourceVariable* UAVH0 = m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "buffer_h0k");
 	if (UAVH0)
-		UAVH0->Set(H0UAV);
+		UAVH0->Set(m_apH0Buffer->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 	IShaderResourceVariable* UAVH0Minusk = m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "buffer_h0minusk");
 	if (UAVH0Minusk)
-		UAVH0Minusk->Set(H0MinuskUVA);
+		UAVH0Minusk->Set(m_apH0MinuskBuffer->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 }
 
 void My_Water::CreateHKTPSO()
@@ -620,7 +612,7 @@ void My_Water::CreateHKTPSO()
 	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
 
 	//UAV SRV
-	RefCntAutoPtr<IBufferView> DXUAV, DYUAV, DZUAV;
+	/*RefCntAutoPtr<IBufferView> DXUAV, DYUAV, DZUAV;
 	{
 		BufferViewDesc ViewDesc;
 		ViewDesc.ViewType = BUFFER_VIEW_UNORDERED_ACCESS;
@@ -629,7 +621,7 @@ void My_Water::CreateHKTPSO()
 		m_apHKTDX->CreateView(ViewDesc, &DXUAV);
 		m_apHKTDY->CreateView(ViewDesc, &DYUAV);
 		m_apHKTDZ->CreateView(ViewDesc, &DZUAV);
-	}
+	}*/
 	PSODesc.Name = "HKT Compute shader";
 	PSOCreateInfo.pCS = HKTShader;
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apHKTPSO);
@@ -641,14 +633,14 @@ void My_Water::CreateHKTPSO()
 	m_apHKTPSO->CreateShaderResourceBinding(&m_apHKTDataSRB, true);
 
 	IShaderResourceVariable* UAVDX = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "hkt_dx");
-	UAVDX->Set(DXUAV);
+	UAVDX->Set(m_apHKTDX->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 	IShaderResourceVariable* UAVDY = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "hkt_dy");
-	UAVDY->Set(DYUAV);
+	UAVDY->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 	IShaderResourceVariable* UAVDZ = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "hkt_dz");
-	UAVDZ->Set(DZUAV);
+	UAVDZ->Set(m_apHKTDZ->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 
 	//Set h0 h0minusk buffer
-	RefCntAutoPtr<IBufferView> H0Data, H0MinusKData;
+	/*RefCntAutoPtr<IBufferView> H0Data, H0MinusKData;
 	{
 		BufferViewDesc ViewDesc;
 		ViewDesc.ViewType = BUFFER_VIEW_SHADER_RESOURCE;
@@ -656,11 +648,15 @@ void My_Water::CreateHKTPSO()
 		ViewDesc.Format.NumComponents = 4;
 		m_apH0Buffer->CreateView(ViewDesc, &H0Data);
 		m_apH0MinuskBuffer->CreateView(ViewDesc, &H0MinusKData);
-	}
+	}*/
 	IShaderResourceVariable* h0tex = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "h0k_buffer");
-	h0tex->Set(H0Data);
+	/*RefCntAutoPtr<ITexture> h0TexData;
+	ConvertToTextureView(H0Data->GetBuffer(), WATER_FFT_N, WATER_FFT_N, sizeof(float4), &h0TexData);*/
+	h0tex->Set(m_apH0Buffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	IShaderResourceVariable* h0minusktex = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "h0minusk_buffer");
-	h0minusktex->Set(H0MinusKData);
+	/*RefCntAutoPtr<ITexture> h0MinuskTexData;
+	ConvertToTextureView(H0MinusKData->GetBuffer(), WATER_FFT_N, WATER_FFT_N, sizeof(float4), &h0MinuskTexData);*/
+	h0minusktex->Set(m_apH0MinuskBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void My_Water::CreateTwiddlePSO()
@@ -729,6 +725,28 @@ void My_Water::CreateTwiddlePSO()
 	pTwiddleIndicesData->Set(pTwiddleIndicesDataUAV);
 	IShaderResourceVariable* pBitReversed = m_apTwiddleSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "bit_reversed");
 	pBitReversed->Set(pBitReversedSRV);
+}
+
+void My_Water::ConvertToTextureView(IBuffer* pData, int width, int height, int Stride, ITexture **pRetTex)
+{
+	TextureSubResData MipData;
+	MipData.pSrcBuffer = pData;
+	MipData.Stride = Stride;
+
+	TextureData TexData;
+	TexData.NumSubresources = 1;
+	TexData.pSubResources = &MipData;
+
+	TextureDesc TexDesc;
+	TexDesc.Type = RESOURCE_DIM_TEX_2D;
+	TexDesc.Width = width;
+	TexDesc.Height = height;
+	TexDesc.MipLevels = 1;
+	TexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	TexDesc.Usage = USAGE_STAGING;
+	TexDesc.BindFlags = BIND_SHADER_RESOURCE;
+	
+	m_pDevice->CreateTexture(TexDesc, &TexData, pRetTex);
 }
 
 WaterTimer::WaterTimer()

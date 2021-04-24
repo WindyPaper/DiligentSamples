@@ -12,8 +12,8 @@ Texture2D    g_NoiseTexture2;
 Texture2D    g_NoiseTexture3;
 //SamplerState g_NoiseTexture4_sampler;
 
-RWBuffer<float4> buffer_h0k;
-RWBuffer<float4> buffer_h0minusk;
+RWTexture2D<float4> buffer_h0k;
+RWTexture2D<float4> buffer_h0minusk;
 
 struct WaterFFTH0Uniform
 {
@@ -82,6 +82,6 @@ void main(uint3 Gid  : SV_GroupID,
 
 	float4 gauss_random = GaussRandom(ImageIndexInt);
 
-	buffer_h0k[uiGlobalThreadIdx] = float4(gauss_random.xy * h0k, 0, 1);
-	buffer_h0minusk[uiGlobalThreadIdx] = float4(gauss_random.zw * h0minusk, 0, 1);
+	buffer_h0k[ImageIndexInt] = float4(gauss_random.xy * h0k, 0, 1);
+	buffer_h0minusk[ImageIndexInt] = float4(gauss_random.zw * h0minusk, 0, 1);
 }

@@ -118,6 +118,9 @@ public:
 protected:
 	void UpdateUI();
 	void CreateGridBuffer();
+
+	void ConvertToTextureView(IBuffer* pData, int width, int height, int Stride, ITexture** pRetTex);
+
 	void CreateConstantsBuffer();
 	void CreateComputePSO();
 
@@ -157,8 +160,8 @@ private:
 	RefCntAutoPtr<IPipelineState> m_apH0PSO;
 	RefCntAutoPtr<IShaderResourceBinding> m_apH0ResDataSRB;
 	RefCntAutoPtr<IBuffer> m_apConstants;
-	RefCntAutoPtr<IBuffer> m_apH0Buffer;
-	RefCntAutoPtr<IBuffer> m_apH0MinuskBuffer;
+	RefCntAutoPtr<ITexture> m_apH0Buffer;
+	RefCntAutoPtr<ITexture> m_apH0MinuskBuffer;
 
 	//Twiddle
 	RefCntAutoPtr<IPipelineState> m_apTwiddlePSO;
@@ -170,9 +173,9 @@ private:
 	//Hkt
 	RefCntAutoPtr<IPipelineState> m_apHKTPSO;
 	RefCntAutoPtr<IShaderResourceBinding> m_apHKTDataSRB;
-	RefCntAutoPtr<IBuffer> m_apHKTDX;
-	RefCntAutoPtr<IBuffer> m_apHKTDY;
-	RefCntAutoPtr<IBuffer> m_apHKTDZ;
+	RefCntAutoPtr<ITexture> m_apHKTDX;
+	RefCntAutoPtr<ITexture> m_apHKTDY;
+	RefCntAutoPtr<ITexture> m_apHKTDZ;
 	RefCntAutoPtr<IBuffer> m_apHKTConstData;
 	
 
