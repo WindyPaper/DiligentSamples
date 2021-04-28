@@ -4,7 +4,7 @@
 static const float M_PI = 3.1415926535897932384626433832795;
 static const float g = 9.81;
 
-RWBuffer<float4> TwiddleIndices;
+RWTexture2D<float4> TwiddleIndices;
 
 Buffer<int> bit_reversed;
 
@@ -24,13 +24,14 @@ cbuffer Constants
 
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 void main(uint3 Gid  : SV_GroupID,
-          uint3 GTid : SV_GroupThreadID)
+          uint3 GTid : SV_GroupThreadID,
+          uint3 DTid : SV_DispatchThreadID)
 {
 	float N = g_Constants.N_padding.x;
 
-	uint2 ImageIndexInt = GTid.xy;
+	uint2 ImageIndexInt = DTid.xy;
 
-    uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
+    // uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
     // if (uiGlobalThreadIdx >= g_Constants.uiNumParticles)
     //     return;    
     float k = fmod(ImageIndexInt.y * (float(N)/ pow(2,ImageIndexInt.x+1)), N);
@@ -46,22 +47,24 @@ void main(uint3 Gid  : SV_GroupID,
 		butterflywing = 1;
 	else butterflywing = 0;
 
+	int CurrNIndex = ImageIndexInt.y;
+
 	// first stage, bit reversed indices
 	if (ImageIndexInt.x == 0) {
 		// top butterfly wing
 		if (butterflywing == 1)
-			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, bit_reversed[int(ImageIndexInt.y)], bit_reversed[int(ImageIndexInt.y + 1)]);
+			TwiddleIndices[ImageIndexInt] = float4(twiddle.real, twiddle.im, bit_reversed[int(CurrNIndex)], bit_reversed[int(CurrNIndex + 1)]);
 		// bot butterfly wing
 		else	
-			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, bit_reversed[int(ImageIndexInt.y - 1)], bit_reversed[int(ImageIndexInt.y)]);
+			TwiddleIndices[ImageIndexInt] = float4(twiddle.real, twiddle.im, bit_reversed[int(CurrNIndex - 1)], bit_reversed[int(CurrNIndex)]);
 	}
 	// second to log2(N) stage
 	else {
 		// top butterfly wing
 		if (butterflywing == 1)
-			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, ImageIndexInt.y, ImageIndexInt.y + butterflyspan);
+			TwiddleIndices[ImageIndexInt] = float4(twiddle.real, twiddle.im, CurrNIndex, CurrNIndex + butterflyspan);
 		// bot butterfly wing
 		else
-			TwiddleIndices[uiGlobalThreadIdx] = float4(twiddle.real, twiddle.im, ImageIndexInt.y - butterflyspan, ImageIndexInt.y);
+			TwiddleIndices[ImageIndexInt] = float4(twiddle.real, twiddle.im, CurrNIndex - butterflyspan, ImageIndexInt.y);
 	}
 }

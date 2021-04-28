@@ -167,7 +167,7 @@ private:
 	RefCntAutoPtr<IPipelineState> m_apTwiddlePSO;
 	RefCntAutoPtr<IShaderResourceBinding> m_apTwiddleSRB;
 	RefCntAutoPtr<IBuffer> m_apBitReversedBuffer;
-	RefCntAutoPtr<IBuffer> m_apTwiddleIndicesBuffer;
+	RefCntAutoPtr<ITexture> m_apTwiddleIndicesBuffer;
 	RefCntAutoPtr<IBuffer> m_apTwiddleConstBuffer;
 
 	//Hkt
@@ -177,8 +177,10 @@ private:
 	RefCntAutoPtr<ITexture> m_apHKTDY;
 	RefCntAutoPtr<ITexture> m_apHKTDZ;
 	RefCntAutoPtr<IBuffer> m_apHKTConstData;
-	
 
+	//
+	
+	int m_Log2_N;
 	int m_CSGroupSize;
 	//////////////////////////////////////////////////////////////////////////
 };
