@@ -4,11 +4,11 @@
 static const float M_PI = 3.1415926535897932384626433832795;
 static const float g = 9.81;
 
-RWBuffer<float4> pingpong0;
+RWTexture2D<float4> pingpong0;
 
-RWBuffer<float4> pingpong1;
+RWTexture2D<float4> pingpong1;
 
-Buffer<float4> TwiddleIndices;
+Texture2D TwiddleIndices;
 
 //StructuredBuffer<int> bit_reversed;
 
@@ -33,35 +33,35 @@ void horizontalButterflies(uint2 index)
 	
 	if(pingpong == 0)
 	{
-		vec4 data = imageLoad(TwiddleIndices, int3(stage, x.x)).rgba;
-		vec2 p_ = imageLoad(pingpong0, int3(data.z, x.y)).rg;
-		vec2 q_ = imageLoad(pingpong0, int3(data.w, x.y)).rg;
-		vec2 w_ = vec2(data.x, data.y);
+		float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
+		float2 p_ = pingpong0.Load(int3(data.z, x.y, 0)).rg;
+		float2 q_ = pingpong0.Load(int3(data.w, x.y, 0)).rg;
+		float2 w_ = float2(data.x, data.y);
 		
-		complex p = complex(p_.x,p_.y);
-		complex q = complex(q_.x,q_.y);
-		complex w = complex(w_.x,w_.y);
+		complex p = {p_.x,p_.y};
+		complex q = {q_.x,q_.y};
+		complex w = {w_.x,w_.y};
 		
 		//Butterfly operation
 		H = add(p,mul(w,q));
 		
-		imageStore(pingpong1, x, vec4(H.real, H.im, 0, 1));
+		pingpong1[x] = float4(H.real, H.im, 0, 1);
 	}
 	else if(pingpong == 1)
 	{
-		vec4 data = imageLoad(TwiddleIndices, int3(stage, x.x)).rgba;
-		vec2 p_ = imageLoad(pingpong1, int3(data.z, x.y)).rg;
-		vec2 q_ = imageLoad(pingpong1, int3(data.w, x.y)).rg;
-		vec2 w_ = vec2(data.x, data.y);
+		float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
+		float2 p_ = pingpong1.Load(int3(data.z, x.y, 0)).rg;
+		float2 q_ = pingpong1.Load(int3(data.w, x.y, 0)).rg;
+		float2 w_ = float2(data.x, data.y);
 		
-		complex p = complex(p_.x,p_.y);
-		complex q = complex(q_.x,q_.y);
-		complex w = complex(w_.x,w_.y);
+		complex p = {p_.x,p_.y};
+		complex q = {q_.x,q_.y};
+		complex w = {w_.x,w_.y};
 		
 		//Butterfly operation
 		H = add(p,mul(w,q));
 		
-		imageStore(pingpong0, x, vec4(H.real, H.im, 0, 1));
+		pingpong0[x] = float4(H.real, H.im, 0, 1);
 	}
 }
 
@@ -72,35 +72,35 @@ void verticalButterflies(uint2 index)
 	
 	if(pingpong == 0)
 	{
-		vec4 data = imageLoad(TwiddleIndices, int3(stage, x.y)).rgba;
-		vec2 p_ = imageLoad(pingpong0, int3(x.x, data.z)).rg;
-		vec2 q_ = imageLoad(pingpong0, int3(x.x, data.w)).rg;
-		vec2 w_ = vec2(data.x, data.y);
+		float4 data = TwiddleIndices.Load(int3(stage, x.y, 0)).rgba;
+		float2 p_ = pingpong0.Load(int3(x.x, data.z, 0)).rg;
+		float2 q_ = pingpong0.Load(int3(x.x, data.w, 0)).rg;
+		float2 w_ = float2(data.x, data.y);
 		
-		complex p = complex(p_.x,p_.y);
-		complex q = complex(q_.x,q_.y);
-		complex w = complex(w_.x,w_.y);
+		complex p = {p_.x,p_.y};
+		complex q = {q_.x,q_.y};
+		complex w = {w_.x,w_.y};
 		
 		//Butterfly operation
 		H = add(p,mul(w,q));
 		
-		imageStore(pingpong1, x, vec4(H.real, H.im, 0, 1));
+		pingpong1[x] = float4(H.real, H.im, 0, 1);
 	}
 	else if(pingpong == 1)
 	{
-		vec4 data = imageLoad(TwiddleIndices, int3(stage, x.y)).rgba;
-		vec2 p_ = imageLoad(pingpong1, int3(x.x, data.z)).rg;
-		vec2 q_ = imageLoad(pingpong1, int3(x.x, data.w)).rg;
-		vec2 w_ = vec2(data.x, data.y);
+		float4 data = TwiddleIndices.Load(int3(stage, x.y, 0)).rgba;
+		float2 p_ = pingpong1.Load(int3(x.x, data.z, 0)).rg;
+		float2 q_ = pingpong1.Load(int3(x.x, data.w, 0)).rg;
+		float2 w_ = float2(data.x, data.y);
 		
-		complex p = complex(p_.x,p_.y);
-		complex q = complex(q_.x,q_.y);
-		complex w = complex(w_.x,w_.y);
+		complex p = {p_.x,p_.y};
+		complex q = {q_.x,q_.y};
+		complex w = {w_.x,w_.y};
 		
 		//Butterfly operation
 		H = add(p,mul(w,q));
 		
-		imageStore(pingpong0, x, vec4(H.real, H.im, 0, 1));
+		pingpong0[x] = float4(H.real, H.im, 0, 1);
 	}
 }
 
