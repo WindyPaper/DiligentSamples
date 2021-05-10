@@ -19,7 +19,7 @@ struct WaterFFTButterflyUniform
 
 cbuffer Constants
 {
-    WaterFFTHKTUniform g_Constants;
+    WaterFFTButterflyUniform g_Constants;
 };
 
 #ifndef THREAD_GROUP_SIZE
