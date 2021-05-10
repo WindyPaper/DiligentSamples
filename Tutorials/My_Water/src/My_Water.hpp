@@ -77,6 +77,16 @@ struct WaterFFTHKTUniform
 	float4 N_L_Time_Padding; //pack
 };
 
+struct WaterFFTButterflyUniform
+{
+	float4 Stage_PingPong_Direction_Padding; //pack
+};
+
+struct WaterFFTInvsersionUniform
+{
+	float4 PingPong_N_Padding; //pack
+};
+
 struct WaterData
 {
 	enum WaterDataEnum
@@ -130,6 +140,8 @@ private:
 	void CreateH0PSO();
 	void CreateTwiddlePSO();
 	void CreateHKTPSO();
+	void CreateButterFlyPSO();
+	void CreateInversionPSO();
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -178,7 +190,20 @@ private:
 	RefCntAutoPtr<ITexture> m_apHKTDZ;
 	RefCntAutoPtr<IBuffer> m_apHKTConstData;
 
-	//
+	//Butterfly
+	RefCntAutoPtr<IPipelineState> m_apButterFlyPSO;
+	RefCntAutoPtr<IBuffer> m_apButterFlyConstData;
+	RefCntAutoPtr<IShaderResourceBinding> m_apButterFlySRB;
+	RefCntAutoPtr<ITexture> m_apPingPong;
+
+	//inversion
+	RefCntAutoPtr<IPipelineState> m_apInversionPSO;
+	RefCntAutoPtr<IBuffer> m_apInversionConstData;
+	RefCntAutoPtr<IShaderResourceBinding> m_apInversionSRB;
+	RefCntAutoPtr<ITexture> m_apInversionDx;
+	RefCntAutoPtr<ITexture> m_apInversionDy;
+	RefCntAutoPtr<ITexture> m_apInversionDz;
+
 	
 	int m_Log2_N;
 	int m_CSGroupSize;

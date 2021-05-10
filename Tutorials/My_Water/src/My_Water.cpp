@@ -378,6 +378,7 @@ void My_Water::CreateComputePSO()
 	CreateH0PSO();
 	CreateTwiddlePSO();
 	CreateHKTPSO();
+	CreateButterFlyPSO();
 }
 
 void My_Water::CreateConstantsBuffer()
@@ -455,6 +456,25 @@ void My_Water::CreateConstantsBuffer()
 	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDX);
 	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDY);
 	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDZ);
+
+	//butterfly buffer
+	BufferDesc ButterFlyConstBufferDesc;
+	ButterFlyConstBufferDesc.Name = "Water ButterFly Constants buffer";
+	ButterFlyConstBufferDesc.Usage = USAGE_DYNAMIC;
+	ButterFlyConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	ButterFlyConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	ButterFlyConstBufferDesc.uiSizeInBytes = sizeof(float4);
+	m_pDevice->CreateBuffer(ButterFlyConstBufferDesc, nullptr, &m_apButterFlyConstData);
+
+	TextureDesc ButterflyPingPongDesc;
+	ButterflyPingPongDesc.Type = RESOURCE_DIM_TEX_2D;
+	ButterflyPingPongDesc.Width = WATER_FFT_N;
+	ButterflyPingPongDesc.Height = WATER_FFT_N;
+	ButterflyPingPongDesc.MipLevels = 1;
+	ButterflyPingPongDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	ButterflyPingPongDesc.Usage = USAGE_DEFAULT;
+	ButterflyPingPongDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(ButterflyPingPongDesc, nullptr, &m_apPingPong);	
 }
 
 void My_Water::WaterRender()
@@ -497,6 +517,34 @@ void My_Water::WaterRender()
 	}
 	m_pImmediateContext->CommitShaderResources(m_apHKTDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	m_pImmediateContext->DispatchCompute(DispAttr);
+
+	//Butterfly
+	int PingPong = 0;
+	m_pImmediateContext->SetPipelineState(m_apButterFlyPSO);
+
+	//horizon
+	for (int i = 0; i < m_Log2_N; ++i)
+	{		
+		{
+			MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+			GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(i, PingPong++, 0, 0);			
+			PingPong %= 2;
+		}
+		m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		m_pImmediateContext->DispatchCompute(DispAttr);
+	}
+
+	//vertical
+	for (int j = 0; j < m_Log2_N; ++j)
+	{
+		{
+			MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+			GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(j, PingPong++, 1, 0);
+			PingPong %= 2;
+		}
+		m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		m_pImmediateContext->DispatchCompute(DispAttr);
+	}
 }
 
 void My_Water::CreateH0PSO()
@@ -759,6 +807,137 @@ void My_Water::ConvertToTextureView(IBuffer* pData, int width, int height, int S
 	TexDesc.BindFlags = BIND_SHADER_RESOURCE;
 	
 	m_pDevice->CreateTexture(TexDesc, &TexData, pRetTex);
+}
+
+void My_Water::CreateButterFlyPSO()
+{
+	ShaderCreateInfo ShaderCI;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("THREAD_GROUP_SIZE", m_CSGroupSize);
+	Macros.Finalize();
+
+	RefCntAutoPtr<IShader> pButterFlyCS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "FFT Butterfly";
+		ShaderCI.FilePath = "water_butterfly.csh";
+		//Macros.AddShaderMacro("UPDATE_SPEED", 1);
+		ShaderCI.Macros = Macros;
+		m_pDevice->CreateShader(ShaderCI, &pButterFlyCS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "Butterfly Compute shader";
+	PSOCreateInfo.pCS = pButterFlyCS;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apButterFlyPSO);
+
+	IShaderResourceVariable* pConst = m_apButterFlyPSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
+	if (pConst)
+		pConst->Set(m_apButterFlyConstData);
+	m_apButterFlyPSO->CreateShaderResourceBinding(&m_apButterFlySRB, true);
+	
+	IShaderResourceVariable* UAV0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+	if (UAV0)
+		UAV0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	IShaderResourceVariable* UAV1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+	if (UAV1)
+		UAV1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+	//read texture
+	IShaderResourceVariable* pReadTwiddleIndicesTex = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TwiddleIndices");
+	if (pReadTwiddleIndicesTex)
+	{
+		pReadTwiddleIndicesTex->Set(m_apTwiddleIndicesBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	}
+}
+
+void My_Water::CreateInversionPSO()
+{
+	ShaderCreateInfo ShaderCI;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("THREAD_GROUP_SIZE", m_CSGroupSize);
+	Macros.Finalize();
+
+	RefCntAutoPtr<IShader> pInversionCS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "FFT inversion";
+		ShaderCI.FilePath = "water_inversion.csh";
+		ShaderCI.Macros = Macros;
+		m_pDevice->CreateShader(ShaderCI, &pInversionCS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "FFT Inversion Compute shader";
+	PSOCreateInfo.pCS = pInversionCS;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apInversionPSO);
+
+	IShaderResourceVariable* pConst = m_apInversionPSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
+	if (pConst)
+		pConst->Set(m_apInversionConstData);
+	m_apInversionPSO->CreateShaderResourceBinding(&m_apInversionSRB, true);
+
+	//IShaderResourceVariable* UAV0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+	//if (UAV0)
+	//	UAV0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	//IShaderResourceVariable* UAV1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+	//if (UAV1)
+	//	UAV1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+	//read texture
+	//IShaderResourceVariable* pReadTwiddleIndicesTex = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TwiddleIndices");
+	//if (pReadTwiddleIndicesTex)
+	//{
+	//	pReadTwiddleIndicesTex->Set(m_apTwiddleIndicesBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	//}
 }
 
 WaterTimer::WaterTimer()

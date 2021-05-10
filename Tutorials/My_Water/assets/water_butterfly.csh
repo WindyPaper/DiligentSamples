@@ -30,6 +30,9 @@ void horizontalButterflies(uint2 index)
 {
 	complex H;
 	int2 x = index;
+
+	int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
+	int pingpong = int(g_Constants.Stage_PingPong_Direction_Padding.y);	
 	
 	if(pingpong == 0)
 	{
@@ -69,6 +72,9 @@ void verticalButterflies(uint2 index)
 {
 	complex H;
 	int2 x = index;
+
+	int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
+	int pingpong = int(g_Constants.Stage_PingPong_Direction_Padding.y);	
 	
 	if(pingpong == 0)
 	{
