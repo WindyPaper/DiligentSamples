@@ -24,25 +24,26 @@ cbuffer Constants
 
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 void main(uint3 Gid  : SV_GroupID,
-          uint3 GTid : SV_GroupThreadID)
+          uint3 GTid : SV_GroupThreadID,
+          uint3 DTid : SV_DispatchThreadID)
 {
-	int pingpong = int(g_Constants.x);
-	int N = int(g_Constants.y);
+	int pingpong = int(g_Constants.PingPong_N_Padding.x);
+	int N = int(g_Constants.PingPong_N_Padding.y);
 
-	uint2 ImageIndexInt = GTid.xy;
+	uint2 ImageIndexInt = DTid.xy;
 
 	float perms[] = {1.0,-1.0};
-	int index = int(mod((int(ImageIndexInt.x + ImageIndexInt.y)),2));
+	int index = int(int(ImageIndexInt.x + ImageIndexInt.y)%2);
 	float perm = perms[index];
 	
 	if(pingpong == 0)
 	{
-		float h = pingpong0.Load(int3(x, 0.0)).r;
-		displacement[x] = float4(perm*(h/float(N*N)), perm*(h/float(N*N)), perm*(h/float(N*N)), 1);
+		float h = pingpong0.Load(int3(ImageIndexInt, 0.0)).r;
+		displacement[ImageIndexInt] = float4(perm*(h/float(N*N)), perm*(h/float(N*N)), perm*(h/float(N*N)), 1);
 	}
 	else if(pingpong == 1)
 	{
-		float h = pingpong1.Load(int3(x, 0.0)).r;
-		displacement[x] = float4(perm*(h/float(N*N)), perm*(h/float(N*N)), perm*(h/float(N*N)), 1);
+		float h = pingpong1.Load(int3(ImageIndexInt, 0.0)).r;
+		displacement[ImageIndexInt] = float4(perm*(h/float(N*N)), perm*(h/float(N*N)), perm*(h/float(N*N)), 1);
 	}
 }

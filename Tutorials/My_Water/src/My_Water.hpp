@@ -200,13 +200,12 @@ private:
 	RefCntAutoPtr<IPipelineState> m_apInversionPSO;
 	RefCntAutoPtr<IBuffer> m_apInversionConstData;
 	RefCntAutoPtr<IShaderResourceBinding> m_apInversionSRB;
-	RefCntAutoPtr<ITexture> m_apInversionDx;
-	RefCntAutoPtr<ITexture> m_apInversionDy;
-	RefCntAutoPtr<ITexture> m_apInversionDz;
+	RefCntAutoPtr<ITexture> m_apInversionDisplace;	
 
 	
 	int m_Log2_N;
 	int m_CSGroupSize;
+	bool m_Choppy;
 	//////////////////////////////////////////////////////////////////////////
 };
 

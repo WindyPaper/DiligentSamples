@@ -29,7 +29,7 @@ cbuffer Constants
 void horizontalButterflies(uint2 index)
 {
 	complex H;
-	int2 x = index;
+	uint2 x = index;
 
 	int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
 	int pingpong = int(g_Constants.Stage_PingPong_Direction_Padding.y);	
@@ -71,7 +71,7 @@ void horizontalButterflies(uint2 index)
 void verticalButterflies(uint2 index)
 {
 	complex H;
-	int2 x = index;
+	uint2 x = index;
 
 	int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
 	int pingpong = int(g_Constants.Stage_PingPong_Direction_Padding.y);	
@@ -112,10 +112,11 @@ void verticalButterflies(uint2 index)
 
 [numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
 void main(uint3 Gid  : SV_GroupID,
-          uint3 GTid : SV_GroupThreadID)
+          uint3 GTid : SV_GroupThreadID,
+          uint3 DTid : SV_DispatchThreadID)
 {
 	int direction = int(g_Constants.Stage_PingPong_Direction_Padding.z);
-	uint2 ImageIndexInt = GTid.xy;
+	uint2 ImageIndexInt = DTid.xy;
 
 	if(direction == 0)
 		horizontalButterflies(ImageIndexInt);

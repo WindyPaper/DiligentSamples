@@ -216,6 +216,7 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
 
 	//water
+	m_Choppy = true;
 	mWaterTimer.Restart();
 	mWaterData.Init(m_pDevice);
 	m_CSGroupSize = 32;
@@ -379,6 +380,7 @@ void My_Water::CreateComputePSO()
 	CreateTwiddlePSO();
 	CreateHKTPSO();
 	CreateButterFlyPSO();
+	CreateInversionPSO();
 }
 
 void My_Water::CreateConstantsBuffer()
@@ -474,7 +476,26 @@ void My_Water::CreateConstantsBuffer()
 	ButterflyPingPongDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
 	ButterflyPingPongDesc.Usage = USAGE_DEFAULT;
 	ButterflyPingPongDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
-	m_pDevice->CreateTexture(ButterflyPingPongDesc, nullptr, &m_apPingPong);	
+	m_pDevice->CreateTexture(ButterflyPingPongDesc, nullptr, &m_apPingPong);
+
+	//Inversion
+	BufferDesc InversionConstBufferDesc;
+	InversionConstBufferDesc.Name = "Water Inversion Constants buffer";
+	InversionConstBufferDesc.Usage = USAGE_DYNAMIC;
+	InversionConstBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	InversionConstBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	InversionConstBufferDesc.uiSizeInBytes = sizeof(float4);
+	m_pDevice->CreateBuffer(InversionConstBufferDesc, nullptr, &m_apInversionConstData);
+
+	TextureDesc DisplaceDesc;
+	DisplaceDesc.Type = RESOURCE_DIM_TEX_2D;
+	DisplaceDesc.Width = WATER_FFT_N;
+	DisplaceDesc.Height = WATER_FFT_N;
+	DisplaceDesc.MipLevels = 1;
+	DisplaceDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	DisplaceDesc.Usage = USAGE_DEFAULT;
+	DisplaceDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(DisplaceDesc, nullptr, &m_apInversionDisplace);
 }
 
 void My_Water::WaterRender()
@@ -523,6 +544,16 @@ void My_Water::WaterRender()
 	m_pImmediateContext->SetPipelineState(m_apButterFlyPSO);
 
 	//horizon
+	IShaderResourceVariable *pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+	if (pPing0)
+	{
+		pPing0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
+	IShaderResourceVariable *pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+	if (pPing1)
+	{
+		pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
 	for (int i = 0; i < m_Log2_N; ++i)
 	{		
 		{
@@ -544,6 +575,25 @@ void My_Water::WaterRender()
 		}
 		m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 		m_pImmediateContext->DispatchCompute(DispAttr);
+	}
+
+	//inversion dy
+	m_pImmediateContext->SetPipelineState(m_apInversionPSO);
+	{
+		MapHelper<WaterFFTInvsersionUniform> GPUFFTInversionUniform(m_pImmediateContext, m_apInversionConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTInversionUniform->PingPong_N_Padding = float4(PingPong, WATER_FFT_N, 0, 0);
+
+		IShaderResourceVariable *pPP0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+		pPP0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		IShaderResourceVariable *pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+		pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));		
+	}
+	m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	m_pImmediateContext->DispatchCompute(DispAttr);
+
+	if (m_Choppy)
+	{
+
 	}
 }
 
@@ -895,7 +945,7 @@ void My_Water::CreateInversionPSO()
 		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
 		ShaderCI.EntryPoint = "main";
 		ShaderCI.Desc.Name = "FFT inversion";
-		ShaderCI.FilePath = "water_inversion.csh";
+		ShaderCI.FilePath = "inversion.csh";
 		ShaderCI.Macros = Macros;
 		m_pDevice->CreateShader(ShaderCI, &pInversionCS);
 	}
@@ -925,19 +975,9 @@ void My_Water::CreateInversionPSO()
 		pConst->Set(m_apInversionConstData);
 	m_apInversionPSO->CreateShaderResourceBinding(&m_apInversionSRB, true);
 
-	//IShaderResourceVariable* UAV0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
-	//if (UAV0)
-	//	UAV0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-	//IShaderResourceVariable* UAV1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
-	//if (UAV1)
-	//	UAV1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-
-	//read texture
-	//IShaderResourceVariable* pReadTwiddleIndicesTex = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TwiddleIndices");
-	//if (pReadTwiddleIndicesTex)
-	//{
-	//	pReadTwiddleIndicesTex->Set(m_apTwiddleIndicesBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	//}
+	IShaderResourceVariable* pDisplacement = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "displacement");
+	if (pDisplacement)
+		pDisplacement->Set(m_apInversionDisplace->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));	
 }
 
 WaterTimer::WaterTimer()

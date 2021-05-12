@@ -32,10 +32,10 @@ cbuffer Constants
 
 float4 GaussRandom(uint2 coord)
 {
-	float noise1 = saturate(g_NoiseTexture0.Load(int3(coord, 0)));
-	float noise2 = saturate(g_NoiseTexture1.Load(int3(coord, 0)));
-	float noise3 = saturate(g_NoiseTexture2.Load(int3(coord, 0)));
-	float noise4 = saturate(g_NoiseTexture3.Load(int3(coord, 0)));
+	float noise1 = clamp(g_NoiseTexture0.Load(int3(coord, 0)), 0.001, 1.0);
+	float noise2 = clamp(g_NoiseTexture1.Load(int3(coord, 0)), 0.001, 1.0);
+	float noise3 = clamp(g_NoiseTexture2.Load(int3(coord, 0)), 0.001, 1.0);
+	float noise4 = clamp(g_NoiseTexture3.Load(int3(coord, 0)), 0.001, 1.0);
 
 	float u0 = 2.0*M_PI*noise1;
 	float v0 = sqrt(-2.0 * log(noise2));
