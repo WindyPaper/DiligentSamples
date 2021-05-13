@@ -543,17 +543,18 @@ void My_Water::WaterRender()
 	int PingPong = 0;
 	m_pImmediateContext->SetPipelineState(m_apButterFlyPSO);
 
-	//horizon
-	IShaderResourceVariable *pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+	IShaderResourceVariable* pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
 	if (pPing0)
 	{
 		pPing0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 	}
-	IShaderResourceVariable *pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+	IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
 	if (pPing1)
 	{
 		pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 	}
+
+	//horizon	
 	for (int i = 0; i < m_Log2_N; ++i)
 	{		
 		{
@@ -593,7 +594,113 @@ void My_Water::WaterRender()
 
 	if (m_Choppy)
 	{
+		PingPong = 0;
 
+		//Butterfly
+		m_pImmediateContext->SetPipelineState(m_apButterFlyPSO);
+
+		{
+			IShaderResourceVariable* pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+			if (pPing0)
+			{
+				pPing0->Set(m_apHKTDX->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+			}
+			IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			if (pPing1)
+			{
+				pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+			}
+		}
+
+		//horizon	
+		for (int i = 0; i < m_Log2_N; ++i)
+		{
+			{
+				MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+				GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(i, PingPong++, 0, 0);
+				PingPong %= 2;
+			}
+			m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+			m_pImmediateContext->DispatchCompute(DispAttr);
+		}
+
+		//vertical
+		for (int j = 0; j < m_Log2_N; ++j)
+		{
+			{
+				MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+				GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(j, PingPong++, 1, 0);
+				PingPong %= 2;
+			}
+			m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+			m_pImmediateContext->DispatchCompute(DispAttr);
+		}
+
+		//inversion dx
+		m_pImmediateContext->SetPipelineState(m_apInversionPSO);
+		{
+			MapHelper<WaterFFTInvsersionUniform> GPUFFTInversionUniform(m_pImmediateContext, m_apInversionConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+			GPUFFTInversionUniform->PingPong_N_Padding = float4(PingPong, WATER_FFT_N, 0, 0);
+
+			IShaderResourceVariable* pPP0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+			pPP0->Set(m_apHKTDX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			IShaderResourceVariable* pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		}
+		m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		m_pImmediateContext->DispatchCompute(DispAttr);
+
+		//dz
+		{
+			IShaderResourceVariable* pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+			if (pPing0)
+			{
+				pPing0->Set(m_apHKTDZ->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+			}
+			IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			if (pPing1)
+			{
+				pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+			}
+		}
+
+		//horizon	
+		for (int i = 0; i < m_Log2_N; ++i)
+		{
+			{
+				MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+				GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(i, PingPong++, 0, 0);
+				PingPong %= 2;
+			}
+			m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+			m_pImmediateContext->DispatchCompute(DispAttr);
+		}
+
+		//vertical
+		for (int j = 0; j < m_Log2_N; ++j)
+		{
+			{
+				MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+				GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(j, PingPong++, 1, 0);
+				PingPong %= 2;
+			}
+			m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+			m_pImmediateContext->DispatchCompute(DispAttr);
+		}
+
+		//inversion dz
+		m_pImmediateContext->SetPipelineState(m_apInversionPSO);
+		{
+			MapHelper<WaterFFTInvsersionUniform> GPUFFTInversionUniform(m_pImmediateContext, m_apInversionConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+			GPUFFTInversionUniform->PingPong_N_Padding = float4(PingPong, WATER_FFT_N, 0, 0);
+
+			IShaderResourceVariable* pPP0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+			pPP0->Set(m_apHKTDZ->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			IShaderResourceVariable* pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		}
+		m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		m_pImmediateContext->DispatchCompute(DispAttr);
 	}
 }
 
