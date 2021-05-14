@@ -453,7 +453,7 @@ void My_Water::CreateConstantsBuffer()
 	HKTTexDesc.Height = WATER_FFT_N;
 	HKTTexDesc.MipLevels = 1;
 	HKTTexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
-	HKTTexDesc.Usage = USAGE_DEFAULT;
+	HKTTexDesc.Usage = USAGE_DYNAMIC;
 	HKTTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDX);
 	m_pDevice->CreateTexture(HKTTexDesc, nullptr, &m_apHKTDY);
@@ -474,7 +474,7 @@ void My_Water::CreateConstantsBuffer()
 	ButterflyPingPongDesc.Height = WATER_FFT_N;
 	ButterflyPingPongDesc.MipLevels = 1;
 	ButterflyPingPongDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
-	ButterflyPingPongDesc.Usage = USAGE_DEFAULT;
+	ButterflyPingPongDesc.Usage = USAGE_DYNAMIC;
 	ButterflyPingPongDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(ButterflyPingPongDesc, nullptr, &m_apPingPong);
 
@@ -493,7 +493,7 @@ void My_Water::CreateConstantsBuffer()
 	DisplaceDesc.Height = WATER_FFT_N;
 	DisplaceDesc.MipLevels = 1;
 	DisplaceDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
-	DisplaceDesc.Usage = USAGE_DEFAULT;
+	DisplaceDesc.Usage = USAGE_DYNAMIC;
 	DisplaceDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(DisplaceDesc, nullptr, &m_apInversionDisplace);
 }
@@ -605,11 +605,11 @@ void My_Water::WaterRender()
 			{
 				pPing0->Set(m_apHKTDX->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 			}
-			IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			/*IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
 			if (pPing1)
 			{
 				pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-			}
+			}*/
 		}
 
 		//horizon	
@@ -644,24 +644,25 @@ void My_Water::WaterRender()
 
 			IShaderResourceVariable* pPP0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
 			pPP0->Set(m_apHKTDX->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			IShaderResourceVariable* pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
-			pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			/*IShaderResourceVariable* pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));*/
 		}
 		m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 		m_pImmediateContext->DispatchCompute(DispAttr);
 
 		//dz
+		m_pImmediateContext->SetPipelineState(m_apButterFlyPSO);
 		{
 			IShaderResourceVariable* pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
 			if (pPing0)
 			{
 				pPing0->Set(m_apHKTDZ->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 			}
-			IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			/*IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
 			if (pPing1)
 			{
 				pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-			}
+			}*/
 		}
 
 		//horizon	
@@ -696,8 +697,8 @@ void My_Water::WaterRender()
 
 			IShaderResourceVariable* pPP0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
 			pPP0->Set(m_apHKTDZ->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			IShaderResourceVariable* pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
-			pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			//IShaderResourceVariable* pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+			//pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 		}
 		m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 		m_pImmediateContext->DispatchCompute(DispAttr);
@@ -1002,7 +1003,8 @@ void My_Water::CreateButterFlyPSO()
 	// clang-format off
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+		{SHADER_TYPE_COMPUTE, "pingpong0", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
 	};
 	// clang-format on
 	PSODesc.ResourceLayout.Variables = Vars;
@@ -1067,7 +1069,10 @@ void My_Water::CreateInversionPSO()
 	// clang-format off
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC}
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},
+		{SHADER_TYPE_COMPUTE, "pingpong0", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "pingpong1", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "displacement", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}		
 	};
 	// clang-format on
 	PSODesc.ResourceLayout.Variables = Vars;
