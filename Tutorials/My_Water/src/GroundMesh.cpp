@@ -150,8 +150,8 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	m_Heightmap.LoadMap("./wm_diffuse_map.png", "./wm_heightmap.png", pDevice);
 
 	Dimension TerrainDim;
-	TerrainDim.Min = float3({ -5690.0f, -3000.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 3000.0f, 12180.0f });
+	TerrainDim.Min = float3({ -5690.0f, -50.00f, -7090.0f });
+	TerrainDim.Size = float3({ 11380.0f, 50.0f, 12180.0f });
 	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
 
@@ -171,6 +171,88 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	if (g_DiffuseTextureVar)
 	{
 		g_DiffuseTextureVar->Set(m_Heightmap.GetDiffuseMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	}
+}
+
+void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture* pHeightMap)
+{
+	// Bind vertex and index buffers
+	Uint32   offset = 0;
+	IBuffer* pBuffs[] = { m_pVertexGPUBuffer };
+	pContext->SetVertexBuffers(0, 1, pBuffs, &offset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+	pContext->SetIndexBuffer(m_pIndexGPUBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	// Set the pipeline state in the immediate context
+	pContext->SetPipelineState(m_pPSO);
+
+	//CBConstants->MeshGridUnit.x = LOD_MESH_GRID_SIZE;
+
+	const SelectionInfo& SelectInfo = mpCDLODTree->GetSelectInfo();
+	//LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
+
+	for (int i = 0; i < SelectInfo.SelectionNodes.size(); ++i)
+	{
+		const SelectNodeData& NodeData = SelectInfo.SelectionNodes[i];
+
+
+		// Set uniform
+		{
+			// Map the buffer and write current world-view-projection matrix
+			MapHelper<GPUConstBuffer> CBConstants(pContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+			CBConstants->ViewProj = m_TerrainViewProjMat;
+
+			int ShaderLODLevel = LOD_COUNT - NodeData.pNode->LODLevel - 1;
+			MapHelper<PerPatchShaderData> PerPatchConstData(pContext, m_pVsPatchBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+			PerPatchConstData->Scale = float4((NodeData.aabb.Max.x - NodeData.aabb.Min.x) / LOD_MESH_GRID_SIZE,
+				(NodeData.aabb.Max.z - NodeData.aabb.Min.z) / LOD_MESH_GRID_SIZE,
+				ShaderLODLevel, 0.0f);
+			PerPatchConstData->Offset = float4(NodeData.aabb.Min.x,
+				(NodeData.aabb.Max.y + NodeData.aabb.Min.y) / 2.0f, NodeData.aabb.Min.z, 0.0f);
+
+			float MorphInfo[2];
+			SelectInfo.GetMorphFromLevel(ShaderLODLevel, MorphInfo);
+			CBConstants->MorphKInfo = float4({ MorphInfo[0], MorphInfo[1], 0.0f, 0.0f });
+			CBConstants->CameraPos = CamPos;
+
+			IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_Texture");
+			pShaderHM->Set(pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		}
+
+		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+		// makes sure that resources are transitioned to required states.
+		pContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		if (NodeData.AreaFlag.flag == SelectNodeAreaFlag::FULL)
+		{
+			pContext->DrawIndexed(GetDrawIndex(0, m_IndexNum));
+		}
+		else
+		{
+			uint16_t QuadIndexNum = m_IndexNum / 4;
+			//Top Left
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::TL_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(0, QuadIndexNum));
+			}
+
+			//Top Right
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::TR_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(m_indexEndTL, QuadIndexNum));
+			}
+
+			//Bottom Left
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::BL_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(m_indexEndTR, QuadIndexNum));
+			}
+
+			//Bottom Right
+			if (NodeData.AreaFlag.flag & SelectNodeAreaFlag::BR_ON)
+			{
+				pContext->DrawIndexed(GetDrawIndex(m_indexEndBL, QuadIndexNum));
+			}
+		}
 	}
 }
 
@@ -332,7 +414,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	// clang-format off
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_VERTEX, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_PIXEL, "g_DiffTexture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
 	};
 	// clang-format on
@@ -341,20 +423,20 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 
 	// Define immutable sampler for g_Texture. Immutable samplers should be used whenever possible
 	// clang-format off
-	SamplerDesc SamLinearClampDesc
+	SamplerDesc SamLinearWrapDesc
 	{
 		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
-		TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP
+		TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
 	};
-	SamplerDesc SamAnisoClampDesc
+	SamplerDesc SamAnisoWrapDesc
 	{
 		FILTER_TYPE_ANISOTROPIC, FILTER_TYPE_ANISOTROPIC, FILTER_TYPE_ANISOTROPIC,
-		TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP
+		TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
 	};
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_Texture", SamLinearClampDesc},
-		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoClampDesc}
+		{SHADER_TYPE_VERTEX, "g_Texture", SamLinearWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoWrapDesc}
 	};
 	// clang-format on
 	ResourceLayout.ImmutableSamplers = ImtblSamplers;

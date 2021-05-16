@@ -228,6 +228,9 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 // Render a frame
 void My_Water::Render()
 {
+	//water
+	WaterRender();
+
     // Clear the back buffer
     const float ClearColor[] = {0.350f, 0.350f, 0.350f, 1.0f};
     // Let the engine perform required state transitions
@@ -264,11 +267,7 @@ void My_Water::Render()
 	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(drawAttrs);
 
-	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos());
-
-
-	//water
-	WaterRender();
+	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), m_apInversionDisplace);
 
 	//render debug view
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
@@ -588,6 +587,10 @@ void My_Water::WaterRender()
 		pPP0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 		IShaderResourceVariable *pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
 		pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));		
+
+		IShaderResourceVariable* pDisplacement = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "displacement");
+		if (pDisplacement)
+			pDisplacement->Set(m_apInversionDisplace->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 	}
 	m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	m_pImmediateContext->DispatchCompute(DispAttr);
@@ -845,7 +848,7 @@ void My_Water::CreateHKTPSO()
 
 	IShaderResourceVariable* pConst = m_apHKTPSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
 	if (pConst)
-		pConst->Set(m_apConstants);
+		pConst->Set(m_apHKTConstData);
 	
 	m_apHKTPSO->CreateShaderResourceBinding(&m_apHKTDataSRB, true);
 
@@ -1095,6 +1098,7 @@ void My_Water::CreateInversionPSO()
 WaterTimer::WaterTimer()
 {
 	mSpeed = 1.0f;
+	mTCount = 0.0f;
 
 	Restart();
 }
@@ -1112,7 +1116,9 @@ float WaterTimer::GetWaterTime()
 	std::chrono::high_resolution_clock::time_point CurrTime = high_resolution_clock::now();
 	auto time_span = duration_cast<duration<float>>(CurrTime - mt);
 	mt = CurrTime;
-	return time_span.count() * mSpeed;
+	mTCount += time_span.count() * mSpeed;
+	std::cout << mTCount << std::endl;
+	return mTCount;
 }
 
 } // namespace Diligent

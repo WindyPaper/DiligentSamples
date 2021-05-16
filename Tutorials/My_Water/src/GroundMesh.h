@@ -50,6 +50,7 @@ namespace Diligent
 
 		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain);		
 		void Render(IDeviceContext *pContext, const float3 &CamPos);
+		void Render(IDeviceContext* pContext, const float3& CamPos, ITexture *pHeightMap);
 
 		void Update(const FirstPersonCamera *pCam);		
 

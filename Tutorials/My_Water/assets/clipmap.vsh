@@ -1,6 +1,9 @@
 Texture2D    g_Texture;
 SamplerState g_Texture_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
+
+static const float WaterTextureScale = 5.0;
+
 struct Dimension
 {
 	float4 Min;
@@ -38,7 +41,7 @@ struct PSInput
 { 
     float4 Pos   : SV_POSITION;
     float2 UV  : TEX_COORD;
-    float2 Morph : TEX_COORD1;
+    float3 Normal : TEX_COORD1;
 };
 
 // morphs vertex xy from from high to low detailed mesh position
@@ -46,6 +49,12 @@ float2 MorphVertex( float2 InPos, float2 vertex, float morphk)
 {
    float2 fracPart = (frac( InPos / 2.0f ) * 2.0f) * Scale.xy;
    return vertex - fracPart * morphk;
+}
+
+float GetHeightMapOffsetValue(float2 BaseUV, float2 OffsetPixel)
+{
+    float2 OffsetUV = OffsetPixel / 255 * WaterTextureScale;   
+    return g_Texture.SampleLevel(g_Texture_sampler, BaseUV + OffsetUV, 0);
 }
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
@@ -59,8 +68,9 @@ void main(in  VSInput VSIn,
     float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
 
     WPos.y = 0.0f;    
-    float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz;
-    WPos.y = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).x * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
+    float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
+    float baseh = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).x;
+    WPos.y = baseh * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
     //WPos.y = 0.0f;
 
     //vertex morph
@@ -69,10 +79,24 @@ void main(in  VSInput VSIn,
     WPos.xz = MorphVertex(VSIn.Pos.xy, WPos.xz, morphLerpK);
 
     //recalculate by new xz position
-    TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz;
+    TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
     WPos.y = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).x * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
 
     PSIn.Pos = mul(g_ViewProj, float4(WPos, 1.0f));
     PSIn.UV = TerrainMapUV;
-    PSIn.Morph = float2(morphLerpK, 1.0f);
+    //PSIn.Morph = float2(morphLerpK, 1.0f);
+
+    //Normal
+    float2 size = float2(2.0,0.0);
+    float3 offset = float3(-1,0,1);
+    float s11 = baseh;
+    float s01 = GetHeightMapOffsetValue(TerrainMapUV, offset.xy);
+    float s21 = GetHeightMapOffsetValue(TerrainMapUV, offset.zy);
+    float s10 = GetHeightMapOffsetValue(TerrainMapUV, offset.yx);
+    float s12 = GetHeightMapOffsetValue(TerrainMapUV, offset.yz);
+    float3 va = normalize(float3(size.xy,s21-s01));
+    float3 vb = normalize(float3(size.yx,s12-s10));
+    float4 bump = float4( cross(va,vb), s11 );
+
+    PSIn.Normal = bump.xyz;
 }

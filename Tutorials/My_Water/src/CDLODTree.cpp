@@ -21,7 +21,11 @@ namespace Diligent
 		{
 			assert(LodLevel == LOD_COUNT - 1);
 
-			heightmap.GetYArea(rx, ry, size, this->rminz, this->rmaxz);
+			//Only for water
+			//heightmap.GetYArea(rx, ry, size, this->rminz, this->rmaxz);
+			this->rmaxz = MAX_HEIGHTMAP_SIZE;
+			this->rminz = -MAX_HEIGHTMAP_SIZE;
+
 		}
 		else
 		{
