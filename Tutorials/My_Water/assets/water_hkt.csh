@@ -49,7 +49,7 @@ void main(uint3 Gid  : SV_GroupID,
 	float w = sqrt(9.81 * magnitude);
 	
 	float4 h0tex_data = h0k_buffer.Load(int3(ImageIndexInt, 0));
-	float4 h0minusk_data = h0minusk_buffer.Load(int3(ImageIndexInt, 0));
+	float4 h0minusk_data = h0k_buffer.Load(int3(int2(N, N) - ImageIndexInt, 0));// h0minusk_buffer.Load(int3(ImageIndexInt, 0));
 
 	complex fourier_amp;
 	fourier_amp.real = h0tex_data.r;

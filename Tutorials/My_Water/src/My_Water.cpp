@@ -873,10 +873,10 @@ void My_Water::CreateHKTPSO()
 	/*RefCntAutoPtr<ITexture> h0TexData;
 	ConvertToTextureView(H0Data->GetBuffer(), WATER_FFT_N, WATER_FFT_N, sizeof(float4), &h0TexData);*/
 	h0tex->Set(m_apH0Buffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	IShaderResourceVariable* h0minusktex = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "h0minusk_buffer");
+	//IShaderResourceVariable* h0minusktex = m_apHKTDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "h0minusk_buffer");
 	/*RefCntAutoPtr<ITexture> h0MinuskTexData;
 	ConvertToTextureView(H0MinusKData->GetBuffer(), WATER_FFT_N, WATER_FFT_N, sizeof(float4), &h0MinuskTexData);*/
-	h0minusktex->Set(m_apH0MinuskBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	//h0minusktex->Set(m_apH0MinuskBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void My_Water::CreateTwiddlePSO()
