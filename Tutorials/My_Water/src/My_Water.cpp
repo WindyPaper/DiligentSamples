@@ -43,8 +43,12 @@
 #include "imGuIZMO.h"
 #include "ImGuiUtils.hpp"
 
+#include "RenderProfile.h"
+
 namespace Diligent
 {	
+	RenderProfileMgr gRenderProfileMgr;
+
 	DebugCanvas gDebugCanvas;
 
 SampleBase* CreateSample()
@@ -214,6 +218,9 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	m_apClipMap.reset(new GroundMesh(LOD_MESH_GRID_SIZE, LOD_COUNT, 0.115f));
 
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
+
+	//profile
+	gRenderProfileMgr.Initialize(m_pDevice, m_pImmediateContext);
 
 	//water
 	m_Choppy = true;
