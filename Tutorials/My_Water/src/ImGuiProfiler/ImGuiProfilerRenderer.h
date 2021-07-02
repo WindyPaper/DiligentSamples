@@ -1,8 +1,18 @@
+#pragma once
+
+#include <algorithm>
+#include <map>
+#include <array>
+
+#include "BasicMath.hpp"
+#include "imgui.h"
+#include "ProfilerTask.h"
+
 namespace ImGuiUtils
 {
-  Diligent::Vector2 Vec2(ImVec2 vec)
+  Diligent::float2 Vec2(ImVec2 vec)
   {
-    return Diligent::Vector2(vec.x, vec.y);
+    return Diligent::float2(vec.x, vec.y);
   }
   class ProfilerGraph
   {
@@ -64,9 +74,9 @@ namespace ImGuiUtils
     void RenderTimings(int graphWidth, int legendWidth, int height, int frameIndexOffset)
     {
       ImDrawList* drawList = ImGui::GetWindowDrawList();
-      const Diligent::Vector2 widgetPos = Vec2(ImGui::GetCursorScreenPos());
-      RenderGraph(drawList, widgetPos, Diligent::Vector2(graphWidth, height), frameIndexOffset);
-      RenderLegend(drawList, widgetPos + Diligent::Vector2(graphWidth, 0.0f), Diligent::Vector2(legendWidth, height), frameIndexOffset);
+      const Diligent::float2 widgetPos = Vec2(ImGui::GetCursorScreenPos());
+      RenderGraph(drawList, widgetPos, Diligent::float2(graphWidth, height), frameIndexOffset);
+      RenderLegend(drawList, widgetPos + Diligent::float2(graphWidth, 0.0f), Diligent::float2(legendWidth, height), frameIndexOffset);
       ImGui::Dummy(ImVec2(float(graphWidth + legendWidth), float(height)));
     }
 
@@ -107,7 +117,7 @@ namespace ImGuiUtils
         taskStats[statIndex].priorityOrder = statNumber;
       }
     }
-    void RenderGraph(ImDrawList *drawList, Diligent::Vector2 graphPos, Diligent::Vector2 graphSize, size_t frameIndexOffset)
+    void RenderGraph(ImDrawList *drawList, Diligent::float2 graphPos, Diligent::float2 graphSize, size_t frameIndexOffset)
     {
       Rect(drawList, graphPos, graphPos + graphSize, 0xffffffff, false);
       float maxFrameTime = 1.0f / 30.0f;
@@ -117,10 +127,10 @@ namespace ImGuiUtils
       {
         size_t frameIndex = (currFrameIndex - frameIndexOffset - 1 - frameNumber + 2 * frames.size()) % frames.size();
 
-        Diligent::Vector2 framePos = graphPos + Diligent::Vector2(graphSize.x - 1 - frameWidth - (frameWidth + frameSpacing) * frameNumber, graphSize.y - 1);
+        Diligent::float2 framePos = graphPos + Diligent::float2(graphSize.x - 1 - frameWidth - (frameWidth + frameSpacing) * frameNumber, graphSize.y - 1);
         if (framePos.x < graphPos.x + 1)
           break;
-        Diligent::Vector2 taskPos = framePos + Diligent::Vector2(0.0f, 0.0f);
+        Diligent::float2 taskPos = framePos + Diligent::float2(0.0f, 0.0f);
         auto &frame = frames[frameIndex];
         for (auto task : frame.tasks)
         {
@@ -128,11 +138,11 @@ namespace ImGuiUtils
           float taskEndHeight = (float(task.endTime) / maxFrameTime) * graphSize.y;
           //taskMaxCosts[task.name] = std::max(taskMaxCosts[task.name], task.endTime - task.startTime);
           if (abs(taskEndHeight - taskStartHeight) > heightThreshold)
-            Rect(drawList, taskPos + Diligent::Vector2(0.0f, -taskStartHeight), taskPos + Diligent::Vector2(frameWidth, -taskEndHeight), task.color, true);
+            Rect(drawList, taskPos + Diligent::float2(0.0f, -taskStartHeight), taskPos + Diligent::float2(frameWidth, -taskEndHeight), task.color, true);
         }
       }
     }
-    void RenderLegend(ImDrawList *drawList, Diligent::Vector2 legendPos, Diligent::Vector2 legendSize, size_t frameIndexOffset)
+    void RenderLegend(ImDrawList *drawList, Diligent::float2 legendPos, Diligent::float2 legendSize, size_t frameIndexOffset)
     {
       float markerLeftRectMargin = 3.0f;
       float markerLeftRectWidth = 5.0f;
@@ -143,7 +153,7 @@ namespace ImGuiUtils
       float markerRightRectHeight = 10.0f;
       float markerRightRectSpacing = 4.0f;
       float nameOffset = 30.0f;
-      Diligent::Vector2 textMargin = Diligent::Vector2(5.0f, -3.0f);
+      Diligent::float2 textMargin = Diligent::float2(5.0f, -3.0f);
 
       auto &currFrame = frames[(currFrameIndex - frameIndexOffset - 1 + 2 * frames.size()) % frames.size()];
       size_t maxTasksCount = size_t(legendSize.y / (markerRightRectHeight + markerRightRectSpacing));
@@ -172,13 +182,13 @@ namespace ImGuiUtils
         float taskStartHeight = (float(task.startTime) / maxFrameTime) * legendSize.y;
         float taskEndHeight = (float(task.endTime) / maxFrameTime) * legendSize.y;
 
-        Diligent::Vector2 markerLeftRectMin = legendPos + Diligent::Vector2(markerLeftRectMargin, legendSize.y);
-        Diligent::Vector2 markerLeftRectMax = markerLeftRectMin + Diligent::Vector2(markerLeftRectWidth, 0.0f);
+        Diligent::float2 markerLeftRectMin = legendPos + Diligent::float2(markerLeftRectMargin, legendSize.y);
+        Diligent::float2 markerLeftRectMax = markerLeftRectMin + Diligent::float2(markerLeftRectWidth, 0.0f);
         markerLeftRectMin.y -= taskStartHeight;
         markerLeftRectMax.y -= taskEndHeight;
 
-        Diligent::Vector2 markerRightRectMin = legendPos + Diligent::Vector2(markerLeftRectMargin + markerLeftRectWidth + markerMidWidth, legendSize.y - markerRigthRectMargin - (markerRightRectHeight + markerRightRectSpacing) * stat.onScreenIndex);
-        Diligent::Vector2 markerRightRectMax = markerRightRectMin + Diligent::Vector2(markerRightRectWidth, -markerRightRectHeight);
+        Diligent::float2 markerRightRectMin = legendPos + Diligent::float2(markerLeftRectMargin + markerLeftRectWidth + markerMidWidth, legendSize.y - markerRigthRectMargin - (markerRightRectHeight + markerRightRectSpacing) * stat.onScreenIndex);
+        Diligent::float2 markerRightRectMax = markerRightRectMin + Diligent::float2(markerRightRectWidth, -markerRightRectHeight);
         RenderTaskMarker(drawList, markerLeftRectMin, markerLeftRectMax, markerRightRectMin, markerRightRectMax, task.color);
 
         uint32_t textColor = useColoredLegendText ? task.color : Diligent::Colors::imguiText;// task.color;
@@ -189,29 +199,29 @@ namespace ImGuiUtils
         timeText << std::fixed << std::string("[") << (taskTimeMs * 1000.0f);
 
         Text(drawList, markerRightRectMax + textMargin, textColor, timeText.str().c_str());
-        Text(drawList, markerRightRectMax + textMargin + Diligent::Vector2(nameOffset, 0.0f), textColor, (std::string("ms] ") + task.name).c_str());
+        Text(drawList, markerRightRectMax + textMargin + Diligent::float2(nameOffset, 0.0f), textColor, (std::string("ms] ") + task.name).c_str());
       }      
     }
 
-    static void Rect(ImDrawList *drawList, Diligent::Vector2 minPoint, Diligent::Vector2 maxPoint, uint32_t col, bool filled = true)
+    static void Rect(ImDrawList *drawList, Diligent::float2 minPoint, Diligent::float2 maxPoint, uint32_t col, bool filled = true)
     {
       if(filled)
         drawList->AddRectFilled(ImVec2(minPoint.x, minPoint.y), ImVec2(maxPoint.x, maxPoint.y), col);
       else
         drawList->AddRect(ImVec2(minPoint.x, minPoint.y), ImVec2(maxPoint.x, maxPoint.y), col);
     }
-    static void Text(ImDrawList *drawList, Diligent::Vector2 point, uint32_t col, const char *text)
+    static void Text(ImDrawList *drawList, Diligent::float2 point, uint32_t col, const char *text)
     {
       drawList->AddText(ImVec2(point.x, point.y), col, text);
     }
-    static void Triangle(ImDrawList *drawList, std::array<Diligent::Vector2, 3> points, uint32_t col, bool filled = true)
+    static void Triangle(ImDrawList *drawList, std::array<Diligent::float2, 3> points, uint32_t col, bool filled = true)
     {
       if (filled)
         drawList->AddTriangleFilled(ImVec2(points[0].x, points[0].y), ImVec2(points[1].x, points[1].y), ImVec2(points[2].x, points[2].y), col);
       else
         drawList->AddTriangle(ImVec2(points[0].x, points[0].y), ImVec2(points[1].x, points[1].y), ImVec2(points[2].x, points[2].y), col);
     }
-    static void RenderTaskMarker(ImDrawList *drawList, Diligent::Vector2 leftMinPoint, Diligent::Vector2 leftMaxPoint, Diligent::Vector2 rightMinPoint, Diligent::Vector2 rightMaxPoint, uint32_t col)
+    static void RenderTaskMarker(ImDrawList *drawList, Diligent::float2 leftMinPoint, Diligent::float2 leftMaxPoint, Diligent::float2 rightMinPoint, Diligent::float2 rightMaxPoint, uint32_t col)
     {
       Rect(drawList, leftMinPoint, leftMaxPoint, col, true);
       Rect(drawList, rightMinPoint, rightMaxPoint, col, true);

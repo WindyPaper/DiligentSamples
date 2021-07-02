@@ -236,7 +236,10 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 void My_Water::Render()
 {
 	//water
-	WaterRender();
+	{
+		GPUProfileScope gpuscope(&gRenderProfileMgr, "WaterFFT");
+		WaterRender();
+	}	
 
     // Clear the back buffer
     const float ClearColor[] = {0.350f, 0.350f, 0.350f, 1.0f};
@@ -282,6 +285,9 @@ void My_Water::Render()
 
 void My_Water::Update(double CurrTime, double ElapsedTime)
 {
+	//profile
+	UpdateProfileData();
+
 	UpdateUI();
     SampleBase::Update(CurrTime, ElapsedTime);
 
@@ -1102,6 +1108,24 @@ void My_Water::CreateInversionPSO()
 		pDisplacement->Set(m_apInversionDisplace->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));	
 }
 
+void My_Water::UpdateProfileData()
+{
+	ProfilerTask* pCPUData = nullptr;
+	ProfilerTask* pGPUData = nullptr;
+
+	int CPUDataSize = 0;
+	int GPUDataSize = 0;
+
+	gRenderProfileMgr.GetCPUProfileData(&pCPUData, CPUDataSize);
+	gRenderProfileMgr.GetGPUProfileData(&pGPUData, GPUDataSize);
+
+	mProfilersWindow.gpuGraph.LoadFrameData(pGPUData, GPUDataSize);
+
+	mProfilersWindow.Render();
+
+	gRenderProfileMgr.CleanProfileTask();
+}
+
 WaterTimer::WaterTimer()
 {
 	mSpeed = 1.0f;
@@ -1124,7 +1148,7 @@ float WaterTimer::GetWaterTime()
 	auto time_span = duration_cast<duration<float>>(CurrTime - mt);
 	mt = CurrTime;
 	mTCount += time_span.count() * mSpeed;
-	std::cout << mTCount << std::endl;
+	//std::cout << mTCount << std::endl;
 	return mTCount;
 }
 

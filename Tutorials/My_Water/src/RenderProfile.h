@@ -11,6 +11,8 @@
 #include "ScopedQueryHelper.hpp"
 #include "DurationQueryHelper.hpp"
 
+#define MAX_PROFILE_PARAM 256
+
 namespace Diligent
 {
 	class IDeviceContext;
@@ -57,6 +59,9 @@ namespace Diligent
 		void GPUProfileTaskEnd(double &RefEndTime);
 
 		void CleanProfileTask();
+
+		void GetCPUProfileData(ProfilerTask** pData, int& size);
+		void GetGPUProfileData(ProfilerTask** pData, int& size);
 
 	private:
 		std::unique_ptr<ScopedQueryHelper>   m_pPipelineStatsQuery;

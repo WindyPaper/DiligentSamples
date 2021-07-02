@@ -32,6 +32,7 @@
 #include "SampleBase.hpp"
 #include "FirstPersonCamera.hpp"
 #include "LightManager.h"
+#include "ImGuiProfiler/ImGuiProfilerRenderer.h"
 
 //RIGHT HAND COORDINATION
 
@@ -127,6 +128,7 @@ public:
 	virtual void WindowResize(Uint32 Width, Uint32 Height);
 
 protected:
+	void UpdateProfileData();
 	void UpdateUI();
 	void CreateGridBuffer();
 
@@ -203,6 +205,8 @@ private:
 	RefCntAutoPtr<IShaderResourceBinding> m_apInversionSRB;
 	RefCntAutoPtr<ITexture> m_apInversionDisplace;	
 
+	//profile window
+	ImGuiUtils::ProfilersWindow mProfilersWindow;
 	
 	int m_Log2_N;
 	int m_CSGroupSize;

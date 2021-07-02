@@ -72,7 +72,8 @@ void Diligent::RenderProfileMgr::Initialize(IRenderDevice *pDevice, IDeviceConte
 
 Diligent::RenderProfileMgr::RenderProfileMgr()
 {
-
+	m_CPUProfileTasks.resize(MAX_PROFILE_PARAM);
+	m_GPUProfileTasks.resize(MAX_PROFILE_PARAM);
 }
 
 Diligent::RenderProfileMgr::~RenderProfileMgr()
@@ -104,4 +105,16 @@ void Diligent::RenderProfileMgr::CleanProfileTask()
 {
 	m_CurrCPUProfileTaskIndex = 0;
 	m_CurrGPUProfileTaskIndex = 0;
+}
+
+void Diligent::RenderProfileMgr::GetCPUProfileData(ProfilerTask** pData, int& size)
+{
+	*pData = &m_CPUProfileTasks[0];
+	size = m_CurrCPUProfileTaskIndex;
+}
+
+void Diligent::RenderProfileMgr::GetGPUProfileData(ProfilerTask** pData, int& size)
+{
+	*pData = &m_GPUProfileTasks[0];
+	size = m_CurrGPUProfileTaskIndex;
 }
