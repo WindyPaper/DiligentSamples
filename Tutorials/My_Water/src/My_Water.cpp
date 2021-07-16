@@ -393,6 +393,8 @@ void My_Water::CreateComputePSO()
 	CreateHKTPSO();
 	CreateButterFlyPSO();
 	CreateInversionPSO();
+
+	CreateFFTRowPSO();
 }
 
 void My_Water::CreateConstantsBuffer()
@@ -508,6 +510,35 @@ void My_Water::CreateConstantsBuffer()
 	DisplaceDesc.Usage = USAGE_DYNAMIC;
 	DisplaceDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(DisplaceDesc, nullptr, &m_apInversionDisplace);
+
+	//FFT Row
+	TextureDesc HtTexDesc;
+	HtTexDesc.Type = RESOURCE_DIM_TEX_2D;
+	HtTexDesc.Width = WATER_FFT_N/2;
+	HtTexDesc.Height = WATER_FFT_N;
+	HtTexDesc.MipLevels = 1;
+	HtTexDesc.Format = TEX_FORMAT_RG32_FLOAT;
+	HtTexDesc.Usage = USAGE_DYNAMIC;
+	HtTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(HtTexDesc, nullptr, &m_apFFTHtTex);
+
+	TextureDesc DtTexDesc;
+	DtTexDesc.Type = RESOURCE_DIM_TEX_2D;
+	DtTexDesc.Width = WATER_FFT_N / 2;
+	DtTexDesc.Height = WATER_FFT_N;
+	DtTexDesc.MipLevels = 1;
+	DtTexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	DtTexDesc.Usage = USAGE_DYNAMIC;
+	DtTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(DtTexDesc, nullptr, &m_apFFTDtTex);
+
+	BufferDesc FastFFTData;
+	FastFFTData.Name = "Water Fast FFT Data";
+	FastFFTData.Usage = USAGE_DYNAMIC;
+	FastFFTData.BindFlags = BIND_UNIFORM_BUFFER;
+	FastFFTData.CPUAccessFlags = CPU_ACCESS_WRITE;
+	FastFFTData.uiSizeInBytes = sizeof(float4);
+	m_pDevice->CreateBuffer(FastFFTData, nullptr, &m_apFFTRowData);
 }
 
 void My_Water::WaterRender()
@@ -1124,6 +1155,70 @@ void My_Water::UpdateProfileData()
 	mProfilersWindow.Render();
 
 	gRenderProfileMgr.CleanProfileTask();
+}
+
+void My_Water::CreateFFTRowPSO()
+{
+	ShaderCreateInfo ShaderCI;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("THREAD_GROUP_SIZE", WATER_FFT_N);
+	Macros.Finalize();
+
+	RefCntAutoPtr<IShader> pFFTRowCS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "FastFFT Row";
+		ShaderCI.FilePath = "water_fft_row.csh";
+		ShaderCI.Macros = Macros;
+		m_pDevice->CreateShader(ShaderCI, &pFFTRowCS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},		
+		{SHADER_TYPE_COMPUTE, "HtOutput", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "DtOutput", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "H0", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "FFT Column Compute shader";
+	PSOCreateInfo.pCS = pFFTRowCS;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apFFTRowPSO);
+
+	IShaderResourceVariable* pConst = m_apFFTRowPSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
+	if (pConst)
+		pConst->Set(m_apFFTRowData);
+	m_apFFTRowPSO->CreateShaderResourceBinding(&m_apFFTRowSRB, true);
+
+	IShaderResourceVariable* pHtOutput = m_apFFTRowSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HtOutput");
+	if (pHtOutput)
+		pHtOutput->Set(m_apFFTHtTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	IShaderResourceVariable* pDtOutput = m_apFFTRowSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DtOutput");
+	if (pDtOutput)
+		pDtOutput->Set(m_apFFTDtTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	IShaderResourceVariable* pH0Input= m_apFFTRowSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "H0");
+	if (pH0Input)
+		pH0Input->Set(m_apH0Buffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 WaterTimer::WaterTimer()

@@ -89,6 +89,11 @@ struct WaterFFTInvsersionUniform
 	float4 PingPong_N_Padding; //pack
 };
 
+struct WaterFFTRowUniform
+{
+	float4 N_H0DataLength_NBitNum_Time;
+};
+
 struct WaterData
 {
 	enum WaterDataEnum
@@ -145,6 +150,8 @@ private:
 	void CreateHKTPSO();
 	void CreateButterFlyPSO();
 	void CreateInversionPSO();
+
+	void CreateFFTRowPSO();
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -204,6 +211,14 @@ private:
 	RefCntAutoPtr<IBuffer> m_apInversionConstData;
 	RefCntAutoPtr<IShaderResourceBinding> m_apInversionSRB;
 	RefCntAutoPtr<ITexture> m_apInversionDisplace;	
+
+	//Optimize FFT
+	//Fast FFT Row
+	RefCntAutoPtr<IPipelineState> m_apFFTRowPSO;
+	RefCntAutoPtr<IBuffer> m_apFFTRowData;
+	RefCntAutoPtr<IShaderResourceBinding> m_apFFTRowSRB;
+	RefCntAutoPtr<ITexture> m_apFFTHtTex;
+	RefCntAutoPtr<ITexture> m_apFFTDtTex;
 
 	//profile window
 	ImGuiUtils::ProfilersWindow mProfilersWindow;
