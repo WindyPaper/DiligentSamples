@@ -10,7 +10,7 @@ RWTexture2D<float4> DtOutput;
 
 struct WaterFastFFT
 {
-	N_H0DataLength_NBitNum_Time;
+	float4 N_H0DataLength_NBitNum_Time;
 };
 
 cbuffer Constants
@@ -22,19 +22,14 @@ cbuffer Constants
 #   define THREAD_GROUP_SIZE 64
 #endif
 
+//share datas for conmunicate between the threads
 groupshared float2 hData[THREAD_GROUP_SIZE/2];
 groupshared float2 xData[THREAD_GROUP_SIZE/2];
 groupshared float2 zData[THREAD_GROUP_SIZE/2];
 
-void fft(inout float2 h[2], inout float2 x[2], inout float2 z[2], uint thread_id, uint half_N)
-{
-	//butterfly
-	
-}
-
 float Omega(uint2 coord, uint half_N, inout float2 k, inout float magnitude)
 {
-	float2 kl = coord - uint2(half_N);
+	uint2 kl = coord - uint2(half_N, half_N);
 
 	float L = 1000;
 	k = float2(2.0 * M_PI * kl.x / L, 2.0 * M_PI * kl.y / L);
@@ -51,9 +46,93 @@ float2 MultiplyComplex(float2 a, float2 b)
 	return float2(a[0] * b[0] - a[1] * b[1], a[1] * b[0] + a[0] * b[1]);
 }
 
-float2 MultipyI(float2 c)
+float2 MultiplyI(float2 c)
 {
 	return float2(-c[1], c[0]);
+}
+
+void fft(inout float2 h[2], inout float2 x[2], inout float2 z[2], uint thread_id, uint N)
+{
+	//butterfly
+	
+	//stage 0 //cos0 = 1, sin0 = 0
+	float dht = h[1];
+	float dxt = x[1];
+	float dzt = z[1];
+
+	h[1] = h[0] - dht;
+	h[0] = h[0] + dht;
+	x[1] = x[0] - dxt;
+	x[0] = x[0] + dxt;
+	z[1] = z[0] - dzt;
+	z[0] = z[0] + dzt;
+
+	bool flag = thread_id & 1;
+	float scale = M_PI * 0.5f; // Pi
+
+	if(flag)
+	{
+		hData[thread_id] = h[0];
+		xData[thread_id] = x[0];
+		zData[thread_id] = z[0];
+	}
+	else
+	{
+		hData[thread_id] = h[1];
+		xData[thread_id] = x[1];
+		zData[thread_id] = z[1];
+	}
+
+	for(uint i = 2; i < N; i <<= 1, scale *= 0.5)
+	{
+		uint i = thread_id ^ (i - 1); //pair index
+		uint j = thread_id & (i - 1); //curr n index
+
+		if(flag)
+		{
+			h[0] = hData[thread_id];
+			x[0] = xData[thread_id];
+			z[0] = zData[thread_id];
+		}
+		else
+		{
+			h[1] = hData[thread_id];
+			x[1] = xData[thread_id];
+			z[1] = zData[thread_id];
+		}
+
+		float e_sin, e_cos;
+		sincos(j * scale, e_sin, e_cos);
+		float2 omega_j = float2(e_cos, e_sin);
+
+		dht = MultiplyComplex(omega_j, h[1]);
+		dxt = MultiplyComplex(omega_j, x[1]);
+		dzt = MultiplyComplex(omega_j, z[1]);
+
+		h[1] = h[0] - dht;
+		h[0] = h[0] + dht;
+		x[1] = x[0] - dxt;
+		x[0] = x[0] + dxt;
+		z[1] = z[0] - dzt;
+		z[0] = z[0] + dzt;
+
+		flag = thread_id & i;
+
+		if(flag)
+		{
+			hData[thread_id] = h[0];
+			xData[thread_id] = x[0];
+			zData[thread_id] = z[0];
+		}
+		else
+		{
+			hData[thread_id] = h[1];
+			xData[thread_id] = x[1];
+			zData[thread_id] = z[1];
+		}
+
+		GroupMemoryBarrierWithGroupSync();
+	}
 }
 
 [numthreads(THREAD_GROUP_SIZE/2, 1, 1)]
@@ -69,6 +148,8 @@ void main(uint3 Gid  : SV_GroupID,
 	uint NBitNum = g_Constants.N_H0DataLength_NBitNum_Time.z;
 	float Time = g_Constants.N_H0DataLength_NBitNum_Time.w;	
 
+	//uint stage_num = log2(N);
+
 	uint base_x = ImageIndexInt.x * 2;
 	uint y = ImageIndexInt.y;
 
@@ -83,8 +164,8 @@ void main(uint3 Gid  : SV_GroupID,
 	h0.xy = H0.Load(int3(first_stage_index0, 0)).xy; //pair 0
 	h0.zw = H0.Load(int3(first_stage_index1, 0)).xy; //pair 1
 
-	int2 h0_star_index0 = int2(N) - first_stage_index0;
-	int2 h0_star_index1 = int2(N) - first_stage_index1;
+	int2 h0_star_index0 = int2(N, N) - first_stage_index0;
+	int2 h0_star_index1 = int2(N, N) - first_stage_index1;
 	h0_star.xy = H0.Load(int3(h0_star_index0, 0)).xy * float2(1.0, -1.0); // conj
 	h0_star.zw = H0.Load(int3(h0_star_index1, 0)).xy * float2(1.0, -1.0); // conj
 
@@ -110,11 +191,11 @@ void main(uint3 Gid  : SV_GroupID,
 	ht[0] = MultiplyComplex(h0.xy, phase0) + MultiplyComplex(h0_star.xy, float2(phase0.x, -phase0.y));
 	ht[1] = MultiplyComplex(h0.zw, phase0) + MultiplyComplex(h0_star.zw, float2(phase0.x, -phase0.y));
 
-	xt[0] = -MultipyI(ht[0] * (kv[0].x / magnitudev[0]));
-	zt[0] = -MultipyI(ht[0] * (kv[0].y / magnitudev[0]));
+	xt[0] = -MultiplyI(ht[0] * (kv[0].x / magnitudev[0]));
+	zt[0] = -MultiplyI(ht[0] * (kv[0].y / magnitudev[0]));
 
-	xt[1] = -MultipyI(ht[1] * (kv[1].x / magnitudev[0]));
-	zt[1] = -MultipyI(ht[1] * (kv[1].y / magnitudev[0]));
+	xt[1] = -MultiplyI(ht[1] * (kv[1].x / magnitudev[0]));
+	zt[1] = -MultiplyI(ht[1] * (kv[1].y / magnitudev[0]));
 
 
 
