@@ -37,7 +37,7 @@ float Omega(uint2 coord, uint half_N, inout float2 k, inout float magnitude)
 	magnitude = length(k);
 	if (magnitude < 0.00001) magnitude = 0.00001;
 	
-	float w = sqrt(9.81 * magnitude);
+	float w = (9.81 * magnitude);
 	return w;
 }
 
@@ -55,59 +55,14 @@ void fft(inout float2 h[2], inout float2 x[2], inout float2 z[2], uint thread_id
 {
 	//butterfly
 	
-	//stage 0 //cos0 = 1, sin0 = 0
-	float dht = h[1];
-	float dxt = x[1];
-	float dzt = z[1];
-
-	h[1] = h[0] - dht;
-	h[0] = h[0] + dht;
-	x[1] = x[0] - dxt;
-	x[0] = x[0] + dxt;
-	z[1] = z[0] - dzt;
-	z[0] = z[0] + dzt;
-
 	bool flag = thread_id & 1;
 	float scale = M_PI * 0.5f; // Pi
 
-	if(flag)
+	//stage 0 //cos0 = 1, sin0 = 0
 	{
-		hData[thread_id] = h[0];
-		xData[thread_id] = x[0];
-		zData[thread_id] = z[0];
-	}
-	else
-	{
-		hData[thread_id] = h[1];
-		xData[thread_id] = x[1];
-		zData[thread_id] = z[1];
-	}
-
-	for(uint i = 2; i < N; i <<= 1, scale *= 0.5)
-	{
-		uint i = thread_id ^ (i - 1); //pair index
-		uint j = thread_id & (i - 1); //curr n index
-
-		if(flag)
-		{
-			h[0] = hData[thread_id];
-			x[0] = xData[thread_id];
-			z[0] = zData[thread_id];
-		}
-		else
-		{
-			h[1] = hData[thread_id];
-			x[1] = xData[thread_id];
-			z[1] = zData[thread_id];
-		}
-
-		float e_sin, e_cos;
-		sincos(j * scale, e_sin, e_cos);
-		float2 omega_j = float2(e_cos, e_sin);
-
-		dht = MultiplyComplex(omega_j, h[1]);
-		dxt = MultiplyComplex(omega_j, x[1]);
-		dzt = MultiplyComplex(omega_j, z[1]);
+		float2 dht = h[1];
+		float2 dxt = x[1];
+		float2 dzt = z[1];
 
 		h[1] = h[0] - dht;
 		h[0] = h[0] + dht;
@@ -116,7 +71,57 @@ void fft(inout float2 h[2], inout float2 x[2], inout float2 z[2], uint thread_id
 		z[1] = z[0] - dzt;
 		z[0] = z[0] + dzt;
 
-		flag = thread_id & i;
+
+		if(flag)
+		{
+			hData[thread_id] = h[0];
+			xData[thread_id] = x[0];
+			zData[thread_id] = z[0];
+		}
+		else
+		{
+			hData[thread_id] = h[1];
+			xData[thread_id] = x[1];
+			zData[thread_id] = z[1];
+		}
+
+		GroupMemoryBarrier();
+	}
+
+	for(uint stage = 2; stage < N; stage <<= 1, scale *= 0.5)
+	{
+		uint i = thread_id ^ (stage - 1); //pair index
+		uint j = thread_id & (stage - 1); //curr n index
+
+		if(flag)
+		{
+			h[0] = hData[i];
+			x[0] = xData[i];
+			z[0] = zData[i];
+		}
+		else
+		{
+			h[1] = hData[i];
+			x[1] = xData[i];
+			z[1] = zData[i];
+		}
+
+		float e_sin, e_cos;
+		sincos(j * scale, e_sin, e_cos);
+		float2 omega_j = float2(e_cos, e_sin);
+
+		float2 dht = MultiplyComplex(omega_j, h[1]);
+		float2 dxt = MultiplyComplex(omega_j, x[1]);
+		float2 dzt = MultiplyComplex(omega_j, z[1]);
+
+		h[1] = h[0] - dht;
+		h[0] = h[0] + dht;
+		x[1] = x[0] - dxt;
+		x[0] = x[0] + dxt;
+		z[1] = z[0] - dzt;
+		z[0] = z[0] + dzt;
+
+		flag = thread_id & stage;
 
 		if(flag)
 		{
@@ -189,19 +194,22 @@ void main(uint3 Gid  : SV_GroupID,
 	float2 phase1 = float2(cos_omega.y, sin_omega.y);
 
 	ht[0] = MultiplyComplex(h0.xy, phase0) + MultiplyComplex(h0_star.xy, float2(phase0.x, -phase0.y));
-	ht[1] = MultiplyComplex(h0.zw, phase0) + MultiplyComplex(h0_star.zw, float2(phase0.x, -phase0.y));
+	ht[1] = MultiplyComplex(h0.zw, phase1) + MultiplyComplex(h0_star.zw, float2(phase1.x, -phase1.y));
 
 	xt[0] = -MultiplyI(ht[0] * (kv[0].x / magnitudev[0]));
 	zt[0] = -MultiplyI(ht[0] * (kv[0].y / magnitudev[0]));
 
-	xt[1] = -MultiplyI(ht[1] * (kv[1].x / magnitudev[0]));
-	zt[1] = -MultiplyI(ht[1] * (kv[1].y / magnitudev[0]));
+	xt[1] = -MultiplyI(ht[1] * (kv[1].x / magnitudev[1]));
+	zt[1] = -MultiplyI(ht[1] * (kv[1].y / magnitudev[1]));
 
-
+	fft(ht, xt, zt, ImageIndexInt.x, N);
 
     //uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
     // if (uiGlobalThreadIdx >= g_Constants.uiNumParticles)
     //     return;
+	HtOutput[ImageIndexInt] = ht[0];
+	HtOutput[ImageIndexInt + uint2(half_N, 0)] = ht[1];
 
-    
+	DtOutput[ImageIndexInt] = float4(xt[0], zt[0]);
+	DtOutput[ImageIndexInt + uint2(half_N, 0)] = float4(xt[1], zt[1]);    
 }

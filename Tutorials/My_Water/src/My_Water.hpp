@@ -152,6 +152,7 @@ private:
 	void CreateInversionPSO();
 
 	void CreateFFTRowPSO();
+	void CreateFFTColumnPSO();
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -219,6 +220,12 @@ private:
 	RefCntAutoPtr<IShaderResourceBinding> m_apFFTRowSRB;
 	RefCntAutoPtr<ITexture> m_apFFTHtTex;
 	RefCntAutoPtr<ITexture> m_apFFTDtTex;
+	
+	//F FFT Column
+	RefCntAutoPtr<IPipelineState> m_apFFTColumnPSO;
+	RefCntAutoPtr<IBuffer> m_apFFTColumnData;
+	RefCntAutoPtr<IShaderResourceBinding> m_apFFTColumnSRB;	
+	RefCntAutoPtr<ITexture> m_apFFTDisplacementTexture;
 
 	//profile window
 	ImGuiUtils::ProfilersWindow mProfilersWindow;
