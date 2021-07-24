@@ -50,6 +50,7 @@ void main(uint3 Gid  : SV_GroupID,
 	
 	float4 h0tex_data = h0k_buffer.Load(int3(ImageIndexInt, 0));
 	float4 h0minusk_data = h0k_buffer.Load(int3(int2(N, N) - ImageIndexInt, 0));// h0minusk_buffer.Load(int3(ImageIndexInt, 0));
+	h0minusk_data.g *= -1;
 
 	complex fourier_amp;
 	fourier_amp.real = h0tex_data.r;

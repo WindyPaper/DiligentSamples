@@ -26,46 +26,79 @@ cbuffer Constants
 #   define THREAD_GROUP_SIZE 64
 #endif
 
+groupshared float2 HData[256];
+
 void horizontalButterflies(uint2 index)
 {
 	complex H;
 	uint2 x = index;
 
-	int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
+	//int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
 	int pingpong = int(g_Constants.Stage_PingPong_Direction_Padding.y);	
 	
 	if(pingpong == 0)
 	{
-		float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
-		float2 p_ = pingpong0.Load(int3(data.z, x.y, 0)).rg;
-		float2 q_ = pingpong0.Load(int3(data.w, x.y, 0)).rg;
-		float2 w_ = float2(data.x, data.y);
+		for(int stage = 0; stage < 8; ++stage)
+		{
+			float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
+
+			float2 p_, q_;
+
+			if(stage == 0)
+			{
+				p_ = pingpong0.Load(int3(data.z, x.y, 0)).rg;
+				q_ = pingpong0.Load(int3(data.w, x.y, 0)).rg;
+			}
+			else
+			{
+				p_ = HData[data.z];
+				q_ = HData[data.w];
+
+				GroupMemoryBarrierWithGroupSync();
+			}			
+			float2 w_ = float2(data.x, data.y);
+			
+			complex p = {p_.x,p_.y};
+			complex q = {q_.x,q_.y};
+			complex w = {w_.x,w_.y};
+			
+			//Butterfly operation
+			complex r = add(p,mul(w,q));
+			HData[x.x] = float2(r.real, r.im);
+
+			GroupMemoryBarrierWithGroupSync();
+		}
+		// float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
+		// float2 p_ = pingpong0.Load(int3(data.z, x.y, 0)).rg;
+		// float2 q_ = pingpong0.Load(int3(data.w, x.y, 0)).rg;
+		// float2 w_ = float2(data.x, data.y);
 		
-		complex p = {p_.x,p_.y};
-		complex q = {q_.x,q_.y};
-		complex w = {w_.x,w_.y};
+		// complex p = {p_.x,p_.y};
+		// complex q = {q_.x,q_.y};
+		// complex w = {w_.x,w_.y};
 		
-		//Butterfly operation
-		H = add(p,mul(w,q));
+		// //Butterfly operation
+		// H = add(p,mul(w,q));
 		
-		pingpong1[x] = float4(H.real, H.im, 0, 1);
+		pingpong1[x] = float4(HData[x.x].x, HData[x.x].y, 0, 1);
+		//GroupMemoryBarrierWithGroupSync();
 	}
-	else if(pingpong == 1)
-	{
-		float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
-		float2 p_ = pingpong1.Load(int3(data.z, x.y, 0)).rg;
-		float2 q_ = pingpong1.Load(int3(data.w, x.y, 0)).rg;
-		float2 w_ = float2(data.x, data.y);
+	// else if(pingpong == 1)
+	// {
+	// 	float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
+	// 	float2 p_ = pingpong1.Load(int3(data.z, x.y, 0)).rg;
+	// 	float2 q_ = pingpong1.Load(int3(data.w, x.y, 0)).rg;
+	// 	float2 w_ = float2(data.x, data.y);
 		
-		complex p = {p_.x,p_.y};
-		complex q = {q_.x,q_.y};
-		complex w = {w_.x,w_.y};
+	// 	complex p = {p_.x,p_.y};
+	// 	complex q = {q_.x,q_.y};
+	// 	complex w = {w_.x,w_.y};
 		
-		//Butterfly operation
-		H = add(p,mul(w,q));
+	// 	//Butterfly operation
+	// 	H = add(p,mul(w,q));
 		
-		pingpong0[x] = float4(H.real, H.im, 0, 1);
-	}
+	// 	pingpong0[x] = float4(H.real, H.im, 0, 1);
+	// }
 }
 
 void verticalButterflies(uint2 index)
@@ -73,44 +106,101 @@ void verticalButterflies(uint2 index)
 	complex H;
 	uint2 x = index;
 
-	int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
-	int pingpong = int(g_Constants.Stage_PingPong_Direction_Padding.y);	
+	float sign = 1.0f;
+	//if()
+
+	//int stage = int(g_Constants.Stage_PingPong_Direction_Padding.x);
+	//int pingpong = int(g_Constants.Stage_PingPong_Direction_Padding.y);	
 	
-	if(pingpong == 0)
-	{
-		float4 data = TwiddleIndices.Load(int3(stage, x.y, 0)).rgba;
-		float2 p_ = pingpong0.Load(int3(x.x, data.z, 0)).rg;
-		float2 q_ = pingpong0.Load(int3(x.x, data.w, 0)).rg;
-		float2 w_ = float2(data.x, data.y);
+	// if(pingpong == 0)
+	// {
+	// 	float4 data = TwiddleIndices.Load(int3(stage, x.y, 0)).rgba;
+	// 	float2 p_ = pingpong0.Load(int3(x.x, data.z, 0)).rg;
+
+	// 	float2 q_;
+	// 	if(stage == 0)
+	// 	{
+	// 		if(data.w > 128)
+	// 		{
+	// 			q_ = pingpong0.Load(int3(x.x, 128 - data.z, 0)).rg;	
+	// 			q_.y *= -1;
+	// 		}
+	// 		else
+	// 		{
+	// 			q_ = pingpong0.Load(int3(x.x, data.z, 0)).rg;	
+	// 		}
+			
+	// 	}		
+	// 	else
+	// 	{
+	// 		uint strike = 2;
+	// 		strike <<= uint(log2(stage));
+	// 		uint test_i = (strike - 1) ^ (x.y);
+	// 		q_ = pingpong0.Load(int3(x.x, int(test_i), 0)).rg;
+	// 	}
+	// 	float2 w_ = float2(data.x, data.y);
 		
-		complex p = {p_.x,p_.y};
-		complex q = {q_.x,q_.y};
-		complex w = {w_.x,w_.y};
+	// 	complex p = {p_.x,p_.y};
+	// 	complex q = {q_.x,q_.y};
+	// 	complex w = {w_.x,w_.y};
+		
+	// 	//Butterfly operation
+	// 	H = add(p,mul(w,q));
+		
+	// 	pingpong1[x] = float4(H.real, H.im, 0, 1);
+	// }
+	//else if(pingpong == 1)
+	{
+		//float4 data = TwiddleIndices.Load(int3(stage, x.y, 0)).rgba;
+
+		for(int stage = 0; stage < 8; ++stage)
+		{
+			float2 p_, q_;
+
+			float4 data = TwiddleIndices.Load(int3(stage, x.x, 0)).rgba;
+
+			if(stage == 0)
+			{
+				p_ = pingpong1.Load(int3(x.y, data.z, 0)).rg;
+				q_ = pingpong1.Load(int3(x.y, data.w, 0)).rg;
+			}
+			else
+			{
+				p_ = HData[data.z];
+				q_ = HData[data.w];
+
+				GroupMemoryBarrierWithGroupSync();
+			}			
+			float2 w_ = float2(data.x, data.y);
+			
+			complex p = {p_.x,p_.y};
+			complex q = {q_.x,q_.y};
+			complex w = {w_.x,w_.y};
+			
+			//Butterfly operation
+			complex r = add(p,mul(w,q));
+			HData[x.x] = float2(r.real, r.im);
+
+			GroupMemoryBarrierWithGroupSync();
+		}
+		// float2 p_ = pingpong1.Load(int3(x.x, data.z, 0)).rg;
+		// float2 q_ = pingpong1.Load(int3(x.x, data.w, 0)).rg;
+		// float2 w_ = float2(data.x, data.y);
+		
+		// complex p = {p_.x,p_.y};
+		// complex q = {q_.x,q_.y};
+		// complex w = {w_.x,w_.y};
 		
 		//Butterfly operation
-		H = add(p,mul(w,q));
+		//H = add(p,mul(w,q));
 		
-		pingpong1[x] = float4(H.real, H.im, 0, 1);
-	}
-	else if(pingpong == 1)
-	{
-		float4 data = TwiddleIndices.Load(int3(stage, x.y, 0)).rgba;
-		float2 p_ = pingpong1.Load(int3(x.x, data.z, 0)).rg;
-		float2 q_ = pingpong1.Load(int3(x.x, data.w, 0)).rg;
-		float2 w_ = float2(data.x, data.y);
-		
-		complex p = {p_.x,p_.y};
-		complex q = {q_.x,q_.y};
-		complex w = {w_.x,w_.y};
-		
-		//Butterfly operation
-		H = add(p,mul(w,q));
-		
-		pingpong0[x] = float4(H.real, H.im, 0, 1);
+		//pingpong0[x] = float4(H.real, H.im, 0, 1);
+		pingpong0[x] = float4(HData[x.x].x, HData[x.x].y, 0, 1);
+		//GroupMemoryBarrierWithGroupSync();
 	}
 }
 
-[numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
+[numthreads(256, 1, 1)]
 void main(uint3 Gid  : SV_GroupID,
           uint3 GTid : SV_GroupThreadID,
           uint3 DTid : SV_DispatchThreadID)
