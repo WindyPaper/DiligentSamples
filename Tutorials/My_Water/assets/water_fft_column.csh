@@ -103,15 +103,15 @@ void fft(inout float2 h[2], inout float2 x[2], inout float2 z[2], uint thread_id
 
 		if(flag)
 		{
-			hData[thread_id] = h[0];
-			xData[thread_id] = x[0];
-			zData[thread_id] = z[0];
+			hData[i] = h[0];
+			xData[i] = x[0];
+			zData[i] = z[0];
 		}
 		else
 		{
-			hData[thread_id] = h[1];
-			xData[thread_id] = x[1];
-			zData[thread_id] = z[1];
+			hData[i] = h[1];
+			xData[i] = x[1];
+			zData[i] = z[1];
 		}
 
 		GroupMemoryBarrierWithGroupSync();
@@ -143,16 +143,16 @@ void main(uint3 Gid  : SV_GroupID,
 	uint next_row_index = (half_N - reverse_bit_row); // (N - (rowindex + half_N)) = half_N - reverse_bit_row
 
 	//bitreverse(n)
-	rowh[0] = HtInput.Load(int3(row_index, column, 0)).xy;	
+	rowh[0] = HtInput.Load(int3(column, row_index, 0)).xy;	
 
-	float4 dt_data0 = DtInput.Load(int3(row_index, column, 0));
+	float4 dt_data0 = DtInput.Load(int3(column, row_index, 0));
 	rowx[0] = dt_data0.xy;
 	rowz[0] = dt_data0.zw;
 
 	//bitreverse(n+1) conj
-	rowh[1] = HtInput.Load(int3(next_row_index, column, 0)).xy;
+	rowh[1] = HtInput.Load(int3(column, next_row_index, 0)).xy;
 	rowh[1].y *= -1;
-	float4 dt_data1 = DtInput.Load(int3(next_row_index, column, 0));
+	float4 dt_data1 = DtInput.Load(int3(column, next_row_index, 0));
 	rowx[1] = dt_data1.xy;
 	rowx[1].y *= -1;
 	rowz[1] = dt_data1.zw;
@@ -161,11 +161,11 @@ void main(uint3 Gid  : SV_GroupID,
 	fft(rowh, rowx, rowz, row, N);
 
 	float sign = (row + column) & 0x1 ? -1.0f : 1.0f;
-	float choppy_scale = 0.00001;
+	float choppy_scale = 1.0;
 	float scale = choppy_scale * sign;
 
-	displacement[uint2(column, row)] = float4(rowx[0].x * scale, rowh[0].x * sign, rowz[0].x * scale, 0.0f);
-	displacement[uint2(column, row + half_N)] = float4(rowx[1].x * scale, rowh[1].x * sign, rowz[1].x * scale, 0.0f);
+	displacement[uint2(column, row)] = float4(rowx[0].x * scale, rowh[0].x * sign, rowz[0].x * scale, 0.0f) / N / N;
+	displacement[uint2(column, row + half_N)] = float4(rowx[1].x * scale, rowh[1].x * sign, rowz[1].x * scale, 0.0f) / N / N;
     //uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
     // if (uiGlobalThreadIdx >= g_Constants.uiNumParticles)
     //     return;

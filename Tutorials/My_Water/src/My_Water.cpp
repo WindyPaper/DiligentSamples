@@ -277,7 +277,7 @@ void My_Water::Render()
 	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(drawAttrs);
 
-	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), m_apInversionDisplace);
+	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), m_apFFTDisplacementTexture);
 
 	//render debug view
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
@@ -576,125 +576,101 @@ void My_Water::WaterRender()
 
 
 	//FFT Row
-	//m_pImmediateContext->SetPipelineState(m_apFFTRowPSO);
-	//{
-	//	MapHelper<WaterFFTRowUniform> GPUFFTRowUniform(m_pImmediateContext, m_apFFTRowData, MAP_WRITE, MAP_FLAG_DISCARD);
-	//	GPUFFTRowUniform->N_H0DataLength_NBitNum_Time = float4(WATER_FFT_N, -1, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
-	//}
-	//m_pImmediateContext->CommitShaderResources(m_apFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	//DispatchComputeAttribs FFTRowDisp(1, WATER_FFT_N / 2 + 1);
-	//m_pImmediateContext->DispatchCompute(FFTRowDisp);
+	m_pImmediateContext->SetPipelineState(m_apFFTRowPSO);
+	{
+		MapHelper<WaterFFTRowUniform> GPUFFTRowUniform(m_pImmediateContext, m_apFFTRowData, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTRowUniform->N_H0DataLength_NBitNum_Time = float4(WATER_FFT_N, -1, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
+	}
+	m_pImmediateContext->CommitShaderResources(m_apFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	DispatchComputeAttribs FFTRowDisp(1, WATER_FFT_N / 2 + 1);
+	m_pImmediateContext->DispatchCompute(FFTRowDisp);
 
-	////FFT Column
-	//m_pImmediateContext->SetPipelineState(m_apFFTColumnPSO);
-	//{
-	//	MapHelper<WaterFFTRowUniform> GPUFFTColumnUniform(m_pImmediateContext, m_apFFTColumnData, MAP_WRITE, MAP_FLAG_DISCARD);
-	//	GPUFFTColumnUniform->N_H0DataLength_NBitNum_Time = float4(WATER_FFT_N, -1, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
-	//}
-	//m_pImmediateContext->CommitShaderResources(m_apFFTColumnSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	//DispatchComputeAttribs FFTColumnDisp(1, WATER_FFT_N);
-	//m_pImmediateContext->DispatchCompute(FFTColumnDisp);
+	//FFT Column
+	m_pImmediateContext->SetPipelineState(m_apFFTColumnPSO);
+	{
+		MapHelper<WaterFFTRowUniform> GPUFFTColumnUniform(m_pImmediateContext, m_apFFTColumnData, MAP_WRITE, MAP_FLAG_DISCARD);
+		GPUFFTColumnUniform->N_H0DataLength_NBitNum_Time = float4(WATER_FFT_N, -1, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
+	}
+	m_pImmediateContext->CommitShaderResources(m_apFFTColumnSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	DispatchComputeAttribs FFTColumnDisp(1, WATER_FFT_N);
+	m_pImmediateContext->DispatchCompute(FFTColumnDisp);
 
 	//Twiddle
-	DispatchComputeAttribs TwiddleIndicesDispAttr;
-	TwiddleIndicesDispAttr.ThreadGroupCountX = std::max(1, m_Log2_N / m_CSGroupSize);
-	TwiddleIndicesDispAttr.ThreadGroupCountY = std::max(1, WATER_FFT_N / m_CSGroupSize);
-	m_pImmediateContext->SetPipelineState(m_apTwiddlePSO);
-	{
-		MapHelper<float4> GPUFFTTWiddleUniform(m_pImmediateContext, m_apTwiddleConstBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTTWiddleUniform->x = WATER_FFT_N;
-	}
-	m_pImmediateContext->CommitShaderResources(m_apTwiddleSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	m_pImmediateContext->DispatchCompute(TwiddleIndicesDispAttr);
+	//DispatchComputeAttribs TwiddleIndicesDispAttr;
+	//TwiddleIndicesDispAttr.ThreadGroupCountX = std::max(1, m_Log2_N / m_CSGroupSize);
+	//TwiddleIndicesDispAttr.ThreadGroupCountY = std::max(1, WATER_FFT_N / m_CSGroupSize);
+	//m_pImmediateContext->SetPipelineState(m_apTwiddlePSO);
+	//{
+	//	MapHelper<float4> GPUFFTTWiddleUniform(m_pImmediateContext, m_apTwiddleConstBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+	//	GPUFFTTWiddleUniform->x = WATER_FFT_N;
+	//}
+	//m_pImmediateContext->CommitShaderResources(m_apTwiddleSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//m_pImmediateContext->DispatchCompute(TwiddleIndicesDispAttr);
 
-	//HKT
-	m_pImmediateContext->SetPipelineState(m_apHKTPSO);
-	{
-		MapHelper<WaterFFTHKTUniform> GPUFFTHKTUniform(m_pImmediateContext, m_apHKTConstData, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTHKTUniform->N_L_Time_Padding = float4(WATER_FFT_N, 1000, mWaterTimer.GetWaterTime(), 0);
-	}
-	m_pImmediateContext->CommitShaderResources(m_apHKTDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	m_pImmediateContext->DispatchCompute(DispAttr);
+	////HKT
+	//m_pImmediateContext->SetPipelineState(m_apHKTPSO);
+	//{
+	//	MapHelper<WaterFFTHKTUniform> GPUFFTHKTUniform(m_pImmediateContext, m_apHKTConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+	//	GPUFFTHKTUniform->N_L_Time_Padding = float4(WATER_FFT_N, 1000, mWaterTimer.GetWaterTime(), 0);
+	//}
+	//m_pImmediateContext->CommitShaderResources(m_apHKTDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//m_pImmediateContext->DispatchCompute(DispAttr);
 
-	//Butterfly
-	int PingPong = 0;
-	m_pImmediateContext->SetPipelineState(m_apButterFlyPSO);
+	////Butterfly
+	//int PingPong = 0;
+	//m_pImmediateContext->SetPipelineState(m_apButterFlyPSO);
 
-	IShaderResourceVariable* pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
-	if (pPing0)
-	{
-		pPing0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-	}
-	IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
-	if (pPing1)
-	{
-		pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-	}
+	//IShaderResourceVariable* pPing0 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+	//if (pPing0)
+	//{
+	//	pPing0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	//}
+	//IShaderResourceVariable* pPing1 = m_apButterFlySRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+	//if (pPing1)
+	//{
+	//	pPing1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	//}	
 
-	//horizon	
-	/*for (int i = 0; i < m_Log2_N; ++i)
-	{
-		{
-			MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
-			GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(i, PingPong++, 0, 0);
-			PingPong %= 2;
-		}
-		m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		m_pImmediateContext->DispatchCompute(DispAttr);
-	}*/
+	//{
+	//	{
+	//		MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+	//		GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(0, PingPong++, 0, 0);
+	//		//PingPong %= 2;
+	//	}
+	//	m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//	DispatchComputeAttribs ButterflyHorizonDisp(1, WATER_FFT_N);
+	//	m_pImmediateContext->DispatchCompute(ButterflyHorizonDisp);
+	//}	
 
-	{
-		{
-			MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
-			GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(0, PingPong++, 0, 0);
-			//PingPong %= 2;
-		}
-		m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		DispatchComputeAttribs ButterflyHorizonDisp(1, WATER_FFT_N);
-		m_pImmediateContext->DispatchCompute(ButterflyHorizonDisp);
-	}
+	////for (int j = 0; j < m_Log2_N; ++j)
+	//{
+	//	{
+	//		MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+	//		GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(0, PingPong++, 1, 0);
+	//		PingPong %= 2;
+	//	}
+	//	m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//	DispatchComputeAttribs ButterflyVerticalDisp(1, WATER_FFT_N);
+	//	m_pImmediateContext->DispatchCompute(ButterflyVerticalDisp);
+	//}
 
-	//vertical
-	/*for (int j = 0; j < m_Log2_N; ++j)
-	{
-		{
-			MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
-			GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(j, PingPong++, 1, 0);
-			PingPong %= 2;
-		}
-		m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		m_pImmediateContext->DispatchCompute(DispAttr);
-	}*/
+	////inversion dy
+	//m_pImmediateContext->SetPipelineState(m_apInversionPSO);
+	//{
+	//	MapHelper<WaterFFTInvsersionUniform> GPUFFTInversionUniform(m_pImmediateContext, m_apInversionConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+	//	GPUFFTInversionUniform->PingPong_N_Padding = float4(PingPong, WATER_FFT_N, 0, 0);
 
-	//for (int j = 0; j < m_Log2_N; ++j)
-	{
-		{
-			MapHelper<WaterFFTButterflyUniform> GPUFFTButterFlyUniform(m_pImmediateContext, m_apButterFlyConstData, MAP_WRITE, MAP_FLAG_DISCARD);
-			GPUFFTButterFlyUniform->Stage_PingPong_Direction_Padding = float4(0, PingPong++, 1, 0);
-			PingPong %= 2;
-		}
-		m_pImmediateContext->CommitShaderResources(m_apButterFlySRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		DispatchComputeAttribs ButterflyVerticalDisp(1, WATER_FFT_N);
-		m_pImmediateContext->DispatchCompute(ButterflyVerticalDisp);
-	}
+	//	IShaderResourceVariable *pPP0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
+	//	pPP0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	//	IShaderResourceVariable *pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
+	//	pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));		
 
-	//inversion dy
-	m_pImmediateContext->SetPipelineState(m_apInversionPSO);
-	{
-		MapHelper<WaterFFTInvsersionUniform> GPUFFTInversionUniform(m_pImmediateContext, m_apInversionConstData, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTInversionUniform->PingPong_N_Padding = float4(PingPong, WATER_FFT_N, 0, 0);
-
-		IShaderResourceVariable *pPP0 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong0");
-		pPP0->Set(m_apHKTDY->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-		IShaderResourceVariable *pPP1 = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "pingpong1");
-		pPP1->Set(m_apPingPong->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));		
-
-		IShaderResourceVariable* pDisplacement = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "displacement");
-		if (pDisplacement)
-			pDisplacement->Set(m_apInversionDisplace->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-	}
-	m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	m_pImmediateContext->DispatchCompute(DispAttr);
+	//	IShaderResourceVariable* pDisplacement = m_apInversionSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "displacement");
+	//	if (pDisplacement)
+	//		pDisplacement->Set(m_apInversionDisplace->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	//}
+	//m_pImmediateContext->CommitShaderResources(m_apInversionSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//m_pImmediateContext->DispatchCompute(DispAttr);
 
 	//if (m_Choppy)
 	//{

@@ -125,15 +125,15 @@ void fft(inout float2 h[2], inout float2 x[2], inout float2 z[2], uint thread_id
 
 		if(flag)
 		{
-			hData[thread_id] = h[0];
-			xData[thread_id] = x[0];
-			zData[thread_id] = z[0];
+			hData[i] = h[0];
+			xData[i] = x[0];
+			zData[i] = z[0];
 		}
 		else
 		{
-			hData[thread_id] = h[1];
-			xData[thread_id] = x[1];
-			zData[thread_id] = z[1];
+			hData[i] = h[1];
+			xData[i] = x[1];
+			zData[i] = z[1];
 		}
 
 		GroupMemoryBarrierWithGroupSync();
@@ -185,8 +185,8 @@ void main(uint3 Gid  : SV_GroupID,
 	//dispersion
 	float T = 200.0f;
 	float w_zero = 2.0f * M_PI / T;
-	float dispersion0 = floor(sqrt(omega0) / w_zero) * w_zero * Time;
-	float dispersion1 = floor(sqrt(omega1) / w_zero) * w_zero * Time;
+	float dispersion0 = floor(sqrt(omega0) / w_zero) * w_zero * (Time/10000.0);
+	float dispersion1 = floor(sqrt(omega1) / w_zero) * w_zero * (Time/10000.0);
 
 	float2 sin_omega, cos_omega;
 	sincos(float2(dispersion0, dispersion1), sin_omega, cos_omega);
