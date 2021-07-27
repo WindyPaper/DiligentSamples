@@ -91,7 +91,7 @@ struct WaterFFTInvsersionUniform
 
 struct WaterFFTRowUniform
 {
-	float4 N_H0DataLength_NBitNum_Time;
+	float4 N_ChoppyScale_NBitNum_Time;
 };
 
 struct WaterData
@@ -118,6 +118,24 @@ struct TerrainData
 
 	int VertexNum = 0;
 	int IdxNum = 0;
+};
+
+struct WaterRenderParam
+{
+	float Amplitude;
+	float size_L;
+	float ChoppyScale;
+	float WindIntensity;
+
+	float2 WindDir;
+
+	WaterRenderParam()
+	{
+		Amplitude = 2.0f;
+		size_L = 1000.0f;
+		ChoppyScale = 1.0f;
+		WindIntensity = 80.0f;
+	}
 };
 
 class My_Water final : public SampleBase
@@ -229,6 +247,9 @@ private:
 
 	//profile window
 	ImGuiUtils::ProfilersWindow mProfilersWindow;
+
+	//render fft param
+	WaterRenderParam m_WaterRenderParam;
 	
 	int m_Log2_N;
 	int m_CSGroupSize;

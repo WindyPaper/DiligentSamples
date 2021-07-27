@@ -54,7 +54,7 @@ float2 MorphVertex( float2 InPos, float2 vertex, float morphk)
 float GetHeightMapOffsetValue(float2 BaseUV, float2 OffsetPixel)
 {
     float2 OffsetUV = OffsetPixel / 255 * WaterTextureScale;   
-    return g_Texture.SampleLevel(g_Texture_sampler, BaseUV + OffsetUV, 0);
+    return g_Texture.SampleLevel(g_Texture_sampler, BaseUV + OffsetUV, 0).y;
 }
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
@@ -69,7 +69,7 @@ void main(in  VSInput VSIn,
 
     WPos.y = 0.0f;    
     float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
-    float baseh = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).x;
+    float baseh = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).y;
     WPos.y = baseh * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
     //WPos.y = 0.0f;
 
@@ -80,7 +80,10 @@ void main(in  VSInput VSIn,
 
     //recalculate by new xz position
     TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
-    WPos.y = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).x * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
+    float3 WaterVertexOffset = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).rgb;
+    WPos.y = WaterVertexOffset.y * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
+    WPos.xz += WaterVertexOffset.xz * (g_TerrainInfo.Size.xz / 1000);
+    //WPos = WaterVertexOffset * g_TerrainInfo.Size + g_TerrainInfo.Min;
 
     PSIn.Pos = mul(g_ViewProj, float4(WPos, 1.0f));
     PSIn.UV = TerrainMapUV;

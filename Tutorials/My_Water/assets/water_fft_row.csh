@@ -10,7 +10,7 @@ RWTexture2D<float4> DtOutput;
 
 struct WaterFastFFT
 {
-	float4 N_H0DataLength_NBitNum_Time;
+	float4 N_ChoppyScale_NBitNum_Time;
 };
 
 cbuffer Constants
@@ -147,11 +147,11 @@ void main(uint3 Gid  : SV_GroupID,
 {
 	uint2 ImageIndexInt = DTid.xy;
 
-	uint N = g_Constants.N_H0DataLength_NBitNum_Time.x;
+	uint N = g_Constants.N_ChoppyScale_NBitNum_Time.x;
 	uint half_N = N / 2;
-	uint NH0DataLength = g_Constants.N_H0DataLength_NBitNum_Time.y;
-	uint NBitNum = g_Constants.N_H0DataLength_NBitNum_Time.z;
-	float Time = g_Constants.N_H0DataLength_NBitNum_Time.w;	
+	//uint NH0DataLength = g_Constants.N_ChoppyScale_NBitNum_Time.y;
+	uint NBitNum = g_Constants.N_ChoppyScale_NBitNum_Time.z;
+	float Time = g_Constants.N_ChoppyScale_NBitNum_Time.w;	
 
 	//uint stage_num = log2(N);
 

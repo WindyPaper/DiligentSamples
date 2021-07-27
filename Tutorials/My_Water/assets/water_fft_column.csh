@@ -10,7 +10,7 @@ RWTexture2D<float4> displacement;
 
 struct WaterFastFFT
 {
-	float4 N_H0DataLength_NBitNum_Time;
+	float4 N_ChoppyScale_NBitNum_Time;
 };
 
 cbuffer Constants
@@ -129,9 +129,10 @@ void main(uint3 Gid  : SV_GroupID,
 
 	float2 rowh[2], rowx[2], rowz[2];
 
-	uint N = g_Constants.N_H0DataLength_NBitNum_Time.x;
+	uint N = g_Constants.N_ChoppyScale_NBitNum_Time.x;
 	uint half_N = N / 2.0;
-	uint NBitNum = g_Constants.N_H0DataLength_NBitNum_Time.z;
+	float choppy_scale = g_Constants.N_ChoppyScale_NBitNum_Time.y;
+	uint NBitNum = g_Constants.N_ChoppyScale_NBitNum_Time.z;
 	
 	uint reverse_bit_row = reversebits(row * 2) >> NBitNum;
 
@@ -160,8 +161,7 @@ void main(uint3 Gid  : SV_GroupID,
 	
 	fft(rowh, rowx, rowz, row, N);
 
-	float sign = (row + column) & 0x1 ? -1.0f : 1.0f;
-	float choppy_scale = 1.0;
+	float sign = (row + column) & 0x1 ? -1.0f : 1.0f;	
 	float scale = choppy_scale * sign;
 
 	displacement[uint2(column, row)] = float4(rowx[0].x * scale, rowh[0].x * sign, rowz[0].x * scale, 0.0f) / N / N;
