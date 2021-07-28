@@ -162,7 +162,12 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	InitPSO(pDevice, pSwapChain, TerrainDim);
 
 	//init shader value
-	IShaderResourceVariable *g_TextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_Texture");
+	IShaderResourceVariable *g_TextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
+	if (g_TextureVar)
+	{
+		g_TextureVar->Set(m_Heightmap.GetHeightMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	}
+	g_TextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_displacement_tex");
 	if (g_TextureVar)
 	{
 		g_TextureVar->Set(m_Heightmap.GetHeightMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
@@ -172,6 +177,7 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	{
 		g_DiffuseTextureVar->Set(m_Heightmap.GetDiffuseMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	}
+
 }
 
 void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture* pHeightMap)
@@ -214,8 +220,13 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture
 			CBConstants->MorphKInfo = float4({ MorphInfo[0], MorphInfo[1], 0.0f, 0.0f });
 			CBConstants->CameraPos = CamPos;
 
-			IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_Texture");
+			IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
 			pShaderHM->Set(pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_displacement_tex");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}			
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
@@ -414,7 +425,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	// clang-format off
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_VERTEX, "g_displacement_tex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_PIXEL, "g_displacement_tex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_PIXEL, "g_DiffTexture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
 	};
 	// clang-format on
@@ -435,7 +447,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	};
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_Texture", SamLinearWrapDesc},
+		{SHADER_TYPE_VERTEX, "g_displacement_tex", SamLinearWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_displacement_tex", SamLinearWrapDesc},
 		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoWrapDesc}
 	};
 	// clang-format on

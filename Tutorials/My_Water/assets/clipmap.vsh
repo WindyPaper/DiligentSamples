@@ -1,5 +1,5 @@
-Texture2D    g_Texture;
-SamplerState g_Texture_sampler; // By convention, texture samplers must use the '_sampler' suffix
+Texture2D    g_displacement_tex;
+SamplerState g_displacement_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 
 static const float WaterTextureScale = 5.0;
@@ -54,7 +54,7 @@ float2 MorphVertex( float2 InPos, float2 vertex, float morphk)
 float GetHeightMapOffsetValue(float2 BaseUV, float2 OffsetPixel)
 {
     float2 OffsetUV = OffsetPixel / 255 * WaterTextureScale;   
-    return g_Texture.SampleLevel(g_Texture_sampler, BaseUV + OffsetUV, 0).y;
+    return g_displacement_tex.SampleLevel(g_displacement_tex_sampler, BaseUV + OffsetUV, 0).y;
 }
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
@@ -69,7 +69,7 @@ void main(in  VSInput VSIn,
 
     WPos.y = 0.0f;    
     float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
-    float baseh = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).y;
+    float baseh = g_displacement_tex.SampleLevel(g_displacement_tex_sampler, TerrainMapUV, 0).y;
     WPos.y = baseh * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
     //WPos.y = 0.0f;
 
@@ -80,7 +80,7 @@ void main(in  VSInput VSIn,
 
     //recalculate by new xz position
     TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
-    float3 WaterVertexOffset = g_Texture.SampleLevel(g_Texture_sampler, TerrainMapUV, 0).rgb;
+    float3 WaterVertexOffset = g_displacement_tex.SampleLevel(g_displacement_tex_sampler, TerrainMapUV, 0).rgb;
     WPos.y = WaterVertexOffset.y * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
     WPos.xz += WaterVertexOffset.xz * (g_TerrainInfo.Size.xz / 1000);
     //WPos = WaterVertexOffset * g_TerrainInfo.Size + g_TerrainInfo.Min;
@@ -90,16 +90,16 @@ void main(in  VSInput VSIn,
     //PSIn.Morph = float2(morphLerpK, 1.0f);
 
     //Normal
-    float2 size = float2(2.0,0.0);
-    float3 offset = float3(-1,0,1);
-    float s11 = baseh;
-    float s01 = GetHeightMapOffsetValue(TerrainMapUV, offset.xy);
-    float s21 = GetHeightMapOffsetValue(TerrainMapUV, offset.zy);
-    float s10 = GetHeightMapOffsetValue(TerrainMapUV, offset.yx);
-    float s12 = GetHeightMapOffsetValue(TerrainMapUV, offset.yz);
-    float3 va = normalize(float3(size.xy,s21-s01));
-    float3 vb = normalize(float3(size.yx,s12-s10));
-    float4 bump = float4( cross(va,vb), s11 );
+    // float2 size = float2(2.0,0.0);
+    // float3 offset = float3(-1,0,1);
+    // float s11 = baseh;
+    // float s01 = GetHeightMapOffsetValue(TerrainMapUV, offset.xy);
+    // float s21 = GetHeightMapOffsetValue(TerrainMapUV, offset.zy);
+    // float s10 = GetHeightMapOffsetValue(TerrainMapUV, offset.yx);
+    // float s12 = GetHeightMapOffsetValue(TerrainMapUV, offset.yz);
+    // float3 va = normalize(float3(size.x, s21-s01, size.y));
+    // float3 vb = normalize(float3(size.y,s12-s10, size.x));
+    // float4 bump = float4( cross(va,vb), s11 );
 
-    PSIn.Normal = bump.xyz;
+    // PSIn.Normal = bump.xyz;
 }

@@ -381,20 +381,18 @@ void My_Water::UpdateUI()
 		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 
-		ImGui::gizmo3D("Directional Light", m_LightManager.DirLight.dir, ImGui::GetTextLineHeight() * 10);
-
-		ImGui::End();
+		ImGui::gizmo3D("Directional Light", m_LightManager.DirLight.dir, ImGui::GetTextLineHeight() * 10);		
 	}
+	ImGui::End();
 
 	if (ImGui::Begin("Ocean params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
 		ImGui::SliderFloat("Amplitude", &m_WaterRenderParam.Amplitude, 0.1, 10);
 		ImGui::SliderFloat("L", &m_WaterRenderParam.size_L, 100, 10000);
 		ImGui::SliderFloat("WindIntensity", &m_WaterRenderParam.WindIntensity, 0.01, 100);
-		ImGui::SliderFloat("ChoppyScale", &m_WaterRenderParam.ChoppyScale, 0.01, 10);
-
-		ImGui::End();
+		ImGui::SliderFloat("ChoppyScale", &m_WaterRenderParam.ChoppyScale, 0.01, 10);		
 	}	
+	ImGui::End();
 }
 
 void My_Water::CreateComputePSO()
