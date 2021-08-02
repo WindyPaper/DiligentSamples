@@ -42,6 +42,8 @@ struct PSInput
     float4 Pos   : SV_POSITION;
     float2 UV  : TEX_COORD;
     float3 Normal : TEX_COORD1;
+    float3 WorldPos : TEX_COORD2;
+    float3 CamPos : TEX_COORD3;
 };
 
 // morphs vertex xy from from high to low detailed mesh position
@@ -88,6 +90,9 @@ void main(in  VSInput VSIn,
     PSIn.Pos = mul(g_ViewProj, float4(WPos, 1.0f));
     PSIn.UV = TerrainMapUV;
     //PSIn.Morph = float2(morphLerpK, 1.0f);
+
+    PSIn.WorldPos = WPos;
+    PSIn.CamPos = g_CameraPos.xyz;
 
     //Normal
     // float2 size = float2(2.0,0.0);

@@ -6,9 +6,11 @@ SamplerState g_displacement_tex_sampler; // By convention, texture samplers must
 
 struct PSInput 
 { 
-    float4 Pos   : SV_POSITION;
+    float4 Pos : SV_POSITION;
     float2 UV  : TEX_COORD;
     float3 Normal : TEX_COORD1;
+    float3 WorldPos : TEX_COORD2;
+    float3 CamPos : TEX_COORD3;
 };
 
 struct PSOutput
@@ -21,8 +23,8 @@ float3 CalWorldNormal(float2 TexCoord, float PixelSize, float TexelSize)
     float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord).xyz;
     float3 right = float3(TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(PixelSize, 0.0f)).xyz - center;
     float3 left = float3(-TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(-PixelSize, 0.0f)).xyz - center;
-    float3 top = float3(0.0f, 0.0f, TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, PixelSize)).xyz - center;
-    float3 bottom = float3(0.0f, 0.0f, -TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, -PixelSize)).xyz - center;
+    float3 top = float3(0.0f, 0.0f, -TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, -PixelSize)).xyz - center;
+    float3 bottom = float3(0.0f, 0.0f, TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, PixelSize)).xyz - center;
 
     float3 TopRight = cross(right, top);
     float3 TopLeft = cross(top, left);
@@ -30,6 +32,14 @@ float3 CalWorldNormal(float2 TexCoord, float PixelSize, float TexelSize)
     float3 BottomRight = cross(bottom, right);
 
     return normalize(TopRight + TopLeft + BottomLeft + BottomRight);
+}
+
+float3 PhongLighting(float3 LightDir, float3 ViewDir, float3 Normal)
+{
+    float3 HalfVec = normalize(LightDir + ViewDir);
+
+    float ndh = saturate(dot(Normal, HalfVec));
+    return pow(ndh, 100);
 }
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
@@ -42,17 +52,22 @@ void main(in  PSInput  PSIn,
     float WaterTextureScale = 5.0;
     float L = 1000.0f;
     float PixelSize = 1.0f / N * WaterTextureScale;
-    float TexelSize = L / N / WaterTextureScale;
+    float TexelSize = L / N * WaterTextureScale;
     float3 WorldNormal = CalWorldNormal(PSIn.UV, PixelSize, TexelSize);
 
-	float3 LightDir = normalize(float3(0, 1, 0));	
+    float3 WorldPos = PSIn.WorldPos;
+    float3 ViewDir = normalize(PSIn.CamPos - WorldPos);    
+
+	float3 LightDir = normalize(float3(1, 1, 1));	
 	float ndl = saturate(dot(LightDir, WorldNormal));
 	float3 DirLightIrradiance = ndl * float3(1, 1, 1);
 	float3 Ambient = float3(0.1, 0.1, 0.1);
 
-    float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz * 0;
+    float3 PhongColor = PhongLighting(LightDir, ViewDir, WorldNormal);
 
-    PSOut.Color.rgb = DirLightIrradiance;//DirLightIrradiance; //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
+    //float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz * 0;
+
+    PSOut.Color.rgb = PhongColor; //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
     PSOut.Color.a = 1.0;
 
     //float morphv = PSIn.Morph.x;
