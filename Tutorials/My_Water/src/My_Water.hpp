@@ -34,6 +34,8 @@
 #include "LightManager.h"
 #include "ImGuiProfiler/ImGuiProfilerRenderer.h"
 
+#include "ShaderUniformDataMgr.h"
+
 //RIGHT HAND COORDINATION
 
 #define WATER_FFT_N 256
