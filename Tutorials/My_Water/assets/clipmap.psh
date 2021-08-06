@@ -1,8 +1,15 @@
+#include "lighting_structure.fxh"
+
 Texture2D    g_DiffTexture;
 SamplerState g_DiffTexture_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 Texture2D    g_displacement_tex;
 SamplerState g_displacement_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
+cbuffer cbLightStructure
+{
+    XLightStructure g_LightStructure;
+};
 
 struct PSInput 
 { 
@@ -11,6 +18,7 @@ struct PSInput
     float3 Normal : TEX_COORD1;
     float3 WorldPos : TEX_COORD2;
     float3 CamPos : TEX_COORD3;
+    float2 L_RepeatScale : TEX_COORD4;
 };
 
 struct PSOutput
@@ -48,9 +56,9 @@ float3 PhongLighting(float3 LightDir, float3 ViewDir, float3 Normal)
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    float N = 256.0f;
-    float WaterTextureScale = 5.0;
-    float L = 1000.0f;
+    float N = 256.0f;    
+    float L = PSIn.L_RepeatScale.x;
+    float WaterTextureScale = PSIn.L_RepeatScale.y;
     float PixelSize = 1.0f / N * WaterTextureScale;
     float TexelSize = L / N * WaterTextureScale;
     float3 WorldNormal = CalWorldNormal(PSIn.UV, PixelSize, TexelSize);
@@ -58,16 +66,24 @@ void main(in  PSInput  PSIn,
     float3 WorldPos = PSIn.WorldPos;
     float3 ViewDir = normalize(PSIn.CamPos - WorldPos);    
 
-	float3 LightDir = normalize(float3(1, 1, 1));	
-	float ndl = saturate(dot(LightDir, WorldNormal));
-	float3 DirLightIrradiance = ndl * float3(1, 1, 1);
+	float3 LightDir = normalize(g_LightStructure.Direction.xyz);
+    float DLIntensity = g_LightStructure.Direction.w;
+	// float ndl = saturate(dot(LightDir, WorldNormal));
+	// float3 DirLightIrradiance = ndl * float3(1, 1, 1);
 	float3 Ambient = float3(0.1, 0.1, 0.1);
 
-    float3 PhongColor = PhongLighting(LightDir, ViewDir, WorldNormal);
+    float3 PhongColor = PhongLighting(LightDir, ViewDir, WorldNormal) * DLIntensity;
+
+    float3 UskyColor = float3(3.2, 9.6, 12.8)/10;
+    float3 UOceanColor = float3(0.004, 0.016, 0.047);
+    float Fresnel = 0.02 + 0.98 * pow(1.0 - dot(WorldNormal, ViewDir), 5.0);
+    float3 Sky = Fresnel * UskyColor;
+    float diffuse = saturate(dot(WorldNormal, LightDir));
+    float3 WaterColor = (1.0 - Fresnel) * UOceanColor * UskyColor * diffuse;
 
     //float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz * 0;
 
-    PSOut.Color.rgb = PhongColor; //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
+    PSOut.Color.rgb = PhongColor + Sky + WaterColor; //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
     PSOut.Color.a = 1.0;
 
     //float morphv = PSIn.Morph.x;

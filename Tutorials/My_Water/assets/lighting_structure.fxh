@@ -5,7 +5,6 @@ struct XLightStructure
 {
 	float4 Direction;
 	float4 AmbientLight;
-	float4 Intensity;
 };
 
 #endif

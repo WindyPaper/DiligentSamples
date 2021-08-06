@@ -3,6 +3,8 @@
 #include "MapHelper.hpp"
 #include "TerrainMap.h"
 
+#include "ShaderUniformDataMgr.h"
+
 namespace Diligent
 {
 
@@ -144,7 +146,7 @@ DrawIndexedAttribs GroundMesh::GetDrawIndex(const uint16_t start, const uint16_t
 	return drawAttrs;
 }
 
-void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
+void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, ShaderUniformDataMgr *pShaderUniformDataMgr)
 {	
 	//m_Heightmap.LoadHeightMap("./wm_heightmap.png", pDevice);
 	m_Heightmap.LoadMap("./wm_diffuse_map.png", "./wm_heightmap.png", pDevice);
@@ -159,7 +161,7 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 	InitIndicesBuffer();
 
 	CommitToGPUDeviceBuffer(pDevice);
-	InitPSO(pDevice, pSwapChain, TerrainDim);
+	InitPSO(pDevice, pSwapChain, TerrainDim, pShaderUniformDataMgr);
 
 	//init shader value
 	IShaderResourceVariable *g_TextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
@@ -180,7 +182,7 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
 
 }
 
-void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture* pHeightMap)
+void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture* pHeightMap, float2 L_RepeatScale)
 {
 	// Bind vertex and index buffers
 	Uint32   offset = 0;
@@ -219,6 +221,8 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture
 			SelectInfo.GetMorphFromLevel(ShaderLODLevel, MorphInfo);
 			CBConstants->MorphKInfo = float4({ MorphInfo[0], MorphInfo[1], 0.0f, 0.0f });
 			CBConstants->CameraPos = CamPos;
+			CBConstants->L.x = L_RepeatScale.x;
+			CBConstants->L.y = L_RepeatScale.y;
 
 			IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
 			pShaderHM->Set(pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
@@ -305,7 +309,7 @@ void GroundMesh::CommitToGPUDeviceBuffer(IRenderDevice *pDevice)
 	pDevice->CreateBuffer(IdxBufDesc, &IdxData, &m_pIndexGPUBuffer);
 }
 
-void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension& dim)
+void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension& dim, ShaderUniformDataMgr *pShaderUniformDataMgr)
 {	
 	// Pipeline state object encompasses configuration of all GPU stages
 
@@ -466,6 +470,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVsConstBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "TerrainDimension")->Set(m_pVSTerrainInfoBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "PerPatchData")->Set(m_pVsPatchBuf);	
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbLightStructure")->Set(pShaderUniformDataMgr->GetLightStructure());
 
 	// Create a shader resource binding object and bind all static resources in it
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);

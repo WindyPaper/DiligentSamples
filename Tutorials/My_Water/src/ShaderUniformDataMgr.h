@@ -19,11 +19,13 @@ namespace Diligent
 		ShaderUniformDataMgr();
 		~ShaderUniformDataMgr();
 
-	private:
-		void Init();
+		void CreateGPUBuffer(IRenderDevice *pDevice);
+
+		IBuffer *GetLightStructure();
+
+		const IBuffer *GetLightStructure() const;
 
 	private:
-		RefCntAutoPtr<IRenderDevice> m_apDevice;
 
 		RefCntAutoPtr<IBuffer> m_apGPULightStructure;
 	};

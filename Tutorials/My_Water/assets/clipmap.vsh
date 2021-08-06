@@ -2,7 +2,7 @@ Texture2D    g_displacement_tex;
 SamplerState g_displacement_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 
-static const float WaterTextureScale = 5.0;
+// static const float WaterTextureScale = 5.0;
 
 struct Dimension
 {
@@ -20,7 +20,7 @@ cbuffer Constants
     float4x4 g_ViewProj;
     float4 g_MorphK;
     float4 g_CameraPos;
-
+    float4 g_L_FFTScale; //x:L  y:Scale
 };
 
 cbuffer PerPatchData
@@ -44,6 +44,7 @@ struct PSInput
     float3 Normal : TEX_COORD1;
     float3 WorldPos : TEX_COORD2;
     float3 CamPos : TEX_COORD3;
+    float2 L_RepeatScale : TEX_COORD4;
 };
 
 // morphs vertex xy from from high to low detailed mesh position
@@ -53,11 +54,11 @@ float2 MorphVertex( float2 InPos, float2 vertex, float morphk)
    return vertex - fracPart * morphk;
 }
 
-float GetHeightMapOffsetValue(float2 BaseUV, float2 OffsetPixel)
-{
-    float2 OffsetUV = OffsetPixel / 255 * WaterTextureScale;   
-    return g_displacement_tex.SampleLevel(g_displacement_tex_sampler, BaseUV + OffsetUV, 0).y;
-}
+// float GetHeightMapOffsetValue(float2 BaseUV, float2 OffsetPixel)
+// {
+//     float2 OffsetUV = OffsetPixel / 255 * WaterTextureScale;   
+//     return g_displacement_tex.SampleLevel(g_displacement_tex_sampler, BaseUV + OffsetUV, 0).y;
+// }
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
 // shader output variable name must match exactly the name of the pixel shader input variable.
@@ -68,6 +69,8 @@ void main(in  VSInput VSIn,
     float2 WPosXZ = float2(VSIn.Pos.x, VSIn.Pos.y) * Scale.xy;    
 
     float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
+
+    float WaterTextureScale = g_L_FFTScale.y;
 
     WPos.y = 0.0f;    
     float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
@@ -84,7 +87,7 @@ void main(in  VSInput VSIn,
     TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) / g_TerrainInfo.Size.xz * WaterTextureScale;
     float3 WaterVertexOffset = g_displacement_tex.SampleLevel(g_displacement_tex_sampler, TerrainMapUV, 0).rgb;
     WPos.y = WaterVertexOffset.y * g_TerrainInfo.Size.y + g_TerrainInfo.Min.y;
-    WPos.xz += WaterVertexOffset.xz * (g_TerrainInfo.Size.xz / 1000);
+    WPos.xz += WaterVertexOffset.xz * (g_TerrainInfo.Size.xz / g_L_FFTScale.x);
     //WPos = WaterVertexOffset * g_TerrainInfo.Size + g_TerrainInfo.Min;
 
     PSIn.Pos = mul(g_ViewProj, float4(WPos, 1.0f));
@@ -93,6 +96,8 @@ void main(in  VSInput VSIn,
 
     PSIn.WorldPos = WPos;
     PSIn.CamPos = g_CameraPos.xyz;
+
+    PSIn.L_RepeatScale = g_L_FFTScale.xy;
 
     //Normal
     // float2 size = float2(2.0,0.0);

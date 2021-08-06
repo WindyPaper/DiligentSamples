@@ -16,6 +16,7 @@
 namespace Diligent
 {
 	class FirstPersonCamera;
+	class ShaderUniformDataMgr;
 
 	struct ClipMapTerrainVerticesData
 	{
@@ -40,6 +41,7 @@ namespace Diligent
 		float4x4 ViewProj;
 		float4 MorphKInfo; //[0]:end/dis, [1] 1/dis
 		float4 CameraPos;
+		float4 L;
 	};
 
 	class GroundMesh
@@ -48,9 +50,9 @@ namespace Diligent
 		GroundMesh(const uint SizeM, const uint Level, const float ClipScale);
 		~GroundMesh();
 
-		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain);		
+		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, ShaderUniformDataMgr *pShaderUniformDataMgr);
 		void Render(IDeviceContext *pContext, const float3 &CamPos);
-		void Render(IDeviceContext* pContext, const float3& CamPos, ITexture *pHeightMap);
+		void Render(IDeviceContext* pContext, const float3& CamPos, ITexture *pHeightMap, float2 L_RepeatScale);
 
 		void Update(const FirstPersonCamera *pCam);		
 
@@ -59,7 +61,7 @@ namespace Diligent
 		void InitIndicesBuffer();
 		void CommitToGPUDeviceBuffer(IRenderDevice *pDevice);
 
-		void InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension& dim);
+		void InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension& dim, ShaderUniformDataMgr *pShaderUniformDataMgr);
 
 		DrawIndexedAttribs GetDrawIndex(const uint16_t start, const uint16_t num);
 
@@ -77,7 +79,7 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_pIndexGPUBuffer;
 		RefCntAutoPtr<IBuffer> m_pVsConstBuf;
 		RefCntAutoPtr<IBuffer> m_pVSTerrainInfoBuf;
-		RefCntAutoPtr<IBuffer> m_pVsPatchBuf;
+		RefCntAutoPtr<IBuffer> m_pVsPatchBuf;		
 		RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 
 		RefCntAutoPtr<IPipelineState> m_pPSO;

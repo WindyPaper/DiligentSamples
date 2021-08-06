@@ -128,6 +128,7 @@ struct WaterRenderParam
 	float size_L;
 	float ChoppyScale;
 	float WindIntensity;
+	float RepeatScale;
 
 	float2 WindDir;
 
@@ -137,6 +138,7 @@ struct WaterRenderParam
 		size_L = 1000.0f;
 		ChoppyScale = 1.0f;
 		WindIntensity = 80.0f;
+		RepeatScale = 5.0f;
 	}
 };
 
@@ -166,10 +168,10 @@ protected:
 
 private:
 	void CreateH0PSO();
-	void CreateTwiddlePSO();
-	void CreateHKTPSO();
-	void CreateButterFlyPSO();
-	void CreateInversionPSO();
+	//void CreateTwiddlePSO();
+	//void CreateHKTPSO();
+	//void CreateButterFlyPSO();
+	//void CreateInversionPSO();
 
 	void CreateFFTRowPSO();
 	void CreateFFTColumnPSO();
@@ -204,34 +206,7 @@ private:
 	RefCntAutoPtr<IShaderResourceBinding> m_apH0ResDataSRB;
 	RefCntAutoPtr<IBuffer> m_apConstants;
 	RefCntAutoPtr<ITexture> m_apH0Buffer;
-	RefCntAutoPtr<ITexture> m_apH0MinuskBuffer;
-
-	//Twiddle
-	RefCntAutoPtr<IPipelineState> m_apTwiddlePSO;
-	RefCntAutoPtr<IShaderResourceBinding> m_apTwiddleSRB;
-	RefCntAutoPtr<IBuffer> m_apBitReversedBuffer;
-	RefCntAutoPtr<ITexture> m_apTwiddleIndicesBuffer;
-	RefCntAutoPtr<IBuffer> m_apTwiddleConstBuffer;
-
-	//Hkt
-	RefCntAutoPtr<IPipelineState> m_apHKTPSO;
-	RefCntAutoPtr<IShaderResourceBinding> m_apHKTDataSRB;
-	RefCntAutoPtr<ITexture> m_apHKTDX;
-	RefCntAutoPtr<ITexture> m_apHKTDY;
-	RefCntAutoPtr<ITexture> m_apHKTDZ;
-	RefCntAutoPtr<IBuffer> m_apHKTConstData;
-
-	//Butterfly
-	RefCntAutoPtr<IPipelineState> m_apButterFlyPSO;
-	RefCntAutoPtr<IBuffer> m_apButterFlyConstData;
-	RefCntAutoPtr<IShaderResourceBinding> m_apButterFlySRB;
-	RefCntAutoPtr<ITexture> m_apPingPong;
-
-	//inversion
-	RefCntAutoPtr<IPipelineState> m_apInversionPSO;
-	RefCntAutoPtr<IBuffer> m_apInversionConstData;
-	RefCntAutoPtr<IShaderResourceBinding> m_apInversionSRB;
-	RefCntAutoPtr<ITexture> m_apInversionDisplace;	
+	RefCntAutoPtr<ITexture> m_apH0MinuskBuffer;	
 
 	//Optimize FFT
 	//Fast FFT Row
@@ -252,6 +227,9 @@ private:
 
 	//render fft param
 	WaterRenderParam m_WaterRenderParam;
+
+	//shader const params manager
+	ShaderUniformDataMgr m_ShaderUniformDataMgr;
 	
 	int m_Log2_N;
 	int m_CSGroupSize;
