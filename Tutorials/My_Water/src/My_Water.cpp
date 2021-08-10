@@ -420,6 +420,7 @@ void My_Water::CreateComputePSO()
 
 	CreateFFTRowPSO();
 	CreateFFTColumnPSO();
+	CreateFoamPSO();
 }
 
 void My_Water::CreateConstantsBuffer()
@@ -484,6 +485,18 @@ void My_Water::CreateConstantsBuffer()
 	FFTDisplacmentTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(FFTDisplacmentTexDesc, nullptr, &m_apFFTDisplacementTexture);
 	m_pDevice->CreateBuffer(FastFFTData, nullptr, &m_apFFTColumnData);
+
+	//FFT Foam
+	TextureDesc FFTFoamTexDesc;
+	FFTFoamTexDesc.Type = RESOURCE_DIM_TEX_2D;
+	FFTFoamTexDesc.Width = WATER_FFT_N;
+	FFTFoamTexDesc.Height = WATER_FFT_N;
+	FFTFoamTexDesc.MipLevels = 1;
+	FFTFoamTexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	FFTFoamTexDesc.Usage = USAGE_DYNAMIC;
+	FFTFoamTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(FFTFoamTexDesc, nullptr, &m_apFFTFoamTexture);
+	m_pDevice->CreateBuffer(FastFFTData, nullptr, &m_apFFTFoamData);
 }
 
 void My_Water::WaterRender()
@@ -777,6 +790,66 @@ void My_Water::CreateFFTColumnPSO()
 	IShaderResourceVariable* pDisplaceTex = m_apFFTColumnSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "displacement");
 	if (pDisplaceTex)
 		pDisplaceTex->Set(m_apFFTDisplacementTexture->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+}
+
+void My_Water::CreateFoamPSO()
+{
+	ShaderCreateInfo ShaderCI;
+	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("THREAD_GROUP_SIZE", WATER_FFT_N);
+	Macros.Finalize();
+
+	RefCntAutoPtr<IShader> pFFTFoamCS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "Generate Foam";
+		ShaderCI.FilePath = "water_generate_foam.csh";
+		ShaderCI.Macros = Macros;
+		m_pDevice->CreateShader(ShaderCI, &pFFTFoamCS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc& PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE;
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "Constants", SHADER_RESOURCE_VARIABLE_TYPE_STATIC},	
+		{SHADER_TYPE_COMPUTE, "FoamTexture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "g_DisplaccementTex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "FFT Foam Compute shader";
+	PSOCreateInfo.pCS = pFFTFoamCS;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apFFTFoamPSO);
+
+	IShaderResourceVariable* pConst = m_apFFTFoamPSO->GetStaticVariableByName(SHADER_TYPE_COMPUTE, "Constants");
+	if (pConst)
+		pConst->Set(m_apFFTFoamData);
+	m_apFFTFoamPSO->CreateShaderResourceBinding(&m_apFFTFoamSRB, true);
+	
+	IShaderResourceVariable* pDisplaceTex = m_apFFTFoamSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "g_DisplaccementTex");
+	if (pDisplaceTex)
+		pDisplaceTex->Set(m_apFFTDisplacementTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	IShaderResourceVariable* pFoamTex = m_apFFTFoamSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "FoamTexture");
+	if (pFoamTex)
+		pFoamTex->Set(m_apFFTFoamTexture->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 }
 
 WaterTimer::WaterTimer()

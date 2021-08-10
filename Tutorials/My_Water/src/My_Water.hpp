@@ -178,6 +178,7 @@ private:
 
 	void CreateFFTRowPSO();
 	void CreateFFTColumnPSO();
+	void CreateFoamPSO();
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -224,6 +225,12 @@ private:
 	RefCntAutoPtr<IBuffer> m_apFFTColumnData;
 	RefCntAutoPtr<IShaderResourceBinding> m_apFFTColumnSRB;	
 	RefCntAutoPtr<ITexture> m_apFFTDisplacementTexture;
+
+	//Foam
+	RefCntAutoPtr<IPipelineState> m_apFFTFoamPSO;
+	RefCntAutoPtr<IBuffer> m_apFFTFoamData;
+	RefCntAutoPtr<IShaderResourceBinding> m_apFFTFoamSRB;
+	RefCntAutoPtr<ITexture> m_apFFTFoamTexture;
 
 	//profile window
 	ImGuiUtils::ProfilersWindow mProfilersWindow;
