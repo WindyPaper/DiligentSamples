@@ -284,7 +284,7 @@ void My_Water::Render()
 		m_pImmediateContext->DrawIndexed(drawAttrs);
 
 		m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), m_apFFTDisplacementTexture, \
-			float2(m_WaterRenderParam.size_L, m_WaterRenderParam.RepeatScale));
+			float4(m_WaterRenderParam.size_L, m_WaterRenderParam.RepeatScale, m_WaterRenderParam.BaseNormalIntensity, WATER_FFT_N));
 	}
 
 	//render debug view
@@ -397,7 +397,7 @@ void My_Water::UpdateUI()
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 
 		ImGui::gizmo3D("Directional Light", m_LightManager.DirLight.dir, ImGui::GetTextLineHeight() * 10);	
-		ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1, 10);
+		ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1, 10);		
 	}
 	ImGui::End();
 
@@ -405,9 +405,11 @@ void My_Water::UpdateUI()
 	{
 		ImGui::SliderFloat("Amplitude", &m_WaterRenderParam.Amplitude, 0.1, 10);
 		ImGui::SliderFloat("L", &m_WaterRenderParam.size_L, 100, 10000);
+		ImGui::gizmo3D("Wind Direction Light", m_WaterRenderParam.WindDir, ImGui::GetTextLineHeight() * 10);
 		ImGui::SliderFloat("WindIntensity", &m_WaterRenderParam.WindIntensity, 0.01, 100);
 		ImGui::SliderFloat("ChoppyScale", &m_WaterRenderParam.ChoppyScale, 0.01, 10);		
 		ImGui::SliderFloat("RepeatScale", &m_WaterRenderParam.RepeatScale, 1.0, 50.0);
+		ImGui::SliderFloat("BaseNormal Intensity", &m_WaterRenderParam.BaseNormalIntensity, 0.1, 10.0);
 	}	
 	ImGui::End();
 }
@@ -499,7 +501,7 @@ void My_Water::WaterRender()
 	{
 		MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
 		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, m_WaterRenderParam.size_L, m_WaterRenderParam.Amplitude, m_WaterRenderParam.WindIntensity);
-		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(1.0, 1.0, 0.1, 0.0);
+		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(m_WaterRenderParam.WindDir.x, m_WaterRenderParam.WindDir.z, 0.0001, 0.0);
 	}
 	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);	
 	m_pImmediateContext->DispatchCompute(DispAttr);
@@ -509,7 +511,7 @@ void My_Water::WaterRender()
 	m_pImmediateContext->SetPipelineState(m_apFFTRowPSO);
 	{
 		MapHelper<WaterFFTRowUniform> GPUFFTRowUniform(m_pImmediateContext, m_apFFTRowData, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTRowUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.ChoppyScale, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
+		GPUFFTRowUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.size_L, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
 	}
 	m_pImmediateContext->CommitShaderResources(m_apFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	DispatchComputeAttribs FFTRowDisp(1, WATER_FFT_N / 2 + 1);

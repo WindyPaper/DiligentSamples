@@ -153,7 +153,7 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, Sha
 
 	Dimension TerrainDim;
 	TerrainDim.Min = float3({ -5690.0f, -50.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 50.0f, 12180.0f });
+	TerrainDim.Size = float3({ 12000.0f, 50.0f, 12000.0f });
 	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
 
@@ -182,7 +182,7 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, Sha
 
 }
 
-void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture* pHeightMap, float2 L_RepeatScale)
+void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture* pHeightMap, float4 L_RepeatScale_NormalIntensity_N)
 {
 	// Bind vertex and index buffers
 	Uint32   offset = 0;
@@ -221,8 +221,10 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture
 			SelectInfo.GetMorphFromLevel(ShaderLODLevel, MorphInfo);
 			CBConstants->MorphKInfo = float4({ MorphInfo[0], MorphInfo[1], 0.0f, 0.0f });
 			CBConstants->CameraPos = CamPos;
-			CBConstants->L.x = L_RepeatScale.x;
-			CBConstants->L.y = L_RepeatScale.y;
+			CBConstants->L.x = L_RepeatScale_NormalIntensity_N.x;
+			CBConstants->L.y = L_RepeatScale_NormalIntensity_N.y;
+			CBConstants->g_BaseNormalIntensity = L_RepeatScale_NormalIntensity_N.z;
+			CBConstants->g_FFTN = L_RepeatScale_NormalIntensity_N.w;
 
 			IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
 			pShaderHM->Set(pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));

@@ -15,7 +15,7 @@
 #define LEAF_RENDER_NODE_SIZE 8
 #define LOD_COUNT  8
 #define LOD_DISTANCE_RATIO 2.0f
-#define LOD_MESH_GRID_SIZE 8
+#define LOD_MESH_GRID_SIZE 64
 #define MORPH_START_RATIO 0.66f
 
 #include "TerrainMap.h"

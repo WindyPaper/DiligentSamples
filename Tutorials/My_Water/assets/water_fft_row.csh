@@ -2,6 +2,7 @@
 
 static const float M_PI = 3.1415926535897932384626433832795;
 static const float g = 9.81;
+static const float KM = 400.0;
 
 Texture2D H0;
 
@@ -27,17 +28,28 @@ groupshared float2 hData[THREAD_GROUP_SIZE/2];
 groupshared float2 xData[THREAD_GROUP_SIZE/2];
 groupshared float2 zData[THREAD_GROUP_SIZE/2];
 
+float tanh (float x)
+{
+	return (1.0 - exp(-2.0 * x)) / (1.0 + exp(-2.0 * x));
+}
+
+float square (float x)
+{
+	return x * x;
+}
+
 float Omega(uint2 coord, uint half_N, inout float2 k, inout float magnitude)
 {
 	uint2 kl = coord - uint2(half_N, half_N);
 
-	float L = 1000;
+	float L = g_Constants.N_ChoppyScale_NBitNum_Time.y;
 	k = float2(2.0 * M_PI * kl.x / L, 2.0 * M_PI * kl.y / L);
 
 	magnitude = length(k);
 	if (magnitude < 0.00001) magnitude = 0.00001;
 	
-	float w = (9.81 * magnitude);
+	float w = (g * magnitude);
+	//float w = g * magnitude * (1.0 + square(magnitude / KM));
 	return w;
 }
 

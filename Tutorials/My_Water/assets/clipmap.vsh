@@ -20,7 +20,9 @@ cbuffer Constants
     float4x4 g_ViewProj;
     float4 g_MorphK;
     float4 g_CameraPos;
-    float4 g_L_FFTScale; //x:L  y:Scale
+    float2 g_L_FFTScale; //x:L  y:Scale
+    float g_BaseNormalIntensity;
+    float g_FFTN;
 };
 
 cbuffer PerPatchData
@@ -45,6 +47,7 @@ struct PSInput
     float3 WorldPos : TEX_COORD2;
     float3 CamPos : TEX_COORD3;
     float2 L_RepeatScale : TEX_COORD4;
+    float2 BaseNormalIntensity_N : TEX_COORD5;
 };
 
 // morphs vertex xy from from high to low detailed mesh position
@@ -98,6 +101,7 @@ void main(in  VSInput VSIn,
     PSIn.CamPos = g_CameraPos.xyz;
 
     PSIn.L_RepeatScale = g_L_FFTScale.xy;
+    PSIn.BaseNormalIntensity_N = float2(g_BaseNormalIntensity, g_FFTN);
 
     //Normal
     // float2 size = float2(2.0,0.0);

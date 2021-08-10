@@ -41,7 +41,9 @@ namespace Diligent
 		float4x4 ViewProj;
 		float4 MorphKInfo; //[0]:end/dis, [1] 1/dis
 		float4 CameraPos;
-		float4 L;
+		float2 L;
+		float g_BaseNormalIntensity;
+		float g_FFTN;
 	};
 
 	class GroundMesh
@@ -52,7 +54,7 @@ namespace Diligent
 
 		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, ShaderUniformDataMgr *pShaderUniformDataMgr);
 		void Render(IDeviceContext *pContext, const float3 &CamPos);
-		void Render(IDeviceContext* pContext, const float3& CamPos, ITexture *pHeightMap, float2 L_RepeatScale);
+		void Render(IDeviceContext* pContext, const float3& CamPos, ITexture *pHeightMap, float4 L_RepeatScale_NormalIntensity_N);
 
 		void Update(const FirstPersonCamera *pCam);		
 

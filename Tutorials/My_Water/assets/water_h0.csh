@@ -75,11 +75,11 @@ void main(uint3 Gid  : SV_GroupID,
 
     //sqrt(Ph(k))/sqrt(2)
 	float h0k = clamp(sqrt((Amplitude/(MagSq*MagSq)) * pow(dot(normalize(k), normalize(WindDirection)), 2) * 
-				exp(-(1.0/(MagSq * L_ * L_))) * exp(-MagSq*pow(l,2.0)))/ sqrt(2.0), -4000.0, 4000.0);
+				exp(-(1.0/(MagSq * L_ * L_))) * exp(-MagSq*pow(l,2.0)))/ sqrt(2.0), -40000.0, 40000.0);
 	
 	//sqrt(Ph(-k))/sqrt(2)
 	float h0minusk = clamp(sqrt((Amplitude/(MagSq*MagSq)) * pow(dot(normalize(-k), normalize(WindDirection)), 2) * 
-					 exp(-(1.0/(MagSq * L_ * L_))) * exp(-MagSq*pow(l,2.0)))/ sqrt(2.0), -4000.0, 4000.0);
+					 exp(-(1.0/(MagSq * L_ * L_))) * exp(-MagSq*pow(l,2.0)))/ sqrt(2.0), -40000.0, 40000.0);
 
 	float4 gauss_random = GaussRandom(ImageIndexInt);
 

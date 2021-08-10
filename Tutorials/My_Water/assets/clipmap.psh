@@ -1,11 +1,14 @@
 #include "brdf.fxh"
 #include "lighting_structure.fxh"
 
-Texture2D    g_DiffTexture;
-SamplerState g_DiffTexture_sampler; // By convention, texture samplers must use the '_sampler' suffix
+// Texture2D    g_DiffTexture;
+// SamplerState g_DiffTexture_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 Texture2D    g_displacement_tex;
 SamplerState g_displacement_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
+// Texture2D    g_detail_normal_tex;
+// SamplerState g_detail_normal_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 cbuffer cbLightStructure
 {
@@ -20,6 +23,7 @@ struct PSInput
     float3 WorldPos : TEX_COORD2;
     float3 CamPos : TEX_COORD3;
     float2 L_RepeatScale : TEX_COORD4;
+    float2 BaseNormalIntensity_N : TEX_COORD5;
 };
 
 struct PSOutput
@@ -57,12 +61,13 @@ float3 PhongLighting(float3 LightDir, float3 ViewDir, float3 Normal)
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    float N = 256.0f;    
+    float N = PSIn.BaseNormalIntensity_N.y;    
     float L = PSIn.L_RepeatScale.x;
     float WaterTextureScale = PSIn.L_RepeatScale.y;
     float PixelSize = 1.0f / N * WaterTextureScale;
     float TexelSize = L / N * WaterTextureScale;
     float3 WorldNormal = CalWorldNormal(PSIn.UV, PixelSize, TexelSize);
+    WorldNormal = normalize(float3(WorldNormal.x * PSIn.BaseNormalIntensity_N.x, WorldNormal.y, WorldNormal.z * PSIn.BaseNormalIntensity_N.x));
 
     float3 WorldPos = PSIn.WorldPos;
     float3 ViewDir = normalize(PSIn.CamPos - WorldPos);    
@@ -92,7 +97,9 @@ void main(in  PSInput  PSIn,
 
     //float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz * 0;
 
-    PSOut.Color.rgb = WaterDiffuse + WaterSpecular; //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
+
+    PSOut.Color.rgb = (WaterDiffuse + 0); //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
+    //PSOut.Color.rgb += WorldNormal * 0.5 + 0.5;
     PSOut.Color.a = 1.0;
 
     //float morphv = PSIn.Morph.x;
