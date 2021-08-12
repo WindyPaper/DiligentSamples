@@ -58,13 +58,14 @@ SampleBase* CreateSample()
 
 void WaterData::Init(IRenderDevice* pDevice)
 {
+	TextureLoadInfo loadInfo;
 	for (int i = 0; i < NOISE_TEX_NUM; ++i)
-	{
-		TextureLoadInfo loadInfo;
-
+	{		
 		std::string FileName = "./WaterNoiseTexture/Noise256_" + std::to_string(i) + ".jpg";
 		CreateTextureFromFile(FileName.c_str(), loadInfo, pDevice, &NoiseTextures[i]);
 	}	
+
+	CreateTextureFromFile("./WaterFoamMap/foam_intensity_perlin2_rgb.dds", loadInfo, pDevice, &FoamDiffuseTexture);
 }
 
 void WaterData::GenerateBitReversedData(int* OutData)
@@ -282,9 +283,13 @@ void My_Water::Render()
 		// Verify the state of vertex and index buffers
 		drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
 		m_pImmediateContext->DrawIndexed(drawAttrs);
-
-		m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), m_apFFTDisplacementTexture, \
-			float4(m_WaterRenderParam.size_L, m_WaterRenderParam.RepeatScale, m_WaterRenderParam.BaseNormalIntensity, WATER_FFT_N));
+		
+		WaterRenderData WRenderData;
+		WRenderData.L_RepeatScale_NormalIntensity_N = float4(m_WaterRenderParam.size_L, m_WaterRenderParam.RepeatScale, m_WaterRenderParam.BaseNormalIntensity, WATER_FFT_N);
+		WRenderData.pHeightMap = m_apFFTDisplacementTexture;
+		WRenderData.pFoamDiffuseMap = mWaterData.FoamDiffuseTexture;
+		WRenderData.pFoamMaskMap = m_apFFTFoamTexture;
+		m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), WRenderData);
 	}
 
 	//render debug view
@@ -492,7 +497,7 @@ void My_Water::CreateConstantsBuffer()
 	FFTFoamTexDesc.Width = WATER_FFT_N;
 	FFTFoamTexDesc.Height = WATER_FFT_N;
 	FFTFoamTexDesc.MipLevels = 1;
-	FFTFoamTexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	FFTFoamTexDesc.Format = TEX_FORMAT_R32_FLOAT;
 	FFTFoamTexDesc.Usage = USAGE_DYNAMIC;
 	FFTFoamTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(FFTFoamTexDesc, nullptr, &m_apFFTFoamTexture);
@@ -514,7 +519,7 @@ void My_Water::WaterRender()
 	{
 		MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
 		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, m_WaterRenderParam.size_L, m_WaterRenderParam.Amplitude, m_WaterRenderParam.WindIntensity);
-		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(m_WaterRenderParam.WindDir.x, m_WaterRenderParam.WindDir.z, 0.0001, 0.0);
+		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(m_WaterRenderParam.WindDir.x, m_WaterRenderParam.WindDir.z, 0.7, 0.0);
 	}
 	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);	
 	m_pImmediateContext->DispatchCompute(DispAttr);
@@ -539,6 +544,12 @@ void My_Water::WaterRender()
 	m_pImmediateContext->CommitShaderResources(m_apFFTColumnSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	DispatchComputeAttribs FFTColumnDisp(1, WATER_FFT_N);
 	m_pImmediateContext->DispatchCompute(FFTColumnDisp);	
+
+	//FFT Foam
+	m_pImmediateContext->SetPipelineState(m_apFFTFoamPSO);
+	m_pImmediateContext->CommitShaderResources(m_apFFTFoamSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	DispatchComputeAttribs FFTFoamDisp(1, WATER_FFT_N);
+	m_pImmediateContext->DispatchCompute(FFTFoamDisp);
 }
 
 void My_Water::CreateH0PSO()
@@ -834,6 +845,21 @@ void My_Water::CreateFoamPSO()
 	// clang-format on
 	PSODesc.ResourceLayout.Variables = Vars;
 	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	// clang-format off
+	// Define immutable sampler for g_Texture. Immutable samplers should be used whenever possible
+	SamplerDesc SamLinearClampDesc
+	{
+		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+		TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP
+	};
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{SHADER_TYPE_COMPUTE, "g_DisplaccementTex", SamLinearClampDesc}
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
 
 	PSODesc.Name = "FFT Foam Compute shader";
 	PSOCreateInfo.pCS = pFFTFoamCS;

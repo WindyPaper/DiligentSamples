@@ -46,6 +46,15 @@ namespace Diligent
 		float g_FFTN;
 	};
 
+	struct WaterRenderData
+	{
+		float4 L_RepeatScale_NormalIntensity_N;
+		ITexture *pHeightMap;
+		ITexture *pFoamMaskMap;
+		ITexture *pFoamDiffuseMap;
+		ITexture *pDetailNormalMap;
+	};
+
 	class GroundMesh
 	{
 	public:
@@ -54,7 +63,7 @@ namespace Diligent
 
 		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, ShaderUniformDataMgr *pShaderUniformDataMgr);
 		void Render(IDeviceContext *pContext, const float3 &CamPos);
-		void Render(IDeviceContext* pContext, const float3& CamPos, ITexture *pHeightMap, float4 L_RepeatScale_NormalIntensity_N);
+		void Render(IDeviceContext* pContext, const float3& CamPos, const WaterRenderData &WRenderData);
 
 		void Update(const FirstPersonCamera *pCam);		
 

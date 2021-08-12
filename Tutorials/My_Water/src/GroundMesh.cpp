@@ -174,15 +174,15 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, Sha
 	{
 		g_TextureVar->Set(m_Heightmap.GetHeightMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	}
-	IShaderResourceVariable *g_DiffuseTextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_DiffTexture");
+	/*IShaderResourceVariable *g_DiffuseTextureVar = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_DiffTexture");
 	if (g_DiffuseTextureVar)
 	{
 		g_DiffuseTextureVar->Set(m_Heightmap.GetDiffuseMapTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	}
+	}*/
 
 }
 
-void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture* pHeightMap, float4 L_RepeatScale_NormalIntensity_N)
+void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, const WaterRenderData &WRenderData)
 {
 	// Bind vertex and index buffers
 	Uint32   offset = 0;
@@ -221,18 +221,30 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, ITexture
 			SelectInfo.GetMorphFromLevel(ShaderLODLevel, MorphInfo);
 			CBConstants->MorphKInfo = float4({ MorphInfo[0], MorphInfo[1], 0.0f, 0.0f });
 			CBConstants->CameraPos = CamPos;
-			CBConstants->L.x = L_RepeatScale_NormalIntensity_N.x;
-			CBConstants->L.y = L_RepeatScale_NormalIntensity_N.y;
-			CBConstants->g_BaseNormalIntensity = L_RepeatScale_NormalIntensity_N.z;
-			CBConstants->g_FFTN = L_RepeatScale_NormalIntensity_N.w;
+			CBConstants->L.x = WRenderData.L_RepeatScale_NormalIntensity_N.x;
+			CBConstants->L.y = WRenderData.L_RepeatScale_NormalIntensity_N.y;
+			CBConstants->g_BaseNormalIntensity = WRenderData.L_RepeatScale_NormalIntensity_N.z;
+			CBConstants->g_FFTN = WRenderData.L_RepeatScale_NormalIntensity_N.w;
 
 			IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
-			pShaderHM->Set(pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			pShaderHM->Set(WRenderData.pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_displacement_tex");
 			if (pShaderHM)
 			{
-				pShaderHM->Set(pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+				pShaderHM->Set(WRenderData.pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 			}			
+
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_tex");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(WRenderData.pFoamDiffuseMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_mask_tex");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(WRenderData.pFoamMaskMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
@@ -322,7 +334,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 
 	// Pipeline state name is used by the engine to report issues.
 	// It is always a good idea to give objects descriptive names.
-	PSOCreateInfo.PSODesc.Name = "Simple triangle PSO";
+	PSOCreateInfo.PSODesc.Name = "Water Mesh PSO";
 
 	// This is a graphics pipeline
 	PSOCreateInfo.PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
@@ -433,7 +445,9 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	{
 		{SHADER_TYPE_VERTEX, "g_displacement_tex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_PIXEL, "g_displacement_tex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_PIXEL, "g_DiffTexture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
+		{SHADER_TYPE_PIXEL, "g_DiffTexture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_foam_tex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_foam_mask_tex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
 	};
 	// clang-format on
 	ResourceLayout.Variables = Vars;
@@ -455,7 +469,9 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	{
 		{SHADER_TYPE_VERTEX, "g_displacement_tex", SamLinearWrapDesc},
 		{SHADER_TYPE_PIXEL, "g_displacement_tex", SamLinearWrapDesc},
-		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoWrapDesc}
+		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_foam_tex", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_foam_mask_tex", SamAnisoWrapDesc}
 	};
 	// clang-format on
 	ResourceLayout.ImmutableSamplers = ImtblSamplers;

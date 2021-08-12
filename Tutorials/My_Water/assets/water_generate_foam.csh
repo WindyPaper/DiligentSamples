@@ -3,12 +3,11 @@
 Texture2D g_DisplaccementTex;
 SamplerState g_DisplaccementTex_sampler;
 
-RWTexture2D<float4> FoamTexture;
+RWTexture2D<float> FoamTexture;
 
 struct WaterFFTH0Uniform
 {
 	float4 N_L_Amplitude_Intensity; //pack
-	float4 WindDir_LL_Alignment; //pack
 };
 
 cbuffer Constants
@@ -20,14 +19,25 @@ cbuffer Constants
 #   define THREAD_GROUP_SIZE 64
 #endif
 
-[numthreads(1, THREAD_GROUP_SIZE, 1)]
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
 void main(uint3 Gid  : SV_GroupID,
           uint3 GTid : SV_GroupThreadID,
           uint3 DTid : SV_DispatchThreadID)
 {
+	float OneTexelSize = 1.0f / THREAD_GROUP_SIZE;
+
 	uint2 ImageIndexInt = DTid.xy;
 
+	float3 left = g_DisplaccementTex.SampleLevel(g_DisplaccementTex_sampler, ImageIndexInt * OneTexelSize + float2(-OneTexelSize, 0.0f), 0).xyz;
+	float3 right = g_DisplaccementTex.SampleLevel(g_DisplaccementTex_sampler, ImageIndexInt * OneTexelSize + float2(OneTexelSize, 0.0f), 0).xyz;
+	float3 up = g_DisplaccementTex.SampleLevel(g_DisplaccementTex_sampler, ImageIndexInt * OneTexelSize + float2(0.0f, -OneTexelSize), 0).xyz;
+	float3 bottom = g_DisplaccementTex.SampleLevel(g_DisplaccementTex_sampler, ImageIndexInt * OneTexelSize + float2(0.0f, OneTexelSize), 0).xyz;
+
+	float scale = 2.0f;
+	float2 Dx = (right.xy - left.xy) * scale;
+	float2 Dy = (up.xy - bottom.xy) * scale;
+	float J = (1.0f + Dx.x) * (1.0f + Dy.y) - Dx.y * Dy.x;
     
 
-	FoamTexture[ImageIndexInt] = float4(1, 1, 0, 1);	
+	FoamTexture[ImageIndexInt] = J;	
 }

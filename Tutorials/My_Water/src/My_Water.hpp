@@ -96,6 +96,11 @@ struct WaterFFTRowUniform
 	float4 N_ChoppyScale_NBitNum_Time;
 };
 
+struct WaterFFTFoamUniform
+{
+	float4 FoamIntensity_Padding;
+};
+
 struct WaterData
 {
 	enum WaterDataEnum
@@ -104,6 +109,7 @@ struct WaterData
 	};
 
 	RefCntAutoPtr<ITexture> NoiseTextures[NOISE_TEX_NUM];
+	RefCntAutoPtr<ITexture> FoamDiffuseTexture;
 
 	void Init(IRenderDevice* pDevice);
 
