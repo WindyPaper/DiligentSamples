@@ -2,7 +2,7 @@
 
 static const float M_PI = 3.1415926535897932384626433832795;
 static const float g = 9.81;
-static const float KM = 400.0;
+static const float KM = 370.0;
 
 Texture2D H0;
 
@@ -48,8 +48,8 @@ float Omega(uint2 coord, uint half_N, inout float2 k, inout float magnitude)
 	magnitude = length(k);
 	if (magnitude < 0.00001) magnitude = 0.00001;
 	
-	float w = (g * magnitude);
-	//float w = g * magnitude * (1.0 + square(magnitude / KM));
+	//float w = (g * magnitude);
+	float w = g * magnitude * (1.0 + square(magnitude / KM));
 	return w;
 }
 
@@ -195,10 +195,12 @@ void main(uint3 Gid  : SV_GroupID,
 	float omega1 = Omega(first_stage_index1, half_N, kv[1], magnitudev[1]);
 
 	//dispersion
-	float T = 200.0f;
-	float w_zero = 2.0f * M_PI / T;
-	float dispersion0 = floor(sqrt(omega0) / w_zero) * w_zero * (Time/10000.0);
-	float dispersion1 = floor(sqrt(omega1) / w_zero) * w_zero * (Time/10000.0);
+	// float T = 200.0f;
+	// float w_zero = 2.0f * M_PI / T;
+	// float dispersion0 = floor(sqrt(omega0) / w_zero) * w_zero * (Time/10000.0);
+	// float dispersion1 = floor(sqrt(omega1) / w_zero) * w_zero * (Time/10000.0);	
+	float dispersion0 = H0.Load(int3(h0_star_index0, 0)).z;
+	float dispersion1 = H0.Load(int3(h0_star_index1, 0)).z;
 
 	float2 sin_omega, cos_omega;
 	sincos(float2(dispersion0, dispersion1), sin_omega, cos_omega);
@@ -208,11 +210,12 @@ void main(uint3 Gid  : SV_GroupID,
 	ht[0] = MultiplyComplex(h0.xy, phase0) + MultiplyComplex(h0_star.xy, float2(phase0.x, -phase0.y));
 	ht[1] = MultiplyComplex(h0.zw, phase1) + MultiplyComplex(h0_star.zw, float2(phase1.x, -phase1.y));
 
-	xt[0] = -MultiplyI(ht[0] * (kv[0].x / magnitudev[0]));
-	zt[0] = -MultiplyI(ht[0] * (kv[0].y / magnitudev[0]));
+	float ChoppyScale = g_Constants.N_ChoppyScale_NBitNum_Time.w;
+	xt[0] = -MultiplyI(ht[0] * (kv[0].x / magnitudev[0])) * ChoppyScale;
+	zt[0] = -MultiplyI(ht[0] * (kv[0].y / magnitudev[0])) * ChoppyScale;
 
-	xt[1] = -MultiplyI(ht[1] * (kv[1].x / magnitudev[1]));
-	zt[1] = -MultiplyI(ht[1] * (kv[1].y / magnitudev[1]));
+	xt[1] = -MultiplyI(ht[1] * (kv[1].x / magnitudev[1])) * ChoppyScale;
+	zt[1] = -MultiplyI(ht[1] * (kv[1].y / magnitudev[1])) * ChoppyScale;
 
 	fft(ht, xt, zt, ImageIndexInt.x, N);
 

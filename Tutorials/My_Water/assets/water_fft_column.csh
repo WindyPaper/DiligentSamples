@@ -162,10 +162,10 @@ void main(uint3 Gid  : SV_GroupID,
 	fft(rowh, rowx, rowz, row, N);
 
 	float sign = (row + column) & 0x1 ? -1.0f : 1.0f;	
-	float scale = choppy_scale * sign;
+	float scale = 1 * sign;
 
-	displacement[uint2(column, row)] = float4(rowx[0].x * scale, rowh[0].x * sign, rowz[0].x * scale, 0.0f) / N / N;
-	displacement[uint2(column, row + half_N)] = float4(rowx[1].x * scale, rowh[1].x * sign, rowz[1].x * scale, 0.0f) / N / N;
+	displacement[uint2(column, row)] = float4(rowx[0].x * scale, rowh[0].x * sign, rowz[0].x * scale, 0.0f);
+	displacement[uint2(column, row + half_N)] = float4(rowx[1].x * scale, rowh[1].x * sign, rowz[1].x * scale, 0.0f);
     //uint uiGlobalThreadIdx = GTid.y * uint(THREAD_GROUP_SIZE) + GTid.x;
     // if (uiGlobalThreadIdx >= g_Constants.uiNumParticles)
     //     return;

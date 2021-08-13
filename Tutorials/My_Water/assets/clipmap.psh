@@ -101,7 +101,7 @@ void main(in  PSInput  PSIn,
     //float diffuse = saturate(dot(WorldNormal, LightDir));
     //float3 WaterColor = (1.0 - Fresnel) * UOceanColor * UskyColor * diffuse;
 
-    //float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz * 0;
+    float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz;
 
 
     float3 LightingColor = (WaterDiffuse + WaterSpecular); //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 

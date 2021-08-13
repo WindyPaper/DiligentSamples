@@ -142,12 +142,12 @@ struct WaterRenderParam
 	WaterRenderParam()
 	{
 		Amplitude = 2.0f;
-		size_L = 1000.0f;
+		size_L = 300.0f;
 		ChoppyScale = 1.0f;
-		WindIntensity = 80.0f;
-		RepeatScale = 1.5f;
+		WindIntensity = 10.0f;
+		RepeatScale = 1.0f;
 		WindDir = float3(1.0f, 1.0f, 1.0f);
-		BaseNormalIntensity = 2.0f;
+		BaseNormalIntensity = 1.0f;
 	}
 };
 
