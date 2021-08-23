@@ -169,7 +169,7 @@ void CalculateDDData(uint2 id, out float2 dxdz, out float2 dydxz, out float2 dyx
 
 
 [numthreads(THREAD_GROUP_SIZE/2, 1, 1)]
-void RowInverseFFT(uint3 id : SV_DispatchThreadID)
+void RowInverseFFT(uint3 id : SV_DispatchThreadID) 
 {
 	//const uint Half_N = N / 2;
 	//const uint BitNum = log2(N);
