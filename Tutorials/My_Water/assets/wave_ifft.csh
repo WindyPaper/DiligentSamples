@@ -1,6 +1,6 @@
 static const float PI = 3.1415926;
 
-Texture2D<float2> H0;
+Texture2D<float2> H0K;
 RWTexture2D<float4> BufferTmp0;
 RWTexture2D<float4> BufferTmp1;
 RWTexture2D<float2> DxDz;
@@ -146,8 +146,8 @@ void CalculateDDData(uint2 id, out float2 dxdz, out float2 dydxz, out float2 dyx
 	float4 wave = WavesData[id.xy];
 	float phase = wave.w * Time;
 	float2 exponent = float2(cos(phase), sin(phase));
-	float2 h = ComplexMult(H0[id.xy].xy, exponent)
-		+ ComplexMult(H0[uint2(N, N) - id.xy].xy * float2(1, -1), float2(exponent.x, -exponent.y));
+	float2 h = ComplexMult(H0K[id.xy].xy, exponent)
+		+ ComplexMult(H0K[uint2(N, N) - id.xy].xy * float2(1, -1), float2(exponent.x, -exponent.y));
 	float2 ih = float2(-h.y, h.x);
 
 	float2 displacementX = ih * wave.x * wave.y;
@@ -172,11 +172,11 @@ void CalculateDDData(uint2 id, out float2 dxdz, out float2 dydxz, out float2 dyx
 void RowInverseFFT(uint3 id : SV_DispatchThreadID)
 {
 	//const uint Half_N = N / 2;
-	const uint BitNum = log2(N);
+	//const uint BitNum = log2(N);
 
 	uint Column = id.x * 2;
 	uint Row = id.y;
-	uint ReverseColumnIdx = reversebits(Column) >> (32 - BitNum);
+	uint ReverseColumnIdx = reversebits(Column) >> (32 - uint(BitNum));
 	uint PairColumnIdx = ReverseColumnIdx + Half_N;
 
 	uint2 Idx0 = uint2(ReverseColumnIdx, Row);
@@ -209,11 +209,11 @@ void RowInverseFFT(uint3 id : SV_DispatchThreadID)
 void ColumnInverseFFT(uint3 id : SV_DispatchThreadID)
 {
 	//const uint Half_N = N / 2;
-	const uint BitNum = log2(N);
+	//const uint BitNum = log2(N);
 
 	uint Row = id.x * 2;
 	uint Column = id.y;
-	uint ReverseRowIdx = reversebits(Row) >> (32 - BitNum);
+	uint ReverseRowIdx = reversebits(Row) >> (32 - uint(BitNum));
 	//uint PairRowIdx = Half_N - ReverseRowIdx;
 	uint PairRowIdx = ReverseRowIdx + Half_N;
 

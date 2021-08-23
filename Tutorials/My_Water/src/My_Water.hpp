@@ -43,6 +43,9 @@
 namespace Diligent
 {
 class GroundMesh;
+class OceanWave;
+struct WaveDisplaySetting;
+
 struct TerrainVertexAttrData
 {
 	float3 pos;
@@ -154,6 +157,8 @@ struct WaterRenderParam
 class My_Water final : public SampleBase
 {
 public:
+	virtual ~My_Water();
+
     virtual void Initialize(const SampleInitInfo& InitInfo) override final;
 
     virtual void Render() override final;
@@ -246,6 +251,9 @@ private:
 
 	//shader const params manager
 	ShaderUniformDataMgr m_ShaderUniformDataMgr;
+
+	WaveDisplaySetting *m_WaveSwellSetting[2];
+	OceanWave* m_pOceanWave;
 	
 	int m_Log2_N;
 	int m_CSGroupSize;

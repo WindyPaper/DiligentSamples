@@ -45,6 +45,8 @@
 
 #include "RenderProfile.h"
 
+#include "OceanWave.h"
+
 namespace Diligent
 {	
 	RenderProfileMgr gRenderProfileMgr;
@@ -233,6 +235,11 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	m_Log2_N = std::log2(WATER_FFT_N);
 	CreateConstantsBuffer();
 	CreateComputePSO();
+
+	m_pOceanWave = new OceanWave(WATER_FFT_N, m_pDevice, m_pShaderSourceFactory);
+	m_pOceanWave->Init(WATER_FFT_N);
+	m_WaveSwellSetting[0] = new WaveDisplaySetting({1.0f, 0.5f, -30.0f, 100000.0f, 1.0f, 0.198f, 3.3f, 0.01f, 9.8f});
+	m_WaveSwellSetting[1] = new WaveDisplaySetting({0.555f, 1.0f, 0.0f, 300000.0f, 1.0f, 1.0f, 5.82f, 0.01f, 9.8f});
 }
 
 // Render a frame
@@ -507,50 +514,59 @@ void My_Water::CreateConstantsBuffer()
 void My_Water::WaterRender()
 {	
 	 //m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Constant")
-	DispatchComputeAttribs DispAttr;
+	//DispatchComputeAttribs DispAttr;
 
-	int DispatchXNum = std::max(1, WATER_FFT_N / m_CSGroupSize);
-	int DispatchYNum = std::max(1, WATER_FFT_N / m_CSGroupSize);
-	DispAttr.ThreadGroupCountX = DispatchXNum;
-	DispAttr.ThreadGroupCountY = DispatchYNum;
+	//int DispatchXNum = std::max(1, WATER_FFT_N / m_CSGroupSize);
+	//int DispatchYNum = std::max(1, WATER_FFT_N / m_CSGroupSize);
+	//DispAttr.ThreadGroupCountX = DispatchXNum;
+	//DispAttr.ThreadGroupCountY = DispatchYNum;
 
-	//H0 (Not necessary to render every frame)
-	m_pImmediateContext->SetPipelineState(m_apH0PSO);
-	{
-		MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, m_WaterRenderParam.size_L, mWaterTimer.GetWaterTime(), m_WaterRenderParam.WindIntensity);
-		float2 NormalizeWindDir = normalize(float2(m_WaterRenderParam.WindDir.x, m_WaterRenderParam.WindDir.z));
-		GPUFFTH0Uniform->WindDir_LL_Alignment = float4(NormalizeWindDir.x, NormalizeWindDir.y, 0.7, 0.0);
-	}
-	m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);	
-	m_pImmediateContext->DispatchCompute(DispAttr);
+	////H0 (Not necessary to render every frame)
+	//m_pImmediateContext->SetPipelineState(m_apH0PSO);
+	//{
+	//	MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
+	//	GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, m_WaterRenderParam.size_L, mWaterTimer.GetWaterTime(), m_WaterRenderParam.WindIntensity);
+	//	float2 NormalizeWindDir = normalize(float2(m_WaterRenderParam.WindDir.x, m_WaterRenderParam.WindDir.z));
+	//	GPUFFTH0Uniform->WindDir_LL_Alignment = float4(NormalizeWindDir.x, NormalizeWindDir.y, 0.7, 0.0);
+	//}
+	//m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);	
+	//m_pImmediateContext->DispatchCompute(DispAttr);
 
 
-	//FFT Row
-	m_pImmediateContext->SetPipelineState(m_apFFTRowPSO);
-	{
-		MapHelper<WaterFFTRowUniform> GPUFFTRowUniform(m_pImmediateContext, m_apFFTRowData, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTRowUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.size_L, 32 - m_Log2_N, m_WaterRenderParam.ChoppyScale);
-	}
-	m_pImmediateContext->CommitShaderResources(m_apFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	DispatchComputeAttribs FFTRowDisp(1, WATER_FFT_N / 2 + 1);
-	m_pImmediateContext->DispatchCompute(FFTRowDisp);
+	////FFT Row
+	//m_pImmediateContext->SetPipelineState(m_apFFTRowPSO);
+	//{
+	//	MapHelper<WaterFFTRowUniform> GPUFFTRowUniform(m_pImmediateContext, m_apFFTRowData, MAP_WRITE, MAP_FLAG_DISCARD);
+	//	GPUFFTRowUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.size_L, 32 - m_Log2_N, m_WaterRenderParam.ChoppyScale);
+	//}
+	//m_pImmediateContext->CommitShaderResources(m_apFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//DispatchComputeAttribs FFTRowDisp(1, WATER_FFT_N / 2 + 1);
+	//m_pImmediateContext->DispatchCompute(FFTRowDisp);
 
-	//FFT Column
-	m_pImmediateContext->SetPipelineState(m_apFFTColumnPSO);
-	{
-		MapHelper<WaterFFTRowUniform> GPUFFTColumnUniform(m_pImmediateContext, m_apFFTColumnData, MAP_WRITE, MAP_FLAG_DISCARD);
-		GPUFFTColumnUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.ChoppyScale, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
-	}
-	m_pImmediateContext->CommitShaderResources(m_apFFTColumnSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	DispatchComputeAttribs FFTColumnDisp(1, WATER_FFT_N);
-	m_pImmediateContext->DispatchCompute(FFTColumnDisp);	
+	////FFT Column
+	//m_pImmediateContext->SetPipelineState(m_apFFTColumnPSO);
+	//{
+	//	MapHelper<WaterFFTRowUniform> GPUFFTColumnUniform(m_pImmediateContext, m_apFFTColumnData, MAP_WRITE, MAP_FLAG_DISCARD);
+	//	GPUFFTColumnUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.ChoppyScale, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
+	//}
+	//m_pImmediateContext->CommitShaderResources(m_apFFTColumnSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//DispatchComputeAttribs FFTColumnDisp(1, WATER_FFT_N);
+	//m_pImmediateContext->DispatchCompute(FFTColumnDisp);	
 
-	//FFT Foam
-	m_pImmediateContext->SetPipelineState(m_apFFTFoamPSO);
-	m_pImmediateContext->CommitShaderResources(m_apFFTFoamSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	DispatchComputeAttribs FFTFoamDisp(1, WATER_FFT_N);
-	m_pImmediateContext->DispatchCompute(FFTFoamDisp);
+	////FFT Foam
+	//m_pImmediateContext->SetPipelineState(m_apFFTFoamPSO);
+	//m_pImmediateContext->CommitShaderResources(m_apFFTFoamSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//DispatchComputeAttribs FFTFoamDisp(1, WATER_FFT_N);
+	//m_pImmediateContext->DispatchCompute(FFTFoamDisp);
+
+	OceanRenderParams OceanParams;
+	//set swell
+	m_WaveSwellSetting[0]->ConvertToCSSpectrumElementParam(&OceanParams.HKSpectrumParam.SpectrumElementParam[0]);
+	m_WaveSwellSetting[1]->ConvertToCSSpectrumElementParam(&OceanParams.HKSpectrumParam.SpectrumElementParam[1]);
+	//IFFT
+	OceanParams.IFFTParam = IFFTBuffer({ mWaterTimer.GetWaterTime(), (float)WATER_FFT_N, (float)WATER_FFT_N/2, (float)m_Log2_N });
+
+	m_pOceanWave->ComputeOceanWave(m_pImmediateContext, OceanParams);
 }
 
 void My_Water::CreateH0PSO()
@@ -877,6 +893,18 @@ void My_Water::CreateFoamPSO()
 	IShaderResourceVariable* pFoamTex = m_apFFTFoamSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "FoamTexture");
 	if (pFoamTex)
 		pFoamTex->Set(m_apFFTFoamTexture->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+}
+
+My_Water::~My_Water()
+{
+	if (m_pOceanWave)
+	{
+		delete m_pOceanWave;
+		m_pOceanWave = nullptr;
+	}
+
+	delete m_WaveSwellSetting[0];
+	delete m_WaveSwellSetting[1];
 }
 
 WaterTimer::WaterTimer()

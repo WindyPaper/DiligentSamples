@@ -1,7 +1,3 @@
-#ifndef THREAD_GROUP_SIZE
-#   define THREAD_GROUP_SIZE 8
-#endif
-
 static const float PI = 3.1415926;
 
 // wave vector x, 1 / magnitude, wave vector z, frequency
@@ -105,11 +101,12 @@ float DirectionSpectrum(float theta, float omega, SpectrumParameters pars)
 float TMACorrection(float omega, float g, float depth)
 {
 	float omegaH = omega * sqrt(depth / g);
+	float RetVal = 1;
 	if (omegaH <= 1)
-		return 0.5 * omegaH * omegaH;
+		RetVal = 0.5 * omegaH * omegaH;
 	if (omegaH < 2)
-		return 1.0 - 0.5 * (2.0 - omegaH) * (2.0 - omegaH);
-	return 1;
+		RetVal = 1.0 - 0.5 * (2.0 - omegaH) * (2.0 - omegaH);
+	return RetVal;
 }
 
 float JONSWAP(float omega, float g, float depth, SpectrumParameters pars)
@@ -135,7 +132,7 @@ float ShortWavesFade(float kLength, SpectrumParameters pars)
 	return exp(-pars.shortWavesFade * pars.shortWavesFade * kLength * kLength);
 }
 
-[numthreads(THREAD_GROUP_SIZE, THREAD_GROUP_SIZE, 1)]
+[numthreads(8, 8, 1)]
 void CalculateInitialSpectrum(uint3 id : SV_DispatchThreadID)
 {
 	float deltaK = 2 * PI / LengthScale;

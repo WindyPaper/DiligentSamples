@@ -38,6 +38,41 @@ namespace Diligent
 		float ShortWavesFade;
 	};
 
+	struct WaveDisplaySetting
+	{
+		float scale;
+		float WindSpeed;
+		float WindDirectionalAngle;
+		float fetch;
+		float SpreadBlend;
+		float swell;
+		float PeakEnhancement;
+		float ShortWavesFade;
+		float g;		
+
+		float JonswapAlpha(float fetch, float windSpeed)
+		{
+			return 0.076f * std::powf(g * fetch / windSpeed / windSpeed, -0.22f);
+		}
+
+		float JonswapPeakFrequency(float fetch, float windSpeed)
+		{
+			return 22 * std::powf(windSpeed * fetch / g / g, -0.33f);
+		}
+
+		void ConvertToCSSpectrumElementParam(HKSpectrumElementParam *pOut)
+		{
+			pOut->scale = scale;
+			pOut->angle = WindDirectionalAngle / 180.0 * PI_F;
+			pOut->SpreadBlend = SpreadBlend;
+			pOut->swell = clamp(swell, 0.01f, 1.0f);
+			pOut->alpha = JonswapAlpha(fetch, WindSpeed);
+			pOut->PeakOmega = JonswapPeakFrequency(fetch, WindSpeed);
+			pOut->gamma = PeakEnhancement;
+			pOut->ShortWavesFade = ShortWavesFade;
+		}
+	};
+
 	struct HKSpectrumGlobalParam
 	{
 		float N;
@@ -48,12 +83,28 @@ namespace Diligent
 		float GravityAcceleration;
 		float Depth;
 		float2 Padding;
+
+		HKSpectrumGlobalParam()
+		{
+			memset(this, 0, sizeof(*this));
+		}
+
+		HKSpectrumGlobalParam(const float n, const float LenScale, const float CutLow, const float CutHigh, const float depth = 500.0f, const float g = 9.18f)
+		{
+			N = n;
+			LengthScale = LenScale;			
+			CutoffLow = CutLow;
+			CutoffHigh = CutHigh;
+			Depth = depth;
+			GravityAcceleration = g;
+		}
+			
 	};
 
 	struct HKSpectrumBuffer
 	{
 		HKSpectrumElementParam SpectrumElementParam[2];
-		HKSpectrumGlobalParam SpectrumGlobalParam;
+		HKSpectrumGlobalParam SpectrumGlobalParam; //only for reverse memory on CPU side.
 	};
 
 	struct IFFTBuffer
@@ -71,6 +122,13 @@ namespace Diligent
 		float2 Padding;
 	};
 
+	struct OceanRenderParams
+	{
+		HKSpectrumBuffer HKSpectrumParam;
+		IFFTBuffer IFFTParam;
+		ResultMergeBuffer MergeParam;
+	};
+
 	class WaveCascadeData
 	{	
 	public:
@@ -78,19 +136,21 @@ namespace Diligent
 			IPipelineState* pHKSpectrumPSO, IPipelineState* pIFFTRowPSO, IPipelineState* pIFFTColumnPSO, IPipelineState* pResultMergePSO, \
 			ITexture* pGaussNoiseTex);
 
-		void Init(const int N);
+		void Init(const int N, const HKSpectrumGlobalParam &param);
 
 		void InitTexture(const int N);
 		void InitBuffer();
 
-		void ComputeWave(IDeviceContext *pContext);
+		void ComputeWave(IDeviceContext *pContext, const OceanRenderParams& params);
 
 	protected:
-		void ComputeHKSpectrum(IDeviceContext *pContext);
-		void ComputeIFFT(IDeviceContext *pContext);
-		void ResultMerge(IDeviceContext *pContext);
+		void ComputeHKSpectrum(IDeviceContext *pContext, const OceanRenderParams& params);
+		void ComputeIFFT(IDeviceContext *pContext, const OceanRenderParams& params);
+		void ResultMerge(IDeviceContext *pContext, const OceanRenderParams& params);
 
 	private:
+		HKSpectrumGlobalParam m_HKScaleCutSpectrumData;
+
 		IRenderDevice *m_pDevice;
 		IPipelineState *m_pHKSpectrumPSO;
 		IPipelineState *m_pIFFTRowPSO;
@@ -130,13 +190,13 @@ namespace Diligent
 	class OceanWave
 	{
 	public:
-		OceanWave(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory);
+		OceanWave(const int N, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory);
 
 		~OceanWave();
 
 		void Init(const int N);
 
-		void ComputeOceanWave(IDeviceContext *pContext);
+		void ComputeOceanWave(IDeviceContext *pContext, const OceanRenderParams &params);
 
 	protected:
 		void CreatePSO(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory);
@@ -147,6 +207,9 @@ namespace Diligent
 
 	private:
 		int m_N;
+		float m_LengthScale0, m_LengthScale1, m_LengthScale2;
+
+		IRenderDevice *m_pDevice;
 
 		WaveCascadeData *m_pCascadeNear;
 		WaveCascadeData *m_pCascadeMid;
@@ -156,6 +219,7 @@ namespace Diligent
 		RefCntAutoPtr<IPipelineState> m_apIFFTRowPSO;
 		RefCntAutoPtr<IPipelineState> m_apIFFTColumnPSO;
 		RefCntAutoPtr<IPipelineState> m_apResultMergePSO;
+		RefCntAutoPtr<ITexture> m_apGaussNoiseTex;
 	};
 }
 
