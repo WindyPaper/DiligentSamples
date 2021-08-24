@@ -137,8 +137,7 @@ void Diligent::WaveCascadeData::ComputeHKSpectrum(IDeviceContext *pContext, cons
 }
 
 void Diligent::WaveCascadeData::ComputeIFFT(IDeviceContext *pContext, const OceanRenderParams& params)
-{
-	//Column IFFT
+{	
 	auto LocalComputeShaderSetParam = [&](IShaderResourceBinding* pSRB)
 	{
 		IShaderResourceVariable* pH0K = pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, WaveTextureSpace::HKSPECTRUM);
@@ -150,8 +149,8 @@ void Diligent::WaveCascadeData::ComputeIFFT(IDeviceContext *pContext, const Ocea
 		IShaderResourceVariable* pDxxDzz = pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, WaveTextureSpace::DXXDZZ);
 		IShaderResourceVariable* pWaveData = pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, WaveTextureSpace::WAVEDATA);
 
-		pH0K->Set(m_apHkSpectrum->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-		pWaveData->Set(m_apWaveDataSpectrum->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		if(pH0K) pH0K->Set(m_apHkSpectrum->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		if(pWaveData) pWaveData->Set(m_apWaveDataSpectrum->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
 		pBufferTmp0->Set(m_apBufferTmp0->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 		pBufferTmp1->Set(m_apBufferTmp1->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
@@ -168,20 +167,21 @@ void Diligent::WaveCascadeData::ComputeIFFT(IDeviceContext *pContext, const Ocea
 		pContext->CommitShaderResources(pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	};
 
+	//Row IFFT
+	pContext->SetPipelineState(m_apIFFTRowSRB->GetPipelineState());
+	LocalComputeShaderSetParam(m_apIFFTRowSRB);
+	pContext->CommitShaderResources(m_apIFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs IFFTRowDisp(1, params.IFFTParam.N, 1);
+	pContext->DispatchCompute(IFFTRowDisp);
+
+	//Column IFFT
 	pContext->SetPipelineState(m_apIFFTColumnSRB->GetPipelineState());
 	LocalComputeShaderSetParam(m_apIFFTColumnSRB);	
 	pContext->CommitShaderResources(m_apIFFTColumnSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 	DispatchComputeAttribs IFFTColumnDisp(1, params.IFFTParam.N, 1);
-	pContext->DispatchCompute(IFFTColumnDisp);
-
-	//Row IFFT
-	pContext->SetPipelineState(m_apIFFTRowSRB->GetPipelineState());
-	LocalComputeShaderSetParam(m_apIFFTRowSRB);	
-	pContext->CommitShaderResources(m_apIFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-	DispatchComputeAttribs IFFTRowDisp(1, params.IFFTParam.N, 1);
-	pContext->DispatchCompute(IFFTRowDisp);
+	pContext->DispatchCompute(IFFTColumnDisp);	
 }
 
 void Diligent::WaveCascadeData::ResultMerge(IDeviceContext *pContext, const OceanRenderParams& params)
@@ -427,7 +427,7 @@ void Diligent::OceanWave::_CreateIFFTColumnPSO(IRenderDevice *pDevice, IShaderSo
 	RefCntAutoPtr<IShader> pIFFTColumnCS;
 	{
 		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
-		ShaderCI.EntryPoint = "RowInverseFFT";
+		ShaderCI.EntryPoint = "ColumnInverseFFT";
 		ShaderCI.Desc.Name = "Wave IFFT Column Calculate";
 		ShaderCI.FilePath = "wave_ifft.csh";
 		ShaderCI.Macros = Macros;
