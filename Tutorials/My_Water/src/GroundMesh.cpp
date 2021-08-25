@@ -4,6 +4,7 @@
 #include "TerrainMap.h"
 
 #include "ShaderUniformDataMgr.h"
+#include "OceanWave.h"
 
 namespace Diligent
 {
@@ -152,8 +153,8 @@ void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, Sha
 	m_Heightmap.LoadMap("./wm_diffuse_map.png", "./wm_heightmap.png", pDevice);
 
 	Dimension TerrainDim;
-	TerrainDim.Min = float3({ -5690.0f, -50.00f, -7090.0f });
-	TerrainDim.Size = float3({ 12000.0f, 50.0f, 12000.0f });
+	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
+	TerrainDim.Size = float3({ 12000.0f, 1000.0f, 12000.0f });
 	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
 
@@ -226,25 +227,46 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, const Wa
 			CBConstants->g_BaseNormalIntensity = WRenderData.L_RepeatScale_NormalIntensity_N.z;
 			CBConstants->g_FFTN = WRenderData.L_RepeatScale_NormalIntensity_N.w;
 
-			IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
-			pShaderHM->Set(WRenderData.pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_displacement_tex");
+			//IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
+			//pShaderHM->Set(WRenderData.pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			/*IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_displacement_tex");
 			if (pShaderHM)
 			{
 				pShaderHM->Set(WRenderData.pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			}			
+			}	*/		
 
-			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_tex");
+			/*pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_tex");
 			if (pShaderHM)
 			{
 				pShaderHM->Set(WRenderData.pFoamDiffuseMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			}
+			}*/
 
-			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_mask_tex");
+			/*pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_mask_tex");
 			if (pShaderHM)
 			{
 				pShaderHM->Set(WRenderData.pFoamMaskMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}*/
+
+			//disp lods
+			ExportRenderParams OceanRenderShaderParams = WRenderData.pOceanWave->ExportParamsToShader();
+			IShaderResourceVariable *pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_texL0");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[0].pDisp->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 			}
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_texL1");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[1].pDisp->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_texL2");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[2].pDisp->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+			CBConstants->LengthScale0 = OceanRenderShaderParams.LengthScales[0];
+			CBConstants->LengthScale1 = OceanRenderShaderParams.LengthScales[1];
+			CBConstants->LengthScale2 = OceanRenderShaderParams.LengthScales[2];
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
@@ -350,8 +372,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 	// Wireframe
-	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
-	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
@@ -443,7 +465,9 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	// clang-format off
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_displacement_tex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_VERTEX, "g_displacement_texL0", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_VERTEX, "g_displacement_texL1", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_VERTEX, "g_displacement_texL2", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
 		{SHADER_TYPE_PIXEL, "g_displacement_tex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_PIXEL, "g_DiffTexture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
 		{SHADER_TYPE_PIXEL, "g_foam_tex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
@@ -467,7 +491,9 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	};
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{SHADER_TYPE_VERTEX, "g_displacement_tex", SamLinearWrapDesc},
+		{SHADER_TYPE_VERTEX, "g_displacement_texL0", SamAnisoWrapDesc},
+		{SHADER_TYPE_VERTEX, "g_displacement_texL1", SamAnisoWrapDesc},
+		{SHADER_TYPE_VERTEX, "g_displacement_texL2", SamAnisoWrapDesc},
 		{SHADER_TYPE_PIXEL, "g_displacement_tex", SamLinearWrapDesc},
 		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoWrapDesc},
 		{SHADER_TYPE_PIXEL, "g_foam_tex", SamAnisoWrapDesc},

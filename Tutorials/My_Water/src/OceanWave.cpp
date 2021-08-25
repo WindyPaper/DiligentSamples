@@ -110,6 +110,11 @@ void Diligent::WaveCascadeData::ComputeWave(IDeviceContext *pContext, const Ocea
 	ResultMerge(pContext, params);
 }
 
+Diligent::OceanRenderTextures Diligent::WaveCascadeData::GetRenderTexture()
+{
+	return OceanRenderTextures({ m_apDisplacement, m_apDerivatives, m_apTurbulence });
+}
+
 void Diligent::WaveCascadeData::ComputeHKSpectrum(IDeviceContext *pContext, const OceanRenderParams& params)
 {
 	pContext->SetPipelineState(m_apHKSpectrumSRB->GetPipelineState());
@@ -256,7 +261,8 @@ void Diligent::OceanWave::Init(const int N)
 	m_N = N;
 	if (!m_apGaussNoiseTex)
 	{
-		FastRandFloat r(100);
+		const float EPS = 0.00001f;
+		FastRandFloat r(100, 0.0f + EPS, 1.0f);
 		auto NormalRandom = [&]()->float
 		{
 			return std::cosf(2 * PI_F * r() * std::sqrtf(-2 * std::logf(r())));
@@ -315,6 +321,20 @@ void Diligent::OceanWave::ComputeOceanWave(IDeviceContext* pContext, const Ocean
 	m_pCascadeFar->ComputeWave(pContext, params);
 	m_pCascadeMid->ComputeWave(pContext, params);
 	m_pCascadeNear->ComputeWave(pContext, params);
+}
+
+Diligent::ExportRenderParams Diligent::OceanWave::ExportParamsToShader() const
+{
+	ExportRenderParams params;
+	params.LengthScales[0] = m_LengthScale0;
+	params.LengthScales[1] = m_LengthScale1;
+	params.LengthScales[2] = m_LengthScale2;
+
+	params.OceanRenderTexs[0] = m_pCascadeFar->GetRenderTexture();
+	params.OceanRenderTexs[1] = m_pCascadeMid->GetRenderTexture();
+	params.OceanRenderTexs[2] = m_pCascadeNear->GetRenderTexture();
+
+	return params;
 }
 
 void Diligent::OceanWave::CreatePSO(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory)

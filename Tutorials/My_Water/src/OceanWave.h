@@ -89,7 +89,7 @@ namespace Diligent
 			memset(this, 0, sizeof(*this));
 		}
 
-		HKSpectrumGlobalParam(const float n, const float LenScale, const float CutLow, const float CutHigh, const float depth = 500.0f, const float g = 9.18f)
+		HKSpectrumGlobalParam(const float n, const float LenScale, const float CutLow, const float CutHigh, const float depth = 500.0f, const float g = 9.81f)
 		{
 			N = n;
 			LengthScale = LenScale;			
@@ -129,6 +129,19 @@ namespace Diligent
 		ResultMergeBuffer MergeParam;
 	};
 
+	struct OceanRenderTextures
+	{
+		ITexture *pDisp;
+		ITexture *pDeriva;
+		ITexture *pTurb;
+	};
+
+	struct ExportRenderParams
+	{
+		OceanRenderTextures OceanRenderTexs[3];
+		float LengthScales[3];
+	};
+
 	class WaveCascadeData
 	{	
 	public:
@@ -142,6 +155,8 @@ namespace Diligent
 		void InitBuffer();
 
 		void ComputeWave(IDeviceContext *pContext, const OceanRenderParams& params);
+
+		OceanRenderTextures GetRenderTexture();
 
 	protected:
 		void ComputeHKSpectrum(IDeviceContext *pContext, const OceanRenderParams& params);
@@ -197,6 +212,8 @@ namespace Diligent
 		void Init(const int N);
 
 		void ComputeOceanWave(IDeviceContext *pContext, const OceanRenderParams &params);
+
+		ExportRenderParams ExportParamsToShader() const;
 
 	protected:
 		void CreatePSO(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory);

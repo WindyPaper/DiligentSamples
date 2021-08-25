@@ -104,24 +104,6 @@ struct WaterFFTFoamUniform
 	float4 FoamIntensity_Padding;
 };
 
-struct WaterData
-{
-	enum WaterDataEnum
-	{
-		NOISE_TEX_NUM = 4
-	};
-
-	RefCntAutoPtr<ITexture> NoiseTextures[NOISE_TEX_NUM];
-	RefCntAutoPtr<ITexture> FoamDiffuseTexture;
-
-	void Init(IRenderDevice* pDevice);
-
-	void GenerateBitReversedData(int* OutData);
-
-protected:
-	Uint8 BitReverseValue(const Uint8 FFTN);
-};
-
 struct TerrainData
 {
 	RefCntAutoPtr<IBuffer> pVertexBuf;
@@ -173,23 +155,9 @@ protected:
 	void UpdateUI();
 	void CreateGridBuffer();
 
-	void ConvertToTextureView(IBuffer* pData, int width, int height, int Stride, ITexture** pRetTex);
-
-	void CreateConstantsBuffer();
-	void CreateComputePSO();
+	void ConvertToTextureView(IBuffer* pData, int width, int height, int Stride, ITexture** pRetTex);	
 
 	void WaterRender();
-
-private:
-	void CreateH0PSO();
-	//void CreateTwiddlePSO();
-	//void CreateHKTPSO();
-	//void CreateButterFlyPSO();
-	//void CreateInversionPSO();
-
-	void CreateFFTRowPSO();
-	void CreateFFTColumnPSO();
-	void CreateFoamPSO();
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -214,34 +182,6 @@ private:
 
 	//Water/////////
 	WaterTimer mWaterTimer;
-	WaterData mWaterData;
-
-	//H0 & H0Minusk
-	RefCntAutoPtr<IPipelineState> m_apH0PSO;
-	RefCntAutoPtr<IShaderResourceBinding> m_apH0ResDataSRB;
-	RefCntAutoPtr<IBuffer> m_apConstants;
-	RefCntAutoPtr<ITexture> m_apH0Buffer;
-	RefCntAutoPtr<ITexture> m_apH0MinuskBuffer;	
-
-	//Optimize FFT
-	//Fast FFT Row
-	RefCntAutoPtr<IPipelineState> m_apFFTRowPSO;
-	RefCntAutoPtr<IBuffer> m_apFFTRowData;
-	RefCntAutoPtr<IShaderResourceBinding> m_apFFTRowSRB;
-	RefCntAutoPtr<ITexture> m_apFFTHtTex;
-	RefCntAutoPtr<ITexture> m_apFFTDtTex;
-	
-	//F FFT Column
-	RefCntAutoPtr<IPipelineState> m_apFFTColumnPSO;
-	RefCntAutoPtr<IBuffer> m_apFFTColumnData;
-	RefCntAutoPtr<IShaderResourceBinding> m_apFFTColumnSRB;	
-	RefCntAutoPtr<ITexture> m_apFFTDisplacementTexture;
-
-	//Foam
-	RefCntAutoPtr<IPipelineState> m_apFFTFoamPSO;
-	RefCntAutoPtr<IBuffer> m_apFFTFoamData;
-	RefCntAutoPtr<IShaderResourceBinding> m_apFFTFoamSRB;
-	RefCntAutoPtr<ITexture> m_apFFTFoamTexture;
 
 	//profile window
 	ImGuiUtils::ProfilersWindow mProfilersWindow;

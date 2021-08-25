@@ -17,6 +17,7 @@ namespace Diligent
 {
 	class FirstPersonCamera;
 	class ShaderUniformDataMgr;
+	class OceanWave;
 
 	struct ClipMapTerrainVerticesData
 	{
@@ -41,9 +42,15 @@ namespace Diligent
 		float4x4 ViewProj;
 		float4 MorphKInfo; //[0]:end/dis, [1] 1/dis
 		float4 CameraPos;
+
 		float2 L;
 		float g_BaseNormalIntensity;
 		float g_FFTN;
+
+		float LengthScale0;
+		float LengthScale1;
+		float LengthScale2;
+		float Padding;
 	};
 
 	struct WaterRenderData
@@ -53,6 +60,8 @@ namespace Diligent
 		ITexture *pFoamMaskMap;
 		ITexture *pFoamDiffuseMap;
 		ITexture *pDetailNormalMap;
+
+		OceanWave *pOceanWave;
 	};
 
 	class GroundMesh

@@ -4,17 +4,17 @@
 // Texture2D    g_DiffTexture;
 // SamplerState g_DiffTexture_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
-Texture2D    g_displacement_tex;
-SamplerState g_displacement_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+// Texture2D    g_displacement_tex;
+// SamplerState g_displacement_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
-// Texture2D    g_detail_normal_tex;
-// SamplerState g_detail_normal_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+// // Texture2D    g_detail_normal_tex;
+// // SamplerState g_detail_normal_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
-Texture2D    g_foam_tex;
-SamplerState g_foam_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+// Texture2D    g_foam_tex;
+// SamplerState g_foam_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
-Texture2D    g_foam_mask_tex;
-SamplerState g_foam_mask_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+// Texture2D    g_foam_mask_tex;
+// SamplerState g_foam_mask_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 cbuffer cbLightStructure
 {
@@ -37,21 +37,21 @@ struct PSOutput
     float4 Color : SV_TARGET; 
 };
 
-float3 CalWorldNormal(float2 TexCoord, float PixelSize, float TexelSize)
-{
-    float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord).xyz;
-    float3 right = float3(TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(PixelSize, 0.0f)).xyz - center;
-    float3 left = float3(-TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(-PixelSize, 0.0f)).xyz - center;
-    float3 top = float3(0.0f, 0.0f, -TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, -PixelSize)).xyz - center;
-    float3 bottom = float3(0.0f, 0.0f, TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, PixelSize)).xyz - center;
+// float3 CalWorldNormal(float2 TexCoord, float PixelSize, float TexelSize)
+// {
+//     float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord).xyz;
+//     float3 right = float3(TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(PixelSize, 0.0f)).xyz - center;
+//     float3 left = float3(-TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(-PixelSize, 0.0f)).xyz - center;
+//     float3 top = float3(0.0f, 0.0f, -TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, -PixelSize)).xyz - center;
+//     float3 bottom = float3(0.0f, 0.0f, TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, PixelSize)).xyz - center;
 
-    float3 TopRight = cross(right, top);
-    float3 TopLeft = cross(top, left);
-    float3 BottomLeft = cross(left, bottom);
-    float3 BottomRight = cross(bottom, right);
+//     float3 TopRight = cross(right, top);
+//     float3 TopLeft = cross(top, left);
+//     float3 BottomLeft = cross(left, bottom);
+//     float3 BottomRight = cross(bottom, right);
 
-    return normalize(TopRight + TopLeft + BottomLeft + BottomRight);
-}
+//     return normalize(TopRight + TopLeft + BottomLeft + BottomRight);
+// }
 
 float3 PhongLighting(float3 LightDir, float3 ViewDir, float3 Normal)
 {
@@ -72,7 +72,7 @@ void main(in  PSInput  PSIn,
     float WaterTextureScale = PSIn.L_RepeatScale.y;
     float PixelSize = 1.0f / N * WaterTextureScale;
     float TexelSize = L / N * WaterTextureScale;
-    float3 WorldNormal = CalWorldNormal(PSIn.UV, PixelSize, TexelSize);
+    float3 WorldNormal = float3(0.0f, 1.0f, 0.0f);// CalWorldNormal(PSIn.UV, PixelSize, TexelSize);
     WorldNormal = normalize(float3(WorldNormal.x * PSIn.BaseNormalIntensity_N.x, WorldNormal.y, WorldNormal.z * PSIn.BaseNormalIntensity_N.x));
 
     float3 WorldPos = PSIn.WorldPos;
@@ -101,16 +101,16 @@ void main(in  PSInput  PSIn,
     //float diffuse = saturate(dot(WorldNormal, LightDir));
     //float3 WaterColor = (1.0 - Fresnel) * UOceanColor * UskyColor * diffuse;
 
-    float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz;
+    // float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz;
 
 
-    float3 LightingColor = (WaterDiffuse + WaterSpecular); //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
+    // float3 LightingColor = (WaterDiffuse + WaterSpecular); //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
 
-    float FoamIntensity = saturate(0.5f - g_foam_mask_tex.Sample(g_foam_mask_tex_sampler, 2 * PSIn.UV).r);
-    FoamIntensity = FoamIntensity * g_foam_tex.Sample(g_foam_tex_sampler, PSIn.UV).r;
+    // float FoamIntensity = saturate(0.5f - g_foam_mask_tex.Sample(g_foam_mask_tex_sampler, 2 * PSIn.UV).r);
+    // FoamIntensity = FoamIntensity * g_foam_tex.Sample(g_foam_tex_sampler, PSIn.UV).r;
     //PSOut.Color.rgb += FoamIntensity * g_foam_tex.Sample(g_foam_tex_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
 
-    PSOut.Color.rgb = lerp(LightingColor, float3(1, 1, 1), FoamIntensity);
+    PSOut.Color.rgb = float3(0.5, 0.5, 0.5) * WaterDiffuse;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;
     PSOut.Color.a = 1.0;
 
     //float morphv = PSIn.Morph.x;
