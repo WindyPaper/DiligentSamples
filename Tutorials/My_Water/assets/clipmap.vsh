@@ -34,7 +34,7 @@ cbuffer Constants
     float LengthScale0;
     float LengthScale1;
     float LengthScale2;
-    float Padding;
+    float LOD_scale;
 };
 
 cbuffer PerPatchData
@@ -101,11 +101,21 @@ void main(in  VSInput VSIn,
     float morphLerpK  = 1.0f - clamp( g_MorphK.x - eyeDist * g_MorphK.y, 0.0, 1.0 );
     WPos.xz = MorphVertex(VSIn.Pos.xy, WPos.xz, morphLerpK);
 
+    float lod_c0 = min(LOD_scale * LengthScale0 / eyeDist, 1);
+    float lod_c1 = min(LOD_scale * LengthScale1 / eyeDist, 1);
+    float lod_c2 = min(LOD_scale * LengthScale2 / eyeDist, 1);
+
     //recalculate by new xz position
     TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) * WaterTextureScale;
-    float3 WaterVertexOffset = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0 * TestScale, 0).rgb;
+    float3 WaterVertexOffset = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0 * TestScale, 0).rgb * lod_c0;
     WPos.y = WaterVertexOffset.y + g_TerrainInfo.Min.y;
-    WPos.xz += WaterVertexOffset.xz;;
+    WPos.xz += WaterVertexOffset.xz;
+
+    float3 DisplaceL1 = g_displacement_texL1.SampleLevel(g_displacement_texL1_sampler, TerrainMapUV / LengthScale1 * TestScale, 0).rgb * lod_c1;
+    WPos += DisplaceL1;
+
+    float3 DisplaceL2 = g_displacement_texL2.SampleLevel(g_displacement_texL2_sampler, TerrainMapUV / LengthScale2 * TestScale, 0).rgb * lod_c2;
+    WPos += DisplaceL2;
     //WPos = WaterVertexOffset * g_TerrainInfo.Size + g_TerrainInfo.Min;
 
     //test

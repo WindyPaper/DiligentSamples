@@ -267,6 +267,7 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, const Wa
 			CBConstants->LengthScale0 = OceanRenderShaderParams.LengthScales[0];
 			CBConstants->LengthScale1 = OceanRenderShaderParams.LengthScales[1];
 			CBConstants->LengthScale2 = OceanRenderShaderParams.LengthScales[2];
+			CBConstants->LOD_scale = 7.0f;
 		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode

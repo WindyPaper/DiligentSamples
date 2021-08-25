@@ -355,19 +355,19 @@ void My_Water::UpdateUI()
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 
 		ImGui::gizmo3D("Directional Light", m_LightManager.DirLight.dir, ImGui::GetTextLineHeight() * 10);	
-		ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1, 10);		
+		ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);		
 	}
 	ImGui::End();
 
 	if (ImGui::Begin("Ocean params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
-		ImGui::SliderFloat("Amplitude", &m_WaterRenderParam.Amplitude, 0.1, 10);
+		ImGui::SliderFloat("Amplitude", &m_WaterRenderParam.Amplitude, 0.1f, 10.0f);
 		ImGui::SliderFloat("L", &m_WaterRenderParam.size_L, 100, 10000);
 		ImGui::gizmo3D("Wind Direction Light", m_WaterRenderParam.WindDir, ImGui::GetTextLineHeight() * 10);
-		ImGui::SliderFloat("WindIntensity", &m_WaterRenderParam.WindIntensity, 0.01, 100);
-		ImGui::SliderFloat("ChoppyScale", &m_WaterRenderParam.ChoppyScale, 0.01, 10);		
-		ImGui::SliderFloat("RepeatScale", &m_WaterRenderParam.RepeatScale, 1.0, 50.0);
-		ImGui::SliderFloat("BaseNormal Intensity", &m_WaterRenderParam.BaseNormalIntensity, 0.1, 10.0);
+		ImGui::SliderFloat("WindIntensity", &m_WaterRenderParam.WindIntensity, 0.01f, 100.0f);
+		ImGui::SliderFloat("ChoppyScale", &m_WaterRenderParam.ChoppyScale, 0.01f, 10.0f);		
+		ImGui::SliderFloat("RepeatScale", &m_WaterRenderParam.RepeatScale, 1.0f, 50.0f);
+		ImGui::SliderFloat("BaseNormal Intensity", &m_WaterRenderParam.BaseNormalIntensity, 0.1f, 10.0f);
 	}	
 	ImGui::End();
 }

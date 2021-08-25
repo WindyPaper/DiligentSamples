@@ -50,7 +50,7 @@ namespace Diligent
 		float LengthScale0;
 		float LengthScale1;
 		float LengthScale2;
-		float Padding;
+		float LOD_scale;
 	};
 
 	struct WaterRenderData
