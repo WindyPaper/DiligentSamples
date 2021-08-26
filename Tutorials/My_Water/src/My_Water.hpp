@@ -181,6 +181,7 @@ private:
 	LightManager m_LightManager;
 
 	//Water/////////
+	float m_LastTimerCount;
 	WaterTimer mWaterTimer;
 
 	//profile window

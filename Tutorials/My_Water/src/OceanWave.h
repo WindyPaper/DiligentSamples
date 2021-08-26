@@ -162,6 +162,7 @@ namespace Diligent
 		void ComputeHKSpectrum(IDeviceContext *pContext, const OceanRenderParams& params);
 		void ComputeIFFT(IDeviceContext *pContext, const OceanRenderParams& params);
 		void ResultMerge(IDeviceContext *pContext, const OceanRenderParams& params);
+		void GenerateFullMipmap(IDeviceContext *pContext);
 
 	private:
 		HKSpectrumGlobalParam m_HKScaleCutSpectrumData;

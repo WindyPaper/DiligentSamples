@@ -23,7 +23,7 @@ struct BxDFContext
 
 void InitBrdf( inout BxDFContext Context, float3 N, float3 V, float3 L )
 {
-	Context.NoL = dot(N, L);
+	Context.NoL = saturate(dot(N, L));
 	Context.NoV = dot(N, V);
 	Context.VoL = dot(V, L);
 	float InvLenH = rsqrt( 2 + 2 * Context.VoL );
@@ -74,4 +74,15 @@ float3 SpecularGGX( float Roughness, float3 SpecularColor, BxDFContext Context, 
 	float3 F = F_Schlick( SpecularColor, Context.VoH );
 
 	return (D * Vis) * F;
+}
+
+// Note: Disney diffuse must be multiply by diffuseAlbedo / PI. This is done outside of this function.
+float DisneyDiffuse(float NdotV, float NdotL, float LdotH, float perceptualRoughness)
+{
+    float fd90 = 0.5 + 2 * LdotH * LdotH * perceptualRoughness;
+    // Two schlick fresnel term
+    float lightScatter   = (1 + (fd90 - 1) * Pow5(1 - NdotL));
+    float viewScatter    = (1 + (fd90 - 1) * Pow5(1 - NdotV));
+
+    return lightScatter * viewScatter;
 }

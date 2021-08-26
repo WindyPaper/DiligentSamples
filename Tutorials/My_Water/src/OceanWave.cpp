@@ -1,6 +1,6 @@
 #include "OceanWave.h"
 
-#include "FastRand.hpp"
+#include <random>
 
 #include "MapHelper.hpp"
 #include "ShaderMacroHelper.hpp"
@@ -64,6 +64,7 @@ void Diligent::WaveCascadeData::InitTexture(const int N)
 	m_pDevice->CreateTexture(InitFloat4Type, nullptr, &m_apDisplacement);
 
 	InitFloat4Type.MipLevels = 0;  //full mipmap chain
+	InitFloat4Type.MiscFlags = MISC_TEXTURE_FLAG_GENERATE_MIPS;
 	m_pDevice->CreateTexture(InitFloat4Type, nullptr, &m_apDerivatives);
 	m_pDevice->CreateTexture(InitFloat4Type, nullptr, &m_apTurbulence);
 }
@@ -108,6 +109,7 @@ void Diligent::WaveCascadeData::ComputeWave(IDeviceContext *pContext, const Ocea
 	ComputeHKSpectrum(pContext, params);
 	ComputeIFFT(pContext, params);
 	ResultMerge(pContext, params);
+	GenerateFullMipmap(pContext);
 }
 
 Diligent::OceanRenderTextures Diligent::WaveCascadeData::GetRenderTexture()
@@ -222,6 +224,12 @@ void Diligent::WaveCascadeData::ResultMerge(IDeviceContext *pContext, const Ocea
 	pContext->DispatchCompute(ResultMergeDisp);
 }
 
+void Diligent::WaveCascadeData::GenerateFullMipmap(IDeviceContext *pContext)
+{
+	pContext->GenerateMips(m_apDerivatives->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	pContext->GenerateMips(m_apTurbulence->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+}
+
 Diligent::OceanWave::OceanWave(const int N, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :
 	m_N(N),
 	m_pDevice(pDevice),
@@ -262,10 +270,13 @@ void Diligent::OceanWave::Init(const int N)
 	if (!m_apGaussNoiseTex)
 	{
 		const float EPS = 0.00001f;
-		FastRandFloat r(100, 0.0f + EPS, 1.0f);
+		std::random_device rd;  //Will be used to obtain a seed for the random number engine
+		std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+		std::uniform_real_distribution<> dis(0.0f + EPS, 1.0);
+
 		auto NormalRandom = [&]()->float
 		{
-			return std::cosf(2 * PI_F * r() * std::sqrtf(-2 * std::logf(r())));
+			return std::cosf(2 * PI_F * dis(gen)) * std::sqrtf(-2 * std::logf(dis(gen)));
 		};		
 		float2 *pSrcTexData = new float2[N * N];
 		for (int i = 0; i < N; ++i)
@@ -275,6 +286,7 @@ void Diligent::OceanWave::Init(const int N)
 				pSrcTexData[i * N + j] = float2(NormalRandom(), NormalRandom());
 			}
 		}
+
 		TextureData GaussTexData;
 		TextureSubResData TexData;
 		TexData.pData = pSrcTexData;

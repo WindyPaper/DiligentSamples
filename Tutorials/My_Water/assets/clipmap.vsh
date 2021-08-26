@@ -60,6 +60,7 @@ struct PSInput
     float3 CamPos : TEX_COORD3;
     float2 L_RepeatScale : TEX_COORD4;
     float2 BaseNormalIntensity_N : TEX_COORD5;
+    float4 LodScales : TEX_COORD6;
 };
 
 // morphs vertex xy from from high to low detailed mesh position
@@ -88,7 +89,7 @@ void main(in  VSInput VSIn,
     float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
     float3 UndisplaceWPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
 
-    float WaterTextureScale = g_L_FFTScale.y;
+    float WaterTextureScale = 1.0f;//g_L_FFTScale.y;
 
     WPos.y = 0.0f;    
     float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) * WaterTextureScale;
@@ -107,9 +108,10 @@ void main(in  VSInput VSIn,
 
     //recalculate by new xz position
     TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) * WaterTextureScale;
+    WPos.y = g_TerrainInfo.Min.y;
     float3 WaterVertexOffset = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0 * TestScale, 0).rgb * lod_c0;
-    WPos.y = WaterVertexOffset.y + g_TerrainInfo.Min.y;
-    WPos.xz += WaterVertexOffset.xz;
+    //WPos.y = WaterVertexOffset.y + g_TerrainInfo.Min.y;
+    WPos += WaterVertexOffset;
 
     float3 DisplaceL1 = g_displacement_texL1.SampleLevel(g_displacement_texL1_sampler, TerrainMapUV / LengthScale1 * TestScale, 0).rgb * lod_c1;
     WPos += DisplaceL1;
@@ -130,6 +132,7 @@ void main(in  VSInput VSIn,
 
     PSIn.L_RepeatScale = g_L_FFTScale.xy;
     PSIn.BaseNormalIntensity_N = float2(g_BaseNormalIntensity, g_FFTN);
+    PSIn.LodScales = float4(lod_c0, lod_c1, lod_c2, 1.0f);
 
     //Normal
     // float2 size = float2(2.0,0.0);

@@ -264,6 +264,38 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, const Wa
 			{
 				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[2].pDisp->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 			}
+			//derivative texs
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_derivatives_texL0");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[0].pDeriva->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_derivatives_texL1");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[1].pDeriva->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_derivatives_texL2");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[2].pDeriva->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+			//turbulence texs
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_turbulence_texL0");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[0].pTurb->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_turbulence_texL1");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[1].pTurb->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_turbulence_texL2");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[2].pTurb->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
 			CBConstants->LengthScale0 = OceanRenderShaderParams.LengthScales[0];
 			CBConstants->LengthScale1 = OceanRenderShaderParams.LengthScales[1];
 			CBConstants->LengthScale2 = OceanRenderShaderParams.LengthScales[2];
@@ -373,8 +405,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
 	// Wireframe
-	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
-	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
+	//PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_WIREFRAME;
+	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.FillMode = FILL_MODE_SOLID;
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
@@ -469,10 +501,12 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		{SHADER_TYPE_VERTEX, "g_displacement_texL0", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
 		{SHADER_TYPE_VERTEX, "g_displacement_texL1", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
 		{SHADER_TYPE_VERTEX, "g_displacement_texL2", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
-		{SHADER_TYPE_PIXEL, "g_displacement_tex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_PIXEL, "g_DiffTexture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
-		{SHADER_TYPE_PIXEL, "g_foam_tex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
-		{SHADER_TYPE_PIXEL, "g_foam_mask_tex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
+		{SHADER_TYPE_PIXEL, "g_derivatives_texL0", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_derivatives_texL1", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_derivatives_texL2", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL0", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL1", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL2", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
 	};
 	// clang-format on
 	ResourceLayout.Variables = Vars;
@@ -495,10 +529,12 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		{SHADER_TYPE_VERTEX, "g_displacement_texL0", SamAnisoWrapDesc},
 		{SHADER_TYPE_VERTEX, "g_displacement_texL1", SamAnisoWrapDesc},
 		{SHADER_TYPE_VERTEX, "g_displacement_texL2", SamAnisoWrapDesc},
-		{SHADER_TYPE_PIXEL, "g_displacement_tex", SamLinearWrapDesc},
-		{SHADER_TYPE_PIXEL, "g_DiffTexture", SamAnisoWrapDesc},
-		{SHADER_TYPE_PIXEL, "g_foam_tex", SamAnisoWrapDesc},
-		{SHADER_TYPE_PIXEL, "g_foam_mask_tex", SamAnisoWrapDesc}
+		{SHADER_TYPE_PIXEL, "g_derivatives_texL0", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_derivatives_texL1", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_derivatives_texL2", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL0", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL1", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL2", SamAnisoWrapDesc}
 	};
 	// clang-format on
 	ResourceLayout.ImmutableSamplers = ImtblSamplers;
@@ -515,6 +551,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVsConstBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "TerrainDimension")->Set(m_pVSTerrainInfoBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "PerPatchData")->Set(m_pVsPatchBuf);	
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "Constants")->Set(m_pVsConstBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbLightStructure")->Set(pShaderUniformDataMgr->GetLightStructure());
 
 	// Create a shader resource binding object and bind all static resources in it

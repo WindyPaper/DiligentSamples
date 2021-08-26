@@ -180,6 +180,7 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	mWaterTimer.Restart();
 	m_CSGroupSize = 32;
 	m_Log2_N = std::log2(WATER_FFT_N);
+	m_LastTimerCount = mWaterTimer.GetWaterTime();
 
 	m_pOceanWave = new OceanWave(WATER_FFT_N, m_pDevice, m_pShaderSourceFactory);
 	m_pOceanWave->Init(WATER_FFT_N);
@@ -373,63 +374,19 @@ void My_Water::UpdateUI()
 }
 
 void My_Water::WaterRender()
-{	
-	 //m_apH0ResDataSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Constant")
-	//DispatchComputeAttribs DispAttr;
-
-	//int DispatchXNum = std::max(1, WATER_FFT_N / m_CSGroupSize);
-	//int DispatchYNum = std::max(1, WATER_FFT_N / m_CSGroupSize);
-	//DispAttr.ThreadGroupCountX = DispatchXNum;
-	//DispAttr.ThreadGroupCountY = DispatchYNum;
-
-	////H0 (Not necessary to render every frame)
-	//m_pImmediateContext->SetPipelineState(m_apH0PSO);
-	//{
-	//	MapHelper<WaterFFTH0Uniform> GPUFFTH0Uniform(m_pImmediateContext, m_apConstants, MAP_WRITE, MAP_FLAG_DISCARD);
-	//	GPUFFTH0Uniform->N_L_Amplitude_Intensity = float4(WATER_FFT_N, m_WaterRenderParam.size_L, mWaterTimer.GetWaterTime(), m_WaterRenderParam.WindIntensity);
-	//	float2 NormalizeWindDir = normalize(float2(m_WaterRenderParam.WindDir.x, m_WaterRenderParam.WindDir.z));
-	//	GPUFFTH0Uniform->WindDir_LL_Alignment = float4(NormalizeWindDir.x, NormalizeWindDir.y, 0.7, 0.0);
-	//}
-	//m_pImmediateContext->CommitShaderResources(m_apH0ResDataSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);	
-	//m_pImmediateContext->DispatchCompute(DispAttr);
-
-
-	////FFT Row
-	//m_pImmediateContext->SetPipelineState(m_apFFTRowPSO);
-	//{
-	//	MapHelper<WaterFFTRowUniform> GPUFFTRowUniform(m_pImmediateContext, m_apFFTRowData, MAP_WRITE, MAP_FLAG_DISCARD);
-	//	GPUFFTRowUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.size_L, 32 - m_Log2_N, m_WaterRenderParam.ChoppyScale);
-	//}
-	//m_pImmediateContext->CommitShaderResources(m_apFFTRowSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	//DispatchComputeAttribs FFTRowDisp(1, WATER_FFT_N / 2 + 1);
-	//m_pImmediateContext->DispatchCompute(FFTRowDisp);
-
-	////FFT Column
-	//m_pImmediateContext->SetPipelineState(m_apFFTColumnPSO);
-	//{
-	//	MapHelper<WaterFFTRowUniform> GPUFFTColumnUniform(m_pImmediateContext, m_apFFTColumnData, MAP_WRITE, MAP_FLAG_DISCARD);
-	//	GPUFFTColumnUniform->N_ChoppyScale_NBitNum_Time = float4(WATER_FFT_N, m_WaterRenderParam.ChoppyScale, 32 - m_Log2_N, mWaterTimer.GetWaterTime());
-	//}
-	//m_pImmediateContext->CommitShaderResources(m_apFFTColumnSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	//DispatchComputeAttribs FFTColumnDisp(1, WATER_FFT_N);
-	//m_pImmediateContext->DispatchCompute(FFTColumnDisp);	
-
-	////FFT Foam
-	//m_pImmediateContext->SetPipelineState(m_apFFTFoamPSO);
-	//m_pImmediateContext->CommitShaderResources(m_apFFTFoamSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	//DispatchComputeAttribs FFTFoamDisp(1, WATER_FFT_N);
-	//m_pImmediateContext->DispatchCompute(FFTFoamDisp);
-
+{
 	OceanRenderParams OceanParams;
 	//set swell
 	m_WaveSwellSetting[0]->ConvertToCSSpectrumElementParam(&OceanParams.HKSpectrumParam.SpectrumElementParam[0]);
 	m_WaveSwellSetting[1]->ConvertToCSSpectrumElementParam(&OceanParams.HKSpectrumParam.SpectrumElementParam[1]);
 	//IFFT
 	OceanParams.IFFTParam = IFFTBuffer({ mWaterTimer.GetWaterTime(), (float)WATER_FFT_N, (float)WATER_FFT_N/2, (float)m_Log2_N });
-	//merge
-	OceanParams.MergeParam = ResultMergeBuffer({1.0f, 0.0f, float2(0.0f)});
-
+	//merge	
+	float DeltaTime = mWaterTimer.GetWaterTime() - m_LastTimerCount;
+	OceanParams.MergeParam = ResultMergeBuffer({1.0f, DeltaTime, float2(0.0f)});
+	//std::cout << "DeltaTime = " << DeltaTime << std::endl;
 	m_pOceanWave->ComputeOceanWave(m_pImmediateContext, OceanParams);
+	m_LastTimerCount = mWaterTimer.GetWaterTime();
 }
 
 void My_Water::ConvertToTextureView(IBuffer* pData, int width, int height, int Stride, ITexture **pRetTex)
@@ -486,7 +443,7 @@ My_Water::~My_Water()
 
 WaterTimer::WaterTimer()
 {
-	mSpeed = 1.0f;
+	mSpeed = 0.8f;
 	mTCount = 0.0f;
 
 	Restart();

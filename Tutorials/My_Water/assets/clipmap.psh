@@ -1,20 +1,44 @@
 #include "brdf.fxh"
 #include "lighting_structure.fxh"
 
-// Texture2D    g_DiffTexture;
-// SamplerState g_DiffTexture_sampler; // By convention, texture samplers must use the '_sampler' suffix
+cbuffer Constants
+{
+    float4x4 g_ViewProj;
+    float4 g_MorphK;
+    float4 g_CameraPos;
 
-// Texture2D    g_displacement_tex;
-// SamplerState g_displacement_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+    float2 g_L_FFTScale; //x:L  y:Scale
+    float g_BaseNormalIntensity;
+    float g_FFTN;
 
-// // Texture2D    g_detail_normal_tex;
-// // SamplerState g_detail_normal_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+    float LengthScale0;
+    float LengthScale1;
+    float LengthScale2;
+    float LOD_scale;
+};
 
-// Texture2D    g_foam_tex;
-// SamplerState g_foam_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+// cbuffer OceanMaterialParams
+// {
 
-// Texture2D    g_foam_mask_tex;
-// SamplerState g_foam_mask_tex_sampler; // By convention, texture samplers must use the '_sampler' suffix
+// };
+
+Texture2D g_derivatives_texL0;
+SamplerState g_derivatives_texL0_sampler;
+
+Texture2D g_derivatives_texL1;
+SamplerState g_derivatives_texL1_sampler;
+
+Texture2D g_derivatives_texL2;
+SamplerState g_derivatives_texL2_sampler;
+
+Texture2D g_turbulence_texL0;
+SamplerState g_turbulence_texL0_sampler;
+
+Texture2D g_turbulence_texL1;
+SamplerState g_turbulence_texL1_sampler;
+
+Texture2D g_turbulence_texL2;
+SamplerState g_turbulence_texL2_sampler;
 
 cbuffer cbLightStructure
 {
@@ -30,28 +54,13 @@ struct PSInput
     float3 CamPos : TEX_COORD3;
     float2 L_RepeatScale : TEX_COORD4;
     float2 BaseNormalIntensity_N : TEX_COORD5;
+    float4 LodScales : TEX_COORD6;
 };
 
 struct PSOutput
 { 
     float4 Color : SV_TARGET; 
 };
-
-// float3 CalWorldNormal(float2 TexCoord, float PixelSize, float TexelSize)
-// {
-//     float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord).xyz;
-//     float3 right = float3(TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(PixelSize, 0.0f)).xyz - center;
-//     float3 left = float3(-TexelSize, 0.0f, 0.0f) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(-PixelSize, 0.0f)).xyz - center;
-//     float3 top = float3(0.0f, 0.0f, -TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, -PixelSize)).xyz - center;
-//     float3 bottom = float3(0.0f, 0.0f, TexelSize) + g_displacement_tex.Sample(g_displacement_tex_sampler, TexCoord + float2(0.0f, PixelSize)).xyz - center;
-
-//     float3 TopRight = cross(right, top);
-//     float3 TopLeft = cross(top, left);
-//     float3 BottomLeft = cross(left, bottom);
-//     float3 BottomRight = cross(bottom, right);
-
-//     return normalize(TopRight + TopLeft + BottomLeft + BottomRight);
-// }
 
 float3 PhongLighting(float3 LightDir, float3 ViewDir, float3 Normal)
 {
@@ -66,22 +75,42 @@ float3 PhongLighting(float3 LightDir, float3 ViewDir, float3 Normal)
 // If the variable has structure type (like in this example), the structure declarations must also be indentical.
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
-{
-    float N = PSIn.BaseNormalIntensity_N.y;    
-    float L = PSIn.L_RepeatScale.x;
-    float WaterTextureScale = PSIn.L_RepeatScale.y;
-    float PixelSize = 1.0f / N * WaterTextureScale;
-    float TexelSize = L / N * WaterTextureScale;
-    float3 WorldNormal = float3(0.0f, 1.0f, 0.0f);// CalWorldNormal(PSIn.UV, PixelSize, TexelSize);
-    WorldNormal = normalize(float3(WorldNormal.x * PSIn.BaseNormalIntensity_N.x, WorldNormal.y, WorldNormal.z * PSIn.BaseNormalIntensity_N.x));
+{    
 
     float3 WorldPos = PSIn.WorldPos;
     float3 ViewDir = normalize(PSIn.CamPos - WorldPos);    
 
+    float4 derivatives = g_derivatives_texL0.Sample(g_derivatives_texL0_sampler, PSIn.UV / LengthScale0);
+    //#if defined(MID) || defined(CLOSE)
+    derivatives += g_derivatives_texL1.Sample(g_derivatives_texL1_sampler, PSIn.UV / LengthScale1) * PSIn.LodScales.y;
+    //#endif
+
+    //#if defined(CLOSE)
+    derivatives += g_derivatives_texL2.Sample(g_derivatives_texL2_sampler, PSIn.UV / LengthScale2) * PSIn.LodScales.z;
+    //#endif
+
+    float2 slope = float2(derivatives.x / (1 + derivatives.z),
+        derivatives.y / (1 + derivatives.w));
+    float3 WorldNormal = normalize(float3(-slope.x, 1, -slope.y));
+
+    //Foam
+    float jacobian = g_turbulence_texL0.Sample(g_turbulence_texL0_sampler, PSIn.UV / LengthScale0).x
+                + g_turbulence_texL1.Sample(g_turbulence_texL1_sampler, PSIn.UV / LengthScale1).x
+                + g_turbulence_texL2.Sample(g_turbulence_texL2_sampler, PSIn.UV / LengthScale2).x;
+    jacobian = min(1, max(0, (-jacobian + 2.52f) * 2.4f));
+
+    float3 Albedo = lerp(0, 1, jacobian);
+    float _Roughness = 0.3f;
+    float _RoughnessScale = 0.004f;
+    float _MaxGloss = 0.9f;
+    float distanceGloss = lerp(1 - _Roughness, _MaxGloss, 1 / (1 + length(ViewDir) * _RoughnessScale));
+    float FinalRoughness = (1.0 - lerp(distanceGloss, 0.1, jacobian));
+    
+
 	float3 LightDir = normalize(g_LightStructure.Direction.xyz);
     float DLIntensity = g_LightStructure.Direction.w;
-	// float ndl = saturate(dot(LightDir, WorldNormal));
-	// float3 DirLightIrradiance = ndl * float3(1, 1, 1);
+	//float ndl = saturate(dot(LightDir, WorldNormal));
+	//float3 DirLightIrradiance = ndl * float3(1, 1, 1);
 	//float3 Ambient = float3(0.1, 0.1, 0.1);
 
     //float3 PhongColor = PhongLighting(LightDir, ViewDir, WorldNormal) * DLIntensity;
@@ -92,10 +121,14 @@ void main(in  PSInput  PSIn,
 
     BxDFContext BrdfContext;
     InitBrdf(BrdfContext, WorldNormal, ViewDir, LightDir);
-    BrdfContext.NoV = saturate( abs( BrdfContext.NoV ) + 1e-5 );
-    float3 WaterDiffuse = Diffuse_Lambert(UOceanColor) * DLIntensity * saturate(BrdfContext.NoL);
+    //BrdfContext.NoV = saturate( abs( BrdfContext.NoV ) + 1e-5 );
+
+    float3 HalfVec = normalize(LightDir + ViewDir);
+    float LoH = saturate(dot(LightDir, HalfVec));
+    float WaterDiffuse = DisneyDiffuse(BrdfContext.NoV, BrdfContext.NoL, LoH, FinalRoughness) * BrdfContext.NoL; //Diffuse_Lambert(Albedo) * DLIntensity * saturate(BrdfContext.NoL);
     //float3 WaterDiffuse = DLIntensity * saturate(BrdfContext.NoL);
-    float3 WaterSpecular = SpecularGGX(0.4f, UskyColor, BrdfContext, saturate(BrdfContext.NoL));
+    float3 SpecularColor = float3(0.04f, 0.04f, 0.04f);
+    float3 WaterSpecular = SpecularGGX(max(0.01f, FinalRoughness), SpecularColor, BrdfContext, saturate(BrdfContext.NoL));
     //float Fresnel = 0.02 + 0.98 * pow(1.0 - dot(WorldNormal, ViewDir), 5.0);
     //float3 Sky = Fresnel * UskyColor;
     //float diffuse = saturate(dot(WorldNormal, LightDir));
@@ -104,13 +137,17 @@ void main(in  PSInput  PSIn,
     // float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz;
 
 
-    // float3 LightingColor = (WaterDiffuse + WaterSpecular); //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
+    float3 LightingColor = (WaterDiffuse * Albedo + WaterSpecular); //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
 
     // float FoamIntensity = saturate(0.5f - g_foam_mask_tex.Sample(g_foam_mask_tex_sampler, 2 * PSIn.UV).r);
     // FoamIntensity = FoamIntensity * g_foam_tex.Sample(g_foam_tex_sampler, PSIn.UV).r;
     //PSOut.Color.rgb += FoamIntensity * g_foam_tex.Sample(g_foam_tex_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
 
-    PSOut.Color.rgb = float3(0.5, 0.5, 0.5) * WaterDiffuse;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;
+    PSOut.Color.rgb = LightingColor;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;
+
+    //degamma
+    //PSOut.Color.rgb = pow(PSOut.Color.rgb, 2.2);
+
     PSOut.Color.a = 1.0;
 
     //float morphv = PSIn.Morph.x;
