@@ -8,8 +8,6 @@ Texture2D    g_displacement_texL2;
 SamplerState g_displacement_texL2_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 
-// static const float WaterTextureScale = 5.0;
-
 struct Dimension
 {
 	float4 Min;
@@ -53,14 +51,11 @@ struct VSInput
 
 struct PSInput 
 { 
-    float4 Pos   : SV_POSITION;
+    float4 Pos : SV_POSITION;
     float2 UV  : TEX_COORD;
-    float3 Normal : TEX_COORD1;
-    float3 WorldPos : TEX_COORD2;
-    float3 CamPos : TEX_COORD3;
-    float2 L_RepeatScale : TEX_COORD4;
-    float2 BaseNormalIntensity_N : TEX_COORD5;
-    float4 LodScales : TEX_COORD6;
+    float3 WorldPos : TEX_COORD1;
+    float3 CamPos : TEX_COORD2;
+    float4 LodScales : TEX_COORD3;
 };
 
 // morphs vertex xy from from high to low detailed mesh position
@@ -70,30 +65,20 @@ float2 MorphVertex( float2 InPos, float2 vertex, float morphk)
    return vertex - fracPart * morphk;
 }
 
-// float GetHeightMapOffsetValue(float2 BaseUV, float2 OffsetPixel)
-// {
-//     float2 OffsetUV = OffsetPixel / 255 * WaterTextureScale;   
-//     return g_displacement_tex.SampleLevel(g_displacement_tex_sampler, BaseUV + OffsetUV, 0).y;
-// }
-
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
 // shader output variable name must match exactly the name of the pixel shader input variable.
 // If the variable has structure type (like in this example), the structure declarations must also be indentical.
 void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
-    const float TestScale = 1.0f / 1.0f;
-
     float2 WPosXZ = float2(VSIn.Pos.x, VSIn.Pos.y) * Scale.xy;    
 
     float3 WPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
     float3 UndisplaceWPos = float3(WPosXZ.r, 0.0f, WPosXZ.g) + float3(Offset.x, Offset.y, Offset.z);
 
-    float WaterTextureScale = 1.0f;//g_L_FFTScale.y;
-
     WPos.y = 0.0f;    
-    float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) * WaterTextureScale;
-    float baseh = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0 * TestScale, 0).y;
+    float2 TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz);
+    float baseh = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0, 0).y;
     WPos.y = baseh * g_TerrainInfo.Size.y / g_L_FFTScale.x + g_TerrainInfo.Min.y;
     //WPos.y = 0.0f;
 
@@ -107,44 +92,24 @@ void main(in  VSInput VSIn,
     float lod_c2 = min(LOD_scale * LengthScale2 / eyeDist, 1);
 
     //recalculate by new xz position
-    TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz) * WaterTextureScale;
+    TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz);
     WPos.y = g_TerrainInfo.Min.y;
-    float3 WaterVertexOffset = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0 * TestScale, 0).rgb * lod_c0;
+    float3 WaterVertexOffset = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0, 0).rgb * lod_c0;
     //WPos.y = WaterVertexOffset.y + g_TerrainInfo.Min.y;
     WPos += WaterVertexOffset;
 
-    float3 DisplaceL1 = g_displacement_texL1.SampleLevel(g_displacement_texL1_sampler, TerrainMapUV / LengthScale1 * TestScale, 0).rgb * lod_c1;
+    float3 DisplaceL1 = g_displacement_texL1.SampleLevel(g_displacement_texL1_sampler, TerrainMapUV / LengthScale1, 0).rgb * lod_c1;
     WPos += DisplaceL1;
 
-    float3 DisplaceL2 = g_displacement_texL2.SampleLevel(g_displacement_texL2_sampler, TerrainMapUV / LengthScale2 * TestScale, 0).rgb * lod_c2;
+    float3 DisplaceL2 = g_displacement_texL2.SampleLevel(g_displacement_texL2_sampler, TerrainMapUV / LengthScale2, 0).rgb * lod_c2;
     WPos += DisplaceL2;
     //WPos = WaterVertexOffset * g_TerrainInfo.Size + g_TerrainInfo.Min;
 
-    //test
-    //WPos = UndisplaceWPos + g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV, 0).rgb * (2000.0 / g_L_FFTScale.x);
-
     PSIn.Pos = mul(g_ViewProj, float4(WPos, 1.0f));
     PSIn.UV = TerrainMapUV;
-    //PSIn.Morph = float2(morphLerpK, 1.0f);
 
     PSIn.WorldPos = WPos;
     PSIn.CamPos = g_CameraPos.xyz;
 
-    PSIn.L_RepeatScale = g_L_FFTScale.xy;
-    PSIn.BaseNormalIntensity_N = float2(g_BaseNormalIntensity, g_FFTN);
-    PSIn.LodScales = float4(lod_c0, lod_c1, lod_c2, 1.0f);
-
-    //Normal
-    // float2 size = float2(2.0,0.0);
-    // float3 offset = float3(-1,0,1);
-    // float s11 = baseh;
-    // float s01 = GetHeightMapOffsetValue(TerrainMapUV, offset.xy);
-    // float s21 = GetHeightMapOffsetValue(TerrainMapUV, offset.zy);
-    // float s10 = GetHeightMapOffsetValue(TerrainMapUV, offset.yx);
-    // float s12 = GetHeightMapOffsetValue(TerrainMapUV, offset.yz);
-    // float3 va = normalize(float3(size.x, s21-s01, size.y));
-    // float3 vb = normalize(float3(size.y,s12-s10, size.x));
-    // float4 bump = float4( cross(va,vb), s11 );
-
-    // PSIn.Normal = bump.xyz;
+    PSIn.LodScales = float4(lod_c0, lod_c1, lod_c2, 1.0f);    
 }

@@ -225,27 +225,7 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, const Wa
 			CBConstants->L.x = WRenderData.L_RepeatScale_NormalIntensity_N.x;
 			CBConstants->L.y = WRenderData.L_RepeatScale_NormalIntensity_N.y;
 			CBConstants->g_BaseNormalIntensity = WRenderData.L_RepeatScale_NormalIntensity_N.z;
-			CBConstants->g_FFTN = WRenderData.L_RepeatScale_NormalIntensity_N.w;
-
-			//IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_VERTEX, "g_displacement_tex");
-			//pShaderHM->Set(WRenderData.pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			/*IShaderResourceVariable* pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_displacement_tex");
-			if (pShaderHM)
-			{
-				pShaderHM->Set(WRenderData.pHeightMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			}	*/		
-
-			/*pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_tex");
-			if (pShaderHM)
-			{
-				pShaderHM->Set(WRenderData.pFoamDiffuseMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			}*/
-
-			/*pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_foam_mask_tex");
-			if (pShaderHM)
-			{
-				pShaderHM->Set(WRenderData.pFoamMaskMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-			}*/
+			CBConstants->g_FFTN = WRenderData.L_RepeatScale_NormalIntensity_N.w;			
 
 			//disp lods
 			ExportRenderParams OceanRenderShaderParams = WRenderData.pOceanWave->ExportParamsToShader();

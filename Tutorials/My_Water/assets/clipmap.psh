@@ -17,10 +17,10 @@ cbuffer Constants
     float LOD_scale;
 };
 
-// cbuffer OceanMaterialParams
-// {
+cbuffer OceanMaterialParams
+{
 
-// };
+};
 
 Texture2D g_derivatives_texL0;
 SamplerState g_derivatives_texL0_sampler;
@@ -49,12 +49,9 @@ struct PSInput
 { 
     float4 Pos : SV_POSITION;
     float2 UV  : TEX_COORD;
-    float3 Normal : TEX_COORD1;
-    float3 WorldPos : TEX_COORD2;
-    float3 CamPos : TEX_COORD3;
-    float2 L_RepeatScale : TEX_COORD4;
-    float2 BaseNormalIntensity_N : TEX_COORD5;
-    float4 LodScales : TEX_COORD6;
+    float3 WorldPos : TEX_COORD1;
+    float3 CamPos : TEX_COORD2;
+    float4 LodScales : TEX_COORD3;
 };
 
 struct PSOutput
@@ -99,51 +96,23 @@ void main(in  PSInput  PSIn,
                 + g_turbulence_texL2.Sample(g_turbulence_texL2_sampler, PSIn.UV / LengthScale2).x;
     jacobian = min(1, max(0, (-jacobian + 2.52f) * 2.4f));
 
-    float3 Albedo = lerp(0, 1, jacobian);
+    float3 Albedo = lerp(0.1, 1, jacobian);
     float _Roughness = 0.3f;
     float _RoughnessScale = 0.004f;
     float _MaxGloss = 0.9f;
-    float distanceGloss = lerp(1 - _Roughness, _MaxGloss, 1 / (1 + length(ViewDir) * _RoughnessScale));
-    float FinalRoughness = (1.0 - lerp(distanceGloss, 0.1, jacobian));
+    float distanceGloss = lerp(1 - _Roughness, _MaxGloss, 1 / (1 + length(PSIn.CamPos - WorldPos) * _RoughnessScale));
+    float FinalRoughness = (1.0 - lerp(distanceGloss, 0.0, jacobian));
     
 
 	float3 LightDir = normalize(g_LightStructure.Direction.xyz);
-    float DLIntensity = g_LightStructure.Direction.w;
-	//float ndl = saturate(dot(LightDir, WorldNormal));
-	//float3 DirLightIrradiance = ndl * float3(1, 1, 1);
-	//float3 Ambient = float3(0.1, 0.1, 0.1);
+    float DLIntensity = g_LightStructure.Direction.w;	
 
-    //float3 PhongColor = PhongLighting(LightDir, ViewDir, WorldNormal) * DLIntensity;
-
-    float3 UskyColor = float3(3.2, 9.6, 12.8)/100.0;
-
-    float3 UOceanColor = float3(0.04, 0.16, 0.47);
-
-    BxDFContext BrdfContext;
-    InitBrdf(BrdfContext, WorldNormal, ViewDir, LightDir);
-    //BrdfContext.NoV = saturate( abs( BrdfContext.NoV ) + 1e-5 );
-
-    float3 HalfVec = normalize(LightDir + ViewDir);
-    float LoH = saturate(dot(LightDir, HalfVec));
-    float WaterDiffuse = DisneyDiffuse(BrdfContext.NoV, BrdfContext.NoL, LoH, FinalRoughness) * BrdfContext.NoL; //Diffuse_Lambert(Albedo) * DLIntensity * saturate(BrdfContext.NoL);
-    //float3 WaterDiffuse = DLIntensity * saturate(BrdfContext.NoL);
-    float3 SpecularColor = float3(0.04f, 0.04f, 0.04f);
-    float3 WaterSpecular = SpecularGGX(max(0.01f, FinalRoughness), SpecularColor, BrdfContext, saturate(BrdfContext.NoL));
-    //float Fresnel = 0.02 + 0.98 * pow(1.0 - dot(WorldNormal, ViewDir), 5.0);
-    //float3 Sky = Fresnel * UskyColor;
-    //float diffuse = saturate(dot(WorldNormal, LightDir));
-    //float3 WaterColor = (1.0 - Fresnel) * UOceanColor * UskyColor * diffuse;
-
-    // float3 center = g_displacement_tex.Sample(g_displacement_tex_sampler, PSIn.UV).xyz;
+    float Metallic = 0.0f;
+    SurfaceReflectanceInfo SrfInfo = PBR_GetSurfaceReflectance(Albedo, FinalRoughness, Metallic);
+    float3 DirectLighting = PBR_ApplyDirectionalLight(LightDir, DLIntensity, SrfInfo, WorldNormal, ViewDir);
 
 
-    float3 LightingColor = (WaterDiffuse * Albedo + WaterSpecular); //g_DiffTexture.Sample(g_DiffTexture_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
-
-    // float FoamIntensity = saturate(0.5f - g_foam_mask_tex.Sample(g_foam_mask_tex_sampler, 2 * PSIn.UV).r);
-    // FoamIntensity = FoamIntensity * g_foam_tex.Sample(g_foam_tex_sampler, PSIn.UV).r;
-    //PSOut.Color.rgb += FoamIntensity * g_foam_tex.Sample(g_foam_tex_sampler, PSIn.UV); //float4(1.0, 1.0, 1.0, 1.0); 
-
-    PSOut.Color.rgb = LightingColor;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;
+    PSOut.Color.rgb = DirectLighting;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;
 
     //degamma
     //PSOut.Color.rgb = pow(PSOut.Color.rgb, 2.2);

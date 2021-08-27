@@ -1,5 +1,3 @@
-#pragma kernel FillResultTextures
-
 RWTexture2D<float3> Displacement;
 RWTexture2D<float4> Derivatives;
 RWTexture2D<float4> Turbulence;

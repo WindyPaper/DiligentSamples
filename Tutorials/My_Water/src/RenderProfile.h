@@ -64,9 +64,9 @@ namespace Diligent
 		void GetGPUProfileData(ProfilerTask** pData, int& size);
 
 	private:
-		std::unique_ptr<ScopedQueryHelper>   m_pPipelineStatsQuery;
+		/*std::unique_ptr<ScopedQueryHelper>   m_pPipelineStatsQuery;
 		std::unique_ptr<ScopedQueryHelper>   m_pOcclusionQuery;
-		std::unique_ptr<ScopedQueryHelper>   m_pDurationQuery;
+		std::unique_ptr<ScopedQueryHelper>   m_pDurationQuery;*/
 		std::unique_ptr<DurationQueryHelper> m_pDurationFromTimestamps;
 
 		IDeviceContext *m_pImmediateContext;

@@ -46,7 +46,7 @@ void Diligent::RenderProfileMgr::Initialize(IRenderDevice *pDevice, IDeviceConte
 	CleanProfileTask();
 	m_pImmediateContext = pImmediateContext;
 
-	{
+	/*{
 		QueryDesc queryDesc;
 		queryDesc.Name = "Pipeline statistics query";
 		queryDesc.Type = QUERY_TYPE_PIPELINE_STATISTICS;
@@ -65,7 +65,7 @@ void Diligent::RenderProfileMgr::Initialize(IRenderDevice *pDevice, IDeviceConte
 		queryDesc.Name = "Duration query";
 		queryDesc.Type = QUERY_TYPE_DURATION;
 		m_pDurationQuery.reset(new ScopedQueryHelper{ pDevice, queryDesc, 2 });
-	}
+	}*/
 
 	m_pDurationFromTimestamps.reset(new DurationQueryHelper{ pDevice, 2 });
 }

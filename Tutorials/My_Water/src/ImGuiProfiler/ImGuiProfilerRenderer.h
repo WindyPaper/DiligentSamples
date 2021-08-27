@@ -41,7 +41,7 @@ namespace ImGuiUtils
           currFrame.tasks.push_back(tasks[taskIndex]);
         else
         {
-          if (tasks[taskIndex - 1].color != tasks[taskIndex].color || tasks[taskIndex - 1].name != tasks[taskIndex].name)
+          if (tasks[taskIndex - 1].name != tasks[taskIndex].name)
           {
             currFrame.tasks.push_back(tasks[taskIndex]);
           }
@@ -317,7 +317,8 @@ namespace ImGuiUtils
       title << std::fixed << "Diligent profiler [" << 1.0f / avgFrameTime << "fps\t" << avgFrameTime * 1000.0f << "ms]###ProfilerWindow";
       //###AnimatedTitle
       ImGui::Begin(title.str().c_str(), 0, ImGuiWindowFlags_NoScrollbar);
-      ImVec2 canvasSize = ImGui::GetContentRegionAvail();
+	  ImGui::SetWindowSize(ImVec2(300.0f, 250.0f), ImGuiCond_Once);
+	  ImVec2 canvasSize = ImGui::GetContentRegionAvail();
 
       int sizeMargin = int(ImGui::GetStyle().ItemSpacing.y);
       int maxGraphHeight = 300;
