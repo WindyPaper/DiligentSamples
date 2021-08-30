@@ -6,6 +6,7 @@
 #include <chrono>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 #include "ImGuiProfiler/ProfilerTask.h"
 #include "GraphicsTypes.h"
 #include "ScopedQueryHelper.hpp"
@@ -55,8 +56,8 @@ namespace Diligent
 		ProfilerTask *GetCPUProfilerTask();
 		ProfilerTask *GetGPUProfilerTask();
 
-		void GPUProfileTaskStart();
-		void GPUProfileTaskEnd(double &RefEndTime);
+		void GPUProfileTaskStart(const std::string &name);
+		void GPUProfileTaskEnd(const std::string &name, double &RefEndTime);
 
 		void CleanProfileTask();
 
@@ -67,9 +68,12 @@ namespace Diligent
 		/*std::unique_ptr<ScopedQueryHelper>   m_pPipelineStatsQuery;
 		std::unique_ptr<ScopedQueryHelper>   m_pOcclusionQuery;
 		std::unique_ptr<ScopedQueryHelper>   m_pDurationQuery;*/
-		std::unique_ptr<DurationQueryHelper> m_pDurationFromTimestamps;
+		//std::unique_ptr<DurationQueryHelper> m_pDurationFromTimestamps;
+
+		std::unordered_map<std::string, std::unique_ptr<DurationQueryHelper>> m_QueryNameToHelper;
 
 		IDeviceContext *m_pImmediateContext;
+		IRenderDevice *m_pIRenderDevice;
 
 		std::vector<ProfilerTask> m_CPUProfileTasks;
 		std::vector<ProfilerTask> m_GPUProfileTasks;

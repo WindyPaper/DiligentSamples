@@ -31,20 +31,22 @@ Diligent::GPUProfileScope::GPUProfileScope(RenderProfileMgr *pRenderProfileMgr, 
 	m_pProfilerTask->color = TextColor;
 	m_pProfilerTask->startTime = 0;
 
-	pRenderProfileMgr->GPUProfileTaskStart();
+	pRenderProfileMgr->GPUProfileTaskStart(name);
 }
 
 Diligent::GPUProfileScope::~GPUProfileScope()
 {
 	double DurationTime;
-	m_pRenderProfileMgr->GPUProfileTaskEnd(DurationTime);
+	m_pRenderProfileMgr->GPUProfileTaskEnd(m_pProfilerTask->name, DurationTime);
 	m_pProfilerTask->endTime = DurationTime;
 }
 
 void Diligent::RenderProfileMgr::Initialize(IRenderDevice *pDevice, IDeviceContext *pImmediateContext)
 {
-	CleanProfileTask();
+	m_pIRenderDevice = pDevice;
 	m_pImmediateContext = pImmediateContext;
+
+	CleanProfileTask();	
 
 	/*{
 		QueryDesc queryDesc;
@@ -67,7 +69,7 @@ void Diligent::RenderProfileMgr::Initialize(IRenderDevice *pDevice, IDeviceConte
 		m_pDurationQuery.reset(new ScopedQueryHelper{ pDevice, queryDesc, 2 });
 	}*/
 
-	m_pDurationFromTimestamps.reset(new DurationQueryHelper{ pDevice, 2 });
+	//m_pDurationFromTimestamps.reset(new DurationQueryHelper{ pDevice, 2 });
 }
 
 Diligent::RenderProfileMgr::RenderProfileMgr()
@@ -91,14 +93,19 @@ Diligent::ProfilerTask * Diligent::RenderProfileMgr::GetGPUProfilerTask()
 	return &m_GPUProfileTasks[m_CurrGPUProfileTaskIndex++];
 }
 
-void Diligent::RenderProfileMgr::GPUProfileTaskStart()
+void Diligent::RenderProfileMgr::GPUProfileTaskStart(const std::string &name)
 {
-	m_pDurationFromTimestamps->Begin(m_pImmediateContext);
+	if (m_QueryNameToHelper.find(name) == m_QueryNameToHelper.end())
+	{
+		m_QueryNameToHelper.insert(std::make_pair(name, new DurationQueryHelper(m_pIRenderDevice, 2)));
+	}
+
+	m_QueryNameToHelper[name]->Begin(m_pImmediateContext);
 }
 
-void Diligent::RenderProfileMgr::GPUProfileTaskEnd(double &RefEndTime)
+void Diligent::RenderProfileMgr::GPUProfileTaskEnd(const std::string &name, double &RefEndTime)
 {
-	m_pDurationFromTimestamps->End(m_pImmediateContext, RefEndTime);
+	m_QueryNameToHelper[name]->End(m_pImmediateContext, RefEndTime);
 }
 
 void Diligent::RenderProfileMgr::CleanProfileTask()
