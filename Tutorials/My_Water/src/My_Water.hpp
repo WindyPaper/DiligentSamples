@@ -36,6 +36,8 @@
 
 #include "ShaderUniformDataMgr.h"
 
+#include "EpipolarLightScattering.hpp"
+
 //RIGHT HAND COORDINATION
 
 #define WATER_FFT_N 256
@@ -195,6 +197,9 @@ private:
 
 	WaveDisplaySetting *m_WaveSwellSetting[2];
 	OceanWave* m_pOceanWave;
+
+	//Sky
+	std::unique_ptr<EpipolarLightScattering> m_apSkyScattering;
 	
 	int m_Log2_N;
 	int m_CSGroupSize;
