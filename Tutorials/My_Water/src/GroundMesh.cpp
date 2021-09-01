@@ -378,9 +378,9 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	// This tutorial will render to a single render target
 	PSOCreateInfo.GraphicsPipeline.NumRenderTargets = 1;
 	// Set render target format which is the format of the swap chain's color buffer
-	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = pSwapChain->GetDesc().ColorBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = TEX_FORMAT_R11G11B10_FLOAT;//pSwapChain->GetDesc().ColorBufferFormat;
 	// Use the depth buffer format from the swap chain
-	PSOCreateInfo.GraphicsPipeline.DSVFormat = pSwapChain->GetDesc().DepthBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.DSVFormat = TEX_FORMAT_D32_FLOAT;// pSwapChain->GetDesc().DepthBufferFormat;
 	// Primitive topology defines what kind of primitives will be rendered by this pipeline state
 	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
@@ -390,8 +390,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
-	// Disable depth testing
-	PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = True;
+	// depth testing
+	PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = true;
 
 	// Define vertex shader input layout
 	LayoutElement LayoutElems[] =

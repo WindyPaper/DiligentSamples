@@ -4,7 +4,7 @@
 // screen space, if extinction evaluation mode is EXTINCTION_EVAL_MODE_EPIPOLAR
 
 #include "BasicStructures.fxh"
-#include "AtmosphereShadersCommon.fxh"
+#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams
 {
@@ -42,10 +42,10 @@ SamplerState      g_tex3DHighOrderSctrLUT_sampler;
 Texture3D<float3> g_tex3DMultipleSctrLUT;
 SamplerState      g_tex3DMultipleSctrLUT_sampler;
 
-#include "LookUpTables.fxh"
-#include "ScatteringIntegrals.fxh"
-#include "Extinction.fxh"
-#include "UnshadowedScattering.fxh"
+#include "EpipolarLightScattering/LookUpTables.fxh"
+#include "EpipolarLightScattering/ScatteringIntegrals.fxh"
+#include "EpipolarLightScattering/Extinction.fxh"
+#include "EpipolarLightScattering/UnshadowedScattering.fxh"
 
 void ShaderFunctionInternal(in float4  f4Pos,
                             out float3 f3Inscattering, 

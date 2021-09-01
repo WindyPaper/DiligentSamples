@@ -1,4 +1,4 @@
-#include "AtmosphereShadersCommon.fxh"
+#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 #ifndef THREAD_GROUP_SIZE
 #   define THREAD_GROUP_SIZE 16
@@ -12,8 +12,8 @@ cbuffer cbParticipatingMediaScatteringParams
 Texture3D<float3> g_tex3DPointwiseSctrRadiance;
 SamplerState g_tex3DPointwiseSctrRadiance_sampler;
 
-#include "LookUpTables.fxh"
-#include "PrecomputeCommon.fxh"
+#include "EpipolarLightScattering/LookUpTables.fxh"
+#include "EpipolarLightScattering/precompute/PrecomputeCommon.fxh"
 
 RWTexture3D</*format = rgba32f*/float3> g_rwtex3DInsctrOrder;
 

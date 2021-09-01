@@ -71,10 +71,7 @@ public:
         ITextureView* ptex2DDstColorBufferRTV = nullptr;
 
         /// Depth-stencil view of the destination depth buffer where final image will be rendered.
-        ITextureView* ptex2DDstDepthBufferDSV = nullptr;
-
-        /// Shadow map shader resource view
-        ITextureView* ptex2DShadowMapSRV = nullptr;
+        ITextureView* ptex2DDstDepthBufferDSV = nullptr;        
     };
 
     EpipolarLightScattering(IRenderDevice*              in_pDevice,
@@ -82,6 +79,7 @@ public:
                             TEXTURE_FORMAT              BackBufferFmt,
                             TEXTURE_FORMAT              DepthBufferFmt,
                             TEXTURE_FORMAT              OffscreenBackBuffer,
+							IShaderSourceInputStreamFactory* pShaderIFactory,
                             const AirScatteringAttribs& ScatteringAttibs = AirScatteringAttribs{});
     ~EpipolarLightScattering();
 
@@ -118,7 +116,7 @@ private:
     void RefineSampleLocations();
     void MarkRayMarchingSamples();
     void RenderSliceUVDirAndOrig();
-    void Build1DMinMaxMipMap(int iCascadeIndex);
+    //void Build1DMinMaxMipMap(int iCascadeIndex);
     void DoRayMarching(Uint32 uiMaxStepsAlongRay, int iCascadeIndex);
     void InterpolateInsctrIrradiance();
     void UnwarpEpipolarScattering(bool bRenderLuminance);
@@ -365,6 +363,8 @@ private:
 
     //const float m_fTurbidity = 1.02f;
     AirScatteringAttribs m_MediaParams;
+
+	IShaderSourceInputStreamFactory* m_pShaderIFactory;
 
     enum UpToDateResourceFlags
     {

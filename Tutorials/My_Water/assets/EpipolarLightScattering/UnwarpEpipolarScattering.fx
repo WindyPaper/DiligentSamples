@@ -3,7 +3,7 @@
 // back buffer
 
 #include "BasicStructures.fxh"
-#include "AtmosphereShadersCommon.fxh"
+#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams
 {
@@ -47,8 +47,8 @@ Texture2D<float>  g_tex2DAverageLuminance;
     SamplerState      g_tex2DEpipolarExtinction_sampler; // Linear clamp
 #endif
 
-#include "Extinction.fxh"
-#include "ToneMapping.fxh"
+#include "EpipolarLightScattering/Extinction.fxh"
+//#include "ToneMapping.fxh"
 
 void UnwarpEpipolarInsctrImage( in float2 f2PosPS, 
                                 in float fCamSpaceZ,
@@ -298,13 +298,13 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
         f3BackgroundColor *= f3Extinction;
     }
 
-#if PERFORM_TONE_MAPPING
-    float fAveLogLum = GetAverageSceneLuminance(g_tex2DAverageLuminance);
-    f4Color.rgb = ToneMap(f3BackgroundColor + f3Inscttering, g_PPAttribs.ToneMapping, fAveLogLum);
-#else
-    const float MinLumn = 0.01;
-    float2 LogLum_W = GetWeightedLogLum(f3BackgroundColor + f3Inscttering, MinLumn);
-    f4Color.rgb = float3(LogLum_W.x, LogLum_W.y, 0.0);
-#endif
+// #if PERFORM_TONE_MAPPING
+//     float fAveLogLum = GetAverageSceneLuminance(g_tex2DAverageLuminance);
+//     f4Color.rgb = ToneMap(f3BackgroundColor + f3Inscttering, g_PPAttribs.ToneMapping, fAveLogLum);
+// #else
+    //const float MinLumn = 0.01;
+    //float2 LogLum_W = GetWeightedLogLum(f3BackgroundColor + f3Inscttering, MinLumn);
+    f4Color.rgb = f3BackgroundColor + f3Inscttering;//f3BackgroundColor + f3Inscttering;//float3(LogLum_W.x, LogLum_W.y, 0.0);
+// #endif
     f4Color.a = 1.0;
 }

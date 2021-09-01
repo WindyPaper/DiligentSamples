@@ -130,7 +130,7 @@ struct EpipolarLightScatteringAttribs
     BOOL bOptimizeSampleLocations           DEFAULT_VALUE(TRUE);
     // Wether to enable light shafts or render unshadowed inscattering.
     // Setting this to FALSE increases performance, but reduces visual quality.
-    BOOL bEnableLightShafts                 DEFAULT_VALUE(TRUE);
+    BOOL bEnableLightShafts                 DEFAULT_VALUE(FALSE);
     // Number of inscattering integral steps taken when computing unshadowed inscattering (default is OK).
     uint uiInstrIntegralSteps               DEFAULT_VALUE(30);
     

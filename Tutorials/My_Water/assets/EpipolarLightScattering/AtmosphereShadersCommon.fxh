@@ -1,10 +1,17 @@
 #ifndef _ATMOSPHERE_SHADERS_COMMON_FXH_
 #define _ATMOSPHERE_SHADERS_COMMON_FXH_
 
-#include "FullScreenTriangleVSOutput.fxh"
-#include "ToneMappingStructures.fxh"
-#include "EpipolarLightScatteringStructures.fxh"
-#include "ShaderUtilities.fxh"
+//#include "EpipolarLightScattering/FullScreenTriangleVSOutput.fxh"
+//#include "ToneMappingStructures.fxh"
+#include "EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
+#include "EpipolarLightScattering/ShaderUtilities.fxh"
+
+struct FullScreenTriangleVSOutput
+{
+    float4 f4PixelPos     : SV_Position;   // Pixel position on the screen
+    float2 f2NormalizedXY : NORMALIZED_XY; // Normalized device XY coordinates [-1,1]x[-1,1]
+    float  fInstID        : INSTANCE_ID;
+};
 
 #define PI      3.1415928
 #define FLT_MAX 3.402823466e+38

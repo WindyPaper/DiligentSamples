@@ -1,7 +1,7 @@
 // MarkRayMarchingSamples.fx
 // Marks ray marching samples in the stencil by increasing stencil value and discarding all other samples
 
-#include "AtmosphereShadersCommon.fxh"
+#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 Texture2D<uint2>  g_tex2DInterpolationSource;
 

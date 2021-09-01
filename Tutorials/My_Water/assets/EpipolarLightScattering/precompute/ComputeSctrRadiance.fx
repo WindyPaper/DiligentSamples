@@ -1,4 +1,4 @@
-#include "AtmosphereShadersCommon.fxh"
+#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams
 {
@@ -8,9 +8,9 @@ cbuffer cbParticipatingMediaScatteringParams
 Texture2D<float2> g_tex2DOccludedNetDensityToAtmTop;
 SamplerState g_tex2DOccludedNetDensityToAtmTop_sampler;
 
-#include "LookUpTables.fxh"
-#include "PrecomputeCommon.fxh"
-#include "ScatteringIntegrals.fxh"
+#include "EpipolarLightScattering/LookUpTables.fxh"
+#include "EpipolarLightScattering/precompute/PrecomputeCommon.fxh"
+#include "EpipolarLightScattering/ScatteringIntegrals.fxh"
 
 Texture3D<float3> g_tex3DPreviousSctrOrder;
 SamplerState g_tex3DPreviousSctrOrder_sampler;

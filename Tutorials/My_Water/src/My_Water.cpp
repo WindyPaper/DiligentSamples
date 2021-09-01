@@ -77,9 +77,9 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
     // This tutorial will render to a single render target
     PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
     // Set render target format which is the format of the swap chain's color buffer
-    PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = m_pSwapChain->GetDesc().ColorBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.RTVFormats[0] = TEX_FORMAT_R11G11B10_FLOAT;// m_pSwapChain->GetDesc().ColorBufferFormat;
     // Use the depth buffer format from the swap chain
-    PSOCreateInfo.GraphicsPipeline.DSVFormat                    = m_pSwapChain->GetDesc().DepthBufferFormat;
+	PSOCreateInfo.GraphicsPipeline.DSVFormat = TEX_FORMAT_D32_FLOAT;// m_pSwapChain->GetDesc().DepthBufferFormat;
     // Primitive topology defines what kind of primitives will be rendered by this pipeline state
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
@@ -175,7 +175,7 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	//profile
 	gRenderProfileMgr.Initialize(m_pDevice, m_pImmediateContext);	
 
-	//water
+	//Ocean
 	m_Choppy = true;
 	mWaterTimer.Restart();
 	m_CSGroupSize = 32;
@@ -186,11 +186,25 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	m_pOceanWave->Init(WATER_FFT_N);
 	m_WaveSwellSetting[0] = new WaveDisplaySetting({1.0f, 0.5f, -30.0f, 100000.0f, 1.0f, 0.198f, 3.3f, 0.01f, 9.8f});
 	m_WaveSwellSetting[1] = new WaveDisplaySetting({0.555f, 1.0f, 0.0f, 300000.0f, 1.0f, 1.0f, 5.82f, 0.01f, 9.8f});
+
+	//sky
+	const auto& SCDesc = m_pSwapChain->GetDesc();
+	m_apSkyScattering.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
+
+	
 }
 
 // Render a frame
 void My_Water::Render()
 {
+	//set rt for sky atmosphere 
+	const float Zero[] = { 0.f, 0.f, 0.f, 0.f };
+	auto* pRTV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+	auto* pDSV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+	m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
 	//water
 	{
 		GPUProfileScope gpuscope(&gRenderProfileMgr, "WaterFFT");
@@ -202,12 +216,12 @@ void My_Water::Render()
 		GPUProfileScope gpuscope(&gRenderProfileMgr, "Water");
 
 		// Clear the back buffer
-		const float ClearColor[] = { 0.350f, 0.350f, 0.350f, 1.0f };
-		// Let the engine perform required state transitions
-		auto* pRTV = m_pSwapChain->GetCurrentBackBufferRTV();
-		auto* pDSV = m_pSwapChain->GetDepthBufferDSV();
-		m_pImmediateContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		//const float ClearColor[] = { 0.350f, 0.350f, 0.350f, 1.0f };
+		//// Let the engine perform required state transitions
+		//auto* pRTV = m_pSwapChain->GetCurrentBackBufferRTV();
+		//auto* pDSV = m_pSwapChain->GetDepthBufferDSV();
+		//m_pImmediateContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		//m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 		// Bind vertex and index buffers
 		Uint32   offset = 0;
@@ -248,6 +262,61 @@ void My_Water::Render()
 
 	//render debug view
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
+
+	//sky atmosphere sky
+	CameraAttribs CamAttribs;
+	CamAttribs.mViewT = m_Camera.GetViewMatrix().Transpose();
+	CamAttribs.mProjT = m_Camera.GetProjMatrix().Transpose();
+	CamAttribs.mViewProjT = m_Camera.GetViewProjMatrix().Transpose();
+	CamAttribs.mViewProjInvT = m_Camera.GetViewProjMatrix().Inverse().Transpose();
+	float fNearPlane = 0.f, fFarPlane = 0.f;
+	m_Camera.GetProjMatrix().GetNearFarClipPlanes(fNearPlane, fFarPlane, false);
+	CamAttribs.fNearPlaneZ = fNearPlane;
+	CamAttribs.fFarPlaneZ = fFarPlane * 0.999999f;
+	CamAttribs.f4Position = m_Camera.GetPos();
+	CamAttribs.f4ViewportSize.x = static_cast<float>(m_pSwapChain->GetDesc().Width);
+	CamAttribs.f4ViewportSize.y = static_cast<float>(m_pSwapChain->GetDesc().Height);
+	CamAttribs.f4ViewportSize.z = 1.f / CamAttribs.f4ViewportSize.x;
+	CamAttribs.f4ViewportSize.w = 1.f / CamAttribs.f4ViewportSize.y;
+
+	EpipolarLightScattering::FrameAttribs FrameAttribs;
+
+	FrameAttribs.pDevice = m_pDevice;
+	FrameAttribs.pDeviceContext = m_pImmediateContext;
+	//FrameAttribs.dElapsedTime = m_fElapsedTime;
+	LightAttribs lattris;
+	lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
+	lattris.f4AmbientLight = float4(1, 1, 1, 1);
+	lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
+	FrameAttribs.pLightAttribs = &lattris;
+	FrameAttribs.pCameraAttribs = &CamAttribs;	
+
+	/*FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
+	FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;	*/
+
+	m_PPAttribs.uiNumSamplesOnTheRayAtDepthBreak = 32u;
+
+	// During the ray marching, on each step we move by the texel size in either horz
+	// or vert direction. So resolution of min/max mipmap should be the same as the
+	// resolution of the original shadow map
+	//m_PPAttribs.uiMinMaxShadowMapResolution = m_ShadowSettings.Resolution;
+	m_PPAttribs.uiInitialSampleStepInSlice = std::min(m_PPAttribs.uiInitialSampleStepInSlice, m_PPAttribs.uiMaxSamplesInSlice);
+	m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
+
+	FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	FrameAttribs.ptex2DDstColorBufferRTV = m_pSwapChain->GetCurrentBackBufferRTV();
+	FrameAttribs.ptex2DDstDepthBufferDSV = m_pSwapChain->GetDepthBufferDSV();
+	//FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
+
+	// Begin new frame
+	m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
+
+	// Render the sun
+	m_apSkyScattering->RenderSun(pRTV->GetDesc().Format, pDSV->GetDesc().Format, 1);
+
+	// Perform the post processing
+	m_apSkyScattering->PerformPostProcessing();
 }
 
 void My_Water::Update(double CurrTime, double ElapsedTime)
@@ -342,6 +411,33 @@ void My_Water::WindowResize(Uint32 Width, Uint32 Height)
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
+
+	m_apSkyScattering->OnWindowResize(m_pDevice, Width, Height);
+	// Flush is required because Intel driver does not release resources until
+	// command buffer is flushed. When window is resized, WindowResize() is called for
+	// every intermediate window size, and light scattering object creates resources
+	// for the new size. This resources are then released by the light scattering object, but
+	// not by Intel driver, which results in memory exhaustion.
+	m_pImmediateContext->Flush();
+
+	m_pOffscreenColorBuffer.Release();
+	m_pOffscreenDepthBuffer.Release();
+
+	TextureDesc ColorBuffDesc;
+	ColorBuffDesc.Name = "Offscreen color buffer";
+	ColorBuffDesc.Type = RESOURCE_DIM_TEX_2D;
+	ColorBuffDesc.Width = Width;
+	ColorBuffDesc.Height = Height;
+	ColorBuffDesc.MipLevels = 1;
+	ColorBuffDesc.Format = TEX_FORMAT_R11G11B10_FLOAT;
+	ColorBuffDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+	m_pDevice->CreateTexture(ColorBuffDesc, nullptr, &m_pOffscreenColorBuffer);
+
+	TextureDesc DepthBuffDesc = ColorBuffDesc;
+	DepthBuffDesc.Name = "Offscreen depth buffer";
+	DepthBuffDesc.Format = TEX_FORMAT_D32_FLOAT;
+	DepthBuffDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_DEPTH_STENCIL;
+	m_pDevice->CreateTexture(DepthBuffDesc, nullptr, &m_pOffscreenDepthBuffer);
 }
 
 void My_Water::UpdateUI()

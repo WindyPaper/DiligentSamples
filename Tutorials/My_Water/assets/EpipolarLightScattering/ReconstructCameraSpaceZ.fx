@@ -2,7 +2,7 @@
 // Reconstructs camera space z from depth
 
 #include "BasicStructures.fxh"
-#include "AtmosphereShadersCommon.fxh"
+#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 Texture2D<float>  g_tex2DDepthBuffer;
 

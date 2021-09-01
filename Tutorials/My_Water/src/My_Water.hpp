@@ -200,6 +200,9 @@ private:
 
 	//Sky
 	std::unique_ptr<EpipolarLightScattering> m_apSkyScattering;
+	RefCntAutoPtr<ITexture> m_pOffscreenColorBuffer;
+	RefCntAutoPtr<ITexture> m_pOffscreenDepthBuffer;	
+	EpipolarLightScatteringAttribs m_PPAttribs;
 	
 	int m_Log2_N;
 	int m_CSGroupSize;
