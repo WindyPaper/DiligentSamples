@@ -207,13 +207,13 @@ void My_Water::Render()
 
 	//water
 	{
-		GPUProfileScope gpuscope(&gRenderProfileMgr, "WaterFFT");
+		GPUProfileScope gpuscope(&gRenderProfileMgr, "WaterFFT", Colors::peterRiver);
 		WaterRender();
 	}	
 
 	//water mesh
 	{
-		GPUProfileScope gpuscope(&gRenderProfileMgr, "Water");
+		GPUProfileScope gpuscope(&gRenderProfileMgr, "Water", Colors::alizarin);
 
 		// Clear the back buffer
 		//const float ClearColor[] = { 0.350f, 0.350f, 0.350f, 1.0f };
@@ -264,59 +264,66 @@ void My_Water::Render()
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
 
 	//sky atmosphere sky
-	CameraAttribs CamAttribs;
-	CamAttribs.mViewT = m_Camera.GetViewMatrix().Transpose();
-	CamAttribs.mProjT = m_Camera.GetProjMatrix().Transpose();
-	CamAttribs.mViewProjT = m_Camera.GetViewProjMatrix().Transpose();
-	CamAttribs.mViewProjInvT = m_Camera.GetViewProjMatrix().Inverse().Transpose();
-	float fNearPlane = 0.f, fFarPlane = 0.f;
-	m_Camera.GetProjMatrix().GetNearFarClipPlanes(fNearPlane, fFarPlane, false);
-	CamAttribs.fNearPlaneZ = fNearPlane;
-	CamAttribs.fFarPlaneZ = fFarPlane * 0.999999f;
-	CamAttribs.f4Position = m_Camera.GetPos();
-	CamAttribs.f4ViewportSize.x = static_cast<float>(m_pSwapChain->GetDesc().Width);
-	CamAttribs.f4ViewportSize.y = static_cast<float>(m_pSwapChain->GetDesc().Height);
-	CamAttribs.f4ViewportSize.z = 1.f / CamAttribs.f4ViewportSize.x;
-	CamAttribs.f4ViewportSize.w = 1.f / CamAttribs.f4ViewportSize.y;
+	{
+		GPUProfileScope gpuscope(&gRenderProfileMgr, "Atmosphere", Colors::amethyst);
 
-	EpipolarLightScattering::FrameAttribs FrameAttribs;
+		CameraAttribs CamAttribs;
+		CamAttribs.mViewT = m_Camera.GetViewMatrix().Transpose();
+		CamAttribs.mProjT = m_Camera.GetProjMatrix().Transpose();
+		CamAttribs.mViewProjT = m_Camera.GetViewProjMatrix().Transpose();
+		CamAttribs.mViewProjInvT = m_Camera.GetViewProjMatrix().Inverse().Transpose();
+		float fNearPlane = 0.f, fFarPlane = 0.f;
+		m_Camera.GetProjMatrix().GetNearFarClipPlanes(fNearPlane, fFarPlane, false);
+		CamAttribs.fNearPlaneZ = fNearPlane;
+		CamAttribs.fFarPlaneZ = fFarPlane * 0.999999f;
+		CamAttribs.f4Position = m_Camera.GetPos();
+		CamAttribs.f4ViewportSize.x = static_cast<float>(m_pSwapChain->GetDesc().Width);
+		CamAttribs.f4ViewportSize.y = static_cast<float>(m_pSwapChain->GetDesc().Height);
+		CamAttribs.f4ViewportSize.z = 1.f / CamAttribs.f4ViewportSize.x;
+		CamAttribs.f4ViewportSize.w = 1.f / CamAttribs.f4ViewportSize.y;
 
-	FrameAttribs.pDevice = m_pDevice;
-	FrameAttribs.pDeviceContext = m_pImmediateContext;
-	//FrameAttribs.dElapsedTime = m_fElapsedTime;
-	LightAttribs lattris;
-	lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
-	lattris.f4AmbientLight = float4(1, 1, 1, 1);
-	lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
-	FrameAttribs.pLightAttribs = &lattris;
-	FrameAttribs.pCameraAttribs = &CamAttribs;	
+		EpipolarLightScattering::FrameAttribs FrameAttribs;
 
-	/*FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
-	FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;	*/
+		FrameAttribs.pDevice = m_pDevice;
+		FrameAttribs.pDeviceContext = m_pImmediateContext;
+		//FrameAttribs.dElapsedTime = m_fElapsedTime;
+		LightAttribs lattris;
+		lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
+		lattris.f4AmbientLight = float4(1, 1, 1, 1);
+		float4 f4ExtraterrestrialSunColor = float4(10, 10, 10, 10);
+		lattris.f4Intensity = f4ExtraterrestrialSunColor; // *m_fScatteringScale;
+		lattris.f4AmbientLight = float4(0, 0, 0, 0);
+		//lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
+		FrameAttribs.pLightAttribs = &lattris;
+		FrameAttribs.pCameraAttribs = &CamAttribs;
 
-	m_PPAttribs.uiNumSamplesOnTheRayAtDepthBreak = 32u;
+		/*FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
+		FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;	*/
 
-	// During the ray marching, on each step we move by the texel size in either horz
-	// or vert direction. So resolution of min/max mipmap should be the same as the
-	// resolution of the original shadow map
-	//m_PPAttribs.uiMinMaxShadowMapResolution = m_ShadowSettings.Resolution;
-	m_PPAttribs.uiInitialSampleStepInSlice = std::min(m_PPAttribs.uiInitialSampleStepInSlice, m_PPAttribs.uiMaxSamplesInSlice);
-	m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
+		m_PPAttribs.uiNumSamplesOnTheRayAtDepthBreak = 32u;
 
-	FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-	FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-	FrameAttribs.ptex2DDstColorBufferRTV = m_pSwapChain->GetCurrentBackBufferRTV();
-	FrameAttribs.ptex2DDstDepthBufferDSV = m_pSwapChain->GetDepthBufferDSV();
-	//FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
+		// During the ray marching, on each step we move by the texel size in either horz
+		// or vert direction. So resolution of min/max mipmap should be the same as the
+		// resolution of the original shadow map
+		//m_PPAttribs.uiMinMaxShadowMapResolution = m_ShadowSettings.Resolution;
+		m_PPAttribs.uiInitialSampleStepInSlice = std::min(m_PPAttribs.uiInitialSampleStepInSlice, m_PPAttribs.uiMaxSamplesInSlice);
+		m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
 
-	// Begin new frame
-	m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
+		FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+		FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+		FrameAttribs.ptex2DDstColorBufferRTV = m_pSwapChain->GetCurrentBackBufferRTV();
+		FrameAttribs.ptex2DDstDepthBufferDSV = m_pSwapChain->GetDepthBufferDSV();
+		//FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
 
-	// Render the sun
-	m_apSkyScattering->RenderSun(pRTV->GetDesc().Format, pDSV->GetDesc().Format, 1);
+		// Begin new frame
+		m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
 
-	// Perform the post processing
-	m_apSkyScattering->PerformPostProcessing();
+		// Render the sun
+		m_apSkyScattering->RenderSun(pRTV->GetDesc().Format, pDSV->GetDesc().Format, 1);
+
+		// Perform the post processing
+		m_apSkyScattering->PerformPostProcessing();
+	}
 }
 
 void My_Water::Update(double CurrTime, double ElapsedTime)
@@ -452,7 +459,13 @@ void My_Water::UpdateUI()
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 
 		ImGui::gizmo3D("Directional Light", m_LightManager.DirLight.dir, ImGui::GetTextLineHeight() * 10);	
-		ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);		
+		ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);
+
+		if (ImGui::InputFloat("Aerosol Density", &m_PPAttribs.fAerosolDensityScale, 0.1f, 0.25f, "%.3f", ImGuiInputTextFlags_EnterReturnsTrue))
+			m_PPAttribs.fAerosolDensityScale = clamp(m_PPAttribs.fAerosolDensityScale, 0.1f, 10.0f);
+
+		if (ImGui::InputFloat("Aerosol Absorption", &m_PPAttribs.fAerosolAbsorbtionScale, 0.1f, 0.25f, "%.3f", ImGuiInputTextFlags_EnterReturnsTrue))
+			m_PPAttribs.fAerosolAbsorbtionScale = clamp(m_PPAttribs.fAerosolAbsorbtionScale, 0.0f, 10.0f);
 	}
 	ImGui::End();
 
