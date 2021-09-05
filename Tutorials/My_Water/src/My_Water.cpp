@@ -290,9 +290,9 @@ void My_Water::Render()
 		LightAttribs lattris;
 		lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
 		lattris.f4AmbientLight = float4(1, 1, 1, 1);
-		float4 f4ExtraterrestrialSunColor = float4(10, 10, 10, 10);
+		float4 f4ExtraterrestrialSunColor = float4(10, 10, 10, 10) * m_LightManager.DirLight.intensity;
 		lattris.f4Intensity = f4ExtraterrestrialSunColor; // *m_fScatteringScale;
-		lattris.f4AmbientLight = float4(0, 0, 0, 0);
+		//lattris.f4AmbientLight = float4(0, 0, 0, 0);
 		//lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
 		FrameAttribs.pLightAttribs = &lattris;
 		FrameAttribs.pCameraAttribs = &CamAttribs;
@@ -415,7 +415,7 @@ void My_Water::WindowResize(Uint32 Width, Uint32 Height)
 	float NearPlane = 0.1f;
 	float FarPlane = 100000.f;
 	float AspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
-	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
+	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 3.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
 
