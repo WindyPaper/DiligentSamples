@@ -2072,6 +2072,18 @@ void EpipolarLightScattering::CreateAmbientSkyLightTexture(IRenderDevice* pDevic
 void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                   frameAttribs,
                                                  EpipolarLightScatteringAttribs& PPAttribs)
 {
+	int DstBufW = frameAttribs.ptex2DDstColorBufferRTV->GetTexture()->GetDesc().Width;
+	int DstBufH = frameAttribs.ptex2DDstColorBufferRTV->GetTexture()->GetDesc().Height;
+	if (m_uiBackBufferWidth != DstBufW || \
+		m_uiBackBufferHeight != DstBufH)
+	{
+		m_uiBackBufferWidth = DstBufW;
+		m_uiBackBufferHeight = DstBufH;
+
+		if(m_ptex2DCamSpaceZRTV)
+			m_ptex2DCamSpaceZRTV.Release();
+	}
+	
     DEV_CHECK_ERR(frameAttribs.ptex2DSrcColorBufferSRV, "Source color buffer SRV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DSrcDepthBufferSRV, "Source depth buffer SRV must not be null");
     DEV_CHECK_ERR(frameAttribs.ptex2DDstColorBufferRTV, "Destination color buffer RTV must not be null");

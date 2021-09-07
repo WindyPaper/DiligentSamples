@@ -36,6 +36,7 @@
 
 #include "TextureLoader.h"
 #include "TextureUtilities.h"
+#include "GraphicsUtilities.h"
 #include "RenderDevice.h"
 #include "Image.h"
 
@@ -46,6 +47,7 @@
 #include "RenderProfile.h"
 
 #include "OceanWave.h"
+#include "ReflectionProbe.h"
 
 namespace Diligent
 {	
@@ -191,7 +193,9 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	const auto& SCDesc = m_pSwapChain->GetDesc();
 	m_apSkyScattering.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
 
-	
+	//cubemap
+	m_pReflectionProbe = new ReflectionProbe(float3(0.0f, 0.0f, 0.0f));
+	CreateGPUTexture();
 }
 
 // Render a frame
@@ -201,6 +205,16 @@ void My_Water::Render()
 	const float Zero[] = { 0.f, 0.f, 0.f, 0.f };
 	auto* pRTV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
 	auto* pDSV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+	//m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	//cube map
+	{
+		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Gen CubeMap", Colors::emerald);
+		CubeMapRender();
+	}
+
 	m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -213,7 +227,7 @@ void My_Water::Render()
 
 	//water mesh
 	{
-		GPUProfileScope gpuscope(&gRenderProfileMgr, "Water", Colors::alizarin);
+		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Water", Colors::alizarin);
 
 		// Clear the back buffer
 		//const float ClearColor[] = { 0.350f, 0.350f, 0.350f, 1.0f };
@@ -265,64 +279,66 @@ void My_Water::Render()
 
 	//sky atmosphere sky
 	{
-		GPUProfileScope gpuscope(&gRenderProfileMgr, "Atmosphere", Colors::amethyst);
+		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Atmosphere", Colors::amethyst);
 
-		CameraAttribs CamAttribs;
-		CamAttribs.mViewT = m_Camera.GetViewMatrix().Transpose();
-		CamAttribs.mProjT = m_Camera.GetProjMatrix().Transpose();
-		CamAttribs.mViewProjT = m_Camera.GetViewProjMatrix().Transpose();
-		CamAttribs.mViewProjInvT = m_Camera.GetViewProjMatrix().Inverse().Transpose();
-		float fNearPlane = 0.f, fFarPlane = 0.f;
-		m_Camera.GetProjMatrix().GetNearFarClipPlanes(fNearPlane, fFarPlane, false);
-		CamAttribs.fNearPlaneZ = fNearPlane;
-		CamAttribs.fFarPlaneZ = fFarPlane * 0.999999f;
-		CamAttribs.f4Position = m_Camera.GetPos();
-		CamAttribs.f4ViewportSize.x = static_cast<float>(m_pSwapChain->GetDesc().Width);
-		CamAttribs.f4ViewportSize.y = static_cast<float>(m_pSwapChain->GetDesc().Height);
-		CamAttribs.f4ViewportSize.z = 1.f / CamAttribs.f4ViewportSize.x;
-		CamAttribs.f4ViewportSize.w = 1.f / CamAttribs.f4ViewportSize.y;
+		//CameraAttribs CamAttribs;
+		//CamAttribs.mViewT = m_Camera.GetViewMatrix().Transpose();
+		//CamAttribs.mProjT = m_Camera.GetProjMatrix().Transpose();
+		//CamAttribs.mViewProjT = m_Camera.GetViewProjMatrix().Transpose();
+		//CamAttribs.mViewProjInvT = m_Camera.GetViewProjMatrix().Inverse().Transpose();
+		//float fNearPlane = 0.f, fFarPlane = 0.f;
+		//m_Camera.GetProjMatrix().GetNearFarClipPlanes(fNearPlane, fFarPlane, false);
+		//CamAttribs.fNearPlaneZ = fNearPlane;
+		//CamAttribs.fFarPlaneZ = fFarPlane * 0.999999f;
+		//CamAttribs.f4Position = m_Camera.GetPos();
+		//CamAttribs.f4ViewportSize.x = static_cast<float>(m_pSwapChain->GetDesc().Width);
+		//CamAttribs.f4ViewportSize.y = static_cast<float>(m_pSwapChain->GetDesc().Height);
+		//CamAttribs.f4ViewportSize.z = 1.f / CamAttribs.f4ViewportSize.x;
+		//CamAttribs.f4ViewportSize.w = 1.f / CamAttribs.f4ViewportSize.y;
 
-		EpipolarLightScattering::FrameAttribs FrameAttribs;
+		//EpipolarLightScattering::FrameAttribs FrameAttribs;
 
-		FrameAttribs.pDevice = m_pDevice;
-		FrameAttribs.pDeviceContext = m_pImmediateContext;
-		//FrameAttribs.dElapsedTime = m_fElapsedTime;
-		LightAttribs lattris;
-		lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
-		lattris.f4AmbientLight = float4(1, 1, 1, 1);
-		float4 f4ExtraterrestrialSunColor = float4(10, 10, 10, 10) * m_LightManager.DirLight.intensity;
-		lattris.f4Intensity = f4ExtraterrestrialSunColor; // *m_fScatteringScale;
-		//lattris.f4AmbientLight = float4(0, 0, 0, 0);
-		//lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
-		FrameAttribs.pLightAttribs = &lattris;
-		FrameAttribs.pCameraAttribs = &CamAttribs;
+		//FrameAttribs.pDevice = m_pDevice;
+		//FrameAttribs.pDeviceContext = m_pImmediateContext;
+		////FrameAttribs.dElapsedTime = m_fElapsedTime;
+		//LightAttribs lattris;
+		//lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
+		//lattris.f4AmbientLight = float4(1, 1, 1, 1);
+		//float4 f4ExtraterrestrialSunColor = float4(10, 10, 10, 10) * m_LightManager.DirLight.intensity;
+		//lattris.f4Intensity = f4ExtraterrestrialSunColor; // *m_fScatteringScale;
+		////lattris.f4AmbientLight = float4(0, 0, 0, 0);
+		////lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
+		//FrameAttribs.pLightAttribs = &lattris;
+		//FrameAttribs.pCameraAttribs = &CamAttribs;
 
-		/*FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
-		FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;	*/
+		///*FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
+		//FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;	*/
 
-		m_PPAttribs.uiNumSamplesOnTheRayAtDepthBreak = 32u;
+		//m_PPAttribs.uiNumSamplesOnTheRayAtDepthBreak = 32u;
 
-		// During the ray marching, on each step we move by the texel size in either horz
-		// or vert direction. So resolution of min/max mipmap should be the same as the
-		// resolution of the original shadow map
-		//m_PPAttribs.uiMinMaxShadowMapResolution = m_ShadowSettings.Resolution;
-		m_PPAttribs.uiInitialSampleStepInSlice = std::min(m_PPAttribs.uiInitialSampleStepInSlice, m_PPAttribs.uiMaxSamplesInSlice);
-		m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
+		//// During the ray marching, on each step we move by the texel size in either horz
+		//// or vert direction. So resolution of min/max mipmap should be the same as the
+		//// resolution of the original shadow map
+		////m_PPAttribs.uiMinMaxShadowMapResolution = m_ShadowSettings.Resolution;
+		//m_PPAttribs.uiInitialSampleStepInSlice = std::min(m_PPAttribs.uiInitialSampleStepInSlice, m_PPAttribs.uiMaxSamplesInSlice);
+		//m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
 
-		FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-		FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-		FrameAttribs.ptex2DDstColorBufferRTV = m_pSwapChain->GetCurrentBackBufferRTV();
-		FrameAttribs.ptex2DDstDepthBufferDSV = m_pSwapChain->GetDepthBufferDSV();
-		//FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
+		//FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+		//FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+		//FrameAttribs.ptex2DDstColorBufferRTV = m_pSwapChain->GetCurrentBackBufferRTV();
+		//FrameAttribs.ptex2DDstDepthBufferDSV = m_pSwapChain->GetDepthBufferDSV();
+		////FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
 
-		// Begin new frame
-		m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
+		//// Begin new frame
+		//m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
 
-		// Render the sun
-		m_apSkyScattering->RenderSun(pRTV->GetDesc().Format, pDSV->GetDesc().Format, 1);
+		//// Render the sun
+		//m_apSkyScattering->RenderSun(pRTV->GetDesc().Format, pDSV->GetDesc().Format, 1);
 
-		// Perform the post processing
-		m_apSkyScattering->PerformPostProcessing();
+		//// Perform the post processing
+		//m_apSkyScattering->PerformPostProcessing();
+
+		AtmosphereRender(&m_Camera, m_pSwapChain->GetCurrentBackBufferRTV(), m_pSwapChain->GetDepthBufferDSV());
 	}
 }
 
@@ -419,7 +435,7 @@ void My_Water::WindowResize(Uint32 Width, Uint32 Height)
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
 
-	m_apSkyScattering->OnWindowResize(m_pDevice, Width, Height);
+	//m_apSkyScattering->OnWindowResize(m_pDevice, Width, Height);
 	// Flush is required because Intel driver does not release resources until
 	// command buffer is flushed. When window is resized, WindowResize() is called for
 	// every intermediate window size, and light scattering object creates resources
@@ -531,7 +547,8 @@ void My_Water::UpdateProfileData()
 	gRenderProfileMgr.GetCPUProfileData(&pCPUData, CPUDataSize);
 	gRenderProfileMgr.GetGPUProfileData(&pGPUData, GPUDataSize);
 
-	mProfilersWindow.gpuGraph.LoadFrameData(pGPUData, GPUDataSize);
+	mProfilersWindow.cpuGraph.LoadFrameData(pCPUData, CPUDataSize);
+	mProfilersWindow.gpuGraph.LoadFrameData(pGPUData, GPUDataSize);	
 
 	mProfilersWindow.Render();
 
@@ -548,6 +565,126 @@ My_Water::~My_Water()
 
 	delete m_WaveSwellSetting[0];
 	delete m_WaveSwellSetting[1];
+
+	delete m_pReflectionProbe;
+}
+
+void My_Water::CreateGPUTexture()
+{
+	const int width = 128;
+
+	TextureDesc TexDesc;
+	TexDesc.Name = "Env cube map";
+	TexDesc.Type = RESOURCE_DIM_TEX_CUBE;
+	TexDesc.Usage = USAGE_DEFAULT;
+	TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+	TexDesc.Width = width;
+	TexDesc.Height = width;
+	TexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+	TexDesc.ArraySize = 6;
+	TexDesc.MipLevels = 0;
+
+	m_pDevice->CreateTexture(TexDesc, nullptr, &m_apEnvCubemap);
+
+	TextureDesc DepthBuffDesc;
+	DepthBuffDesc.Type = RESOURCE_DIM_TEX_2D;
+	DepthBuffDesc.Width = 128;
+	DepthBuffDesc.Height = 128;
+	DepthBuffDesc.MipLevels = 1;
+	DepthBuffDesc.Name = "render cubemap depth buffer";
+	DepthBuffDesc.Format = TEX_FORMAT_D32_FLOAT;
+	DepthBuffDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_DEPTH_STENCIL;
+	m_pDevice->CreateTexture(DepthBuffDesc, nullptr, &m_apEnvCubemapDepth);
+}
+
+void My_Water::CubeMapRender()
+{			
+	/*if (!m_apEnvMapAttribsCB)
+	{
+		CreateUniformBuffer(m_pDevice, sizeof(PrecomputeEnvMapAttribs), "env map attribs CB", &m_apEnvMapAttribsCB);
+	}*/
+
+	FirstPersonCamera *pCameras = m_pReflectionProbe->GetCameras();
+
+	for (int face = 0; face < 6; ++face)
+	{
+		TextureViewDesc RTVDesc(TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY);
+		RTVDesc.Name = "RTV for cube texture";
+		RTVDesc.FirstArraySlice = face;
+		RTVDesc.NumArraySlices = 1;
+		RefCntAutoPtr<ITextureView> pRTV;
+		m_apEnvCubemap->CreateView(RTVDesc, &pRTV);
+		ITextureView* ppRTVs[] = { pRTV };		
+
+		//set rt for cubemap rendering
+		const float Zero[] = { 0.f, 0.f, 0.f, 0.f };
+		auto* pDSV = m_apEnvCubemapDepth->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
+		m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		AtmosphereRender(&(pCameras[face]), pRTV, pDSV);
+	}
+}
+
+void My_Water::AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor, ITextureView *pDstDepth)
+{
+	CameraAttribs CamAttribs;
+	CamAttribs.mViewT = pCam->GetViewMatrix().Transpose();
+	CamAttribs.mProjT = pCam->GetProjMatrix().Transpose();
+	CamAttribs.mViewProjT = pCam->GetViewProjMatrix().Transpose();
+	CamAttribs.mViewProjInvT = pCam->GetViewProjMatrix().Inverse().Transpose();
+	float fNearPlane = 0.f, fFarPlane = 0.f;
+	pCam->GetProjMatrix().GetNearFarClipPlanes(fNearPlane, fFarPlane, false);
+	CamAttribs.fNearPlaneZ = fNearPlane;
+	CamAttribs.fFarPlaneZ = fFarPlane * 0.999999f;
+	CamAttribs.f4Position = pCam->GetPos();
+	CamAttribs.f4ViewportSize.x = pDstColor->GetTexture()->GetDesc().Width;// static_cast<float>(m_pSwapChain->GetDesc().Width);
+	CamAttribs.f4ViewportSize.y = pDstColor->GetTexture()->GetDesc().Height;// static_cast<float>(m_pSwapChain->GetDesc().Height);
+	CamAttribs.f4ViewportSize.z = 1.f / CamAttribs.f4ViewportSize.x;
+	CamAttribs.f4ViewportSize.w = 1.f / CamAttribs.f4ViewportSize.y;
+
+	EpipolarLightScattering::FrameAttribs FrameAttribs;
+
+	FrameAttribs.pDevice = m_pDevice;
+	FrameAttribs.pDeviceContext = m_pImmediateContext;
+	//FrameAttribs.dElapsedTime = m_fElapsedTime;
+	LightAttribs lattris;
+	lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
+	lattris.f4AmbientLight = float4(1, 1, 1, 1);
+	float4 f4ExtraterrestrialSunColor = float4(10, 10, 10, 10) * m_LightManager.DirLight.intensity;
+	lattris.f4Intensity = f4ExtraterrestrialSunColor; // *m_fScatteringScale;
+	//lattris.f4AmbientLight = float4(0, 0, 0, 0);
+	//lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
+	FrameAttribs.pLightAttribs = &lattris;
+	FrameAttribs.pCameraAttribs = &CamAttribs;
+
+	/*FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
+	FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;	*/
+
+	m_PPAttribs.uiNumSamplesOnTheRayAtDepthBreak = 32u;
+
+	// During the ray marching, on each step we move by the texel size in either horz
+	// or vert direction. So resolution of min/max mipmap should be the same as the
+	// resolution of the original shadow map
+	//m_PPAttribs.uiMinMaxShadowMapResolution = m_ShadowSettings.Resolution;
+	m_PPAttribs.uiInitialSampleStepInSlice = std::min(m_PPAttribs.uiInitialSampleStepInSlice, m_PPAttribs.uiMaxSamplesInSlice);
+	m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
+
+	FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	FrameAttribs.ptex2DDstColorBufferRTV = pDstColor; //m_pSwapChain->GetCurrentBackBufferRTV();
+	FrameAttribs.ptex2DDstDepthBufferDSV = pDstDepth;// m_pSwapChain->GetDepthBufferDSV();
+	//FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
+
+	// Begin new frame
+	m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
+
+	// Render the sun
+	m_apSkyScattering->RenderSun(pDstColor->GetDesc().Format, pDstDepth->GetDesc().Format, 1);
+
+	// Perform the post processing
+	m_apSkyScattering->PerformPostProcessing();
 }
 
 WaterTimer::WaterTimer()

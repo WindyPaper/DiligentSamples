@@ -46,6 +46,17 @@ namespace Diligent
 		RenderProfileMgr *m_pRenderProfileMgr;
 	};
 
+	class CPUAndGPUProfileScope
+	{
+	public:
+		CPUAndGPUProfileScope(RenderProfileMgr *pRenderProfileMgr, std::string name, uint32_t TextColor = Colors::orange);
+		~CPUAndGPUProfileScope();
+
+	private:
+		CPUProfileScope m_cpu;
+		GPUProfileScope m_gpu;
+	};
+
 	class RenderProfileMgr
 	{
 	public:
@@ -63,6 +74,9 @@ namespace Diligent
 
 		void GetCPUProfileData(ProfilerTask** pData, int& size);
 		void GetGPUProfileData(ProfilerTask** pData, int& size);
+
+	public:
+		std::chrono::high_resolution_clock::time_point FrameTime;
 
 	private:
 		/*std::unique_ptr<ScopedQueryHelper>   m_pPipelineStatsQuery;

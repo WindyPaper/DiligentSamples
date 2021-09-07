@@ -47,6 +47,7 @@ namespace Diligent
 class GroundMesh;
 class OceanWave;
 struct WaveDisplaySetting;
+class ReflectionProbe;
 
 struct TerrainVertexAttrData
 {
@@ -156,10 +157,18 @@ protected:
 	void UpdateProfileData();
 	void UpdateUI();
 	void CreateGridBuffer();
+	void CreateGPUTexture();
 
 	void ConvertToTextureView(IBuffer* pData, int width, int height, int Stride, ITexture** pRetTex);	
 
 	void WaterRender();
+
+	//Env 
+	void CubeMapRender();
+	void GetSkyDiffuse();
+	void GetSkySpec();
+
+	void AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor, ITextureView *pDstDepth);
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -203,6 +212,13 @@ private:
 	RefCntAutoPtr<ITexture> m_pOffscreenColorBuffer;
 	RefCntAutoPtr<ITexture> m_pOffscreenDepthBuffer;	
 	EpipolarLightScatteringAttribs m_PPAttribs;
+
+	//Env map
+	RefCntAutoPtr<IBuffer> m_apEnvMapAttribsCB;
+	RefCntAutoPtr<ITexture> m_apEnvCubemap;
+	RefCntAutoPtr<ITexture> m_apEnvCubemapDepth;
+	ReflectionProbe *m_pReflectionProbe;
+
 	
 	int m_Log2_N;
 	int m_CSGroupSize;

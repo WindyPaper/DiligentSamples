@@ -6,6 +6,7 @@ using hrc = std::chrono::high_resolution_clock;
 Diligent::CPUProfileScope::CPUProfileScope(RenderProfileMgr *pRenderProfileMgr, std::string name, uint32_t TextColor /*= Colors::orange*/)
 {
 	m_pProfilerTask = pRenderProfileMgr->GetCPUProfilerTask();
+	m_StartTime = pRenderProfileMgr->FrameTime;
 
 	m_pProfilerTask->startTime = GetCurrFrameTimeSeconds();
 	m_pProfilerTask->color = TextColor;
@@ -14,7 +15,7 @@ Diligent::CPUProfileScope::CPUProfileScope(RenderProfileMgr *pRenderProfileMgr, 
 
 Diligent::CPUProfileScope::~CPUProfileScope()
 {
-	m_pProfilerTask->endTime = GetCurrFrameTimeSeconds();
+	m_pProfilerTask->endTime = GetCurrFrameTimeSeconds();	
 }
 
 double Diligent::CPUProfileScope::GetCurrFrameTimeSeconds()
@@ -112,6 +113,8 @@ void Diligent::RenderProfileMgr::CleanProfileTask()
 {
 	m_CurrCPUProfileTaskIndex = 0;
 	m_CurrGPUProfileTaskIndex = 0;
+
+	FrameTime = hrc::now();
 }
 
 void Diligent::RenderProfileMgr::GetCPUProfileData(ProfilerTask** pData, int& size)
@@ -124,4 +127,16 @@ void Diligent::RenderProfileMgr::GetGPUProfileData(ProfilerTask** pData, int& si
 {
 	*pData = &m_GPUProfileTasks[0];
 	size = m_CurrGPUProfileTaskIndex;
+}
+
+Diligent::CPUAndGPUProfileScope::CPUAndGPUProfileScope(RenderProfileMgr *pRenderProfileMgr, std::string name, uint32_t TextColor /*= Colors::orange*/) :
+	m_cpu(pRenderProfileMgr, name, TextColor),
+	m_gpu(pRenderProfileMgr, name, TextColor)
+{
+
+}
+
+Diligent::CPUAndGPUProfileScope::~CPUAndGPUProfileScope()
+{
+
 }

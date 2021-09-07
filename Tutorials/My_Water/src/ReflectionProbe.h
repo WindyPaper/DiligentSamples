@@ -2,6 +2,7 @@
 #define _REFLECTION_PROBE_H_
 
 #include "BasicMath.hpp"
+#include "FirstPersonCamera.hpp"
 
 namespace Diligent
 {
@@ -11,8 +12,12 @@ namespace Diligent
 		ReflectionProbe(const float3& pos);
 		~ReflectionProbe();
 
+		FirstPersonCamera *GetCameras();
+
 	private:
 		float3 m_Pos;
+
+		FirstPersonCamera m_Cameras[6];
 	};
 }
 
