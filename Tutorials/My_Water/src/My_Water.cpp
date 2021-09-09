@@ -48,6 +48,7 @@
 
 #include "OceanWave.h"
 #include "ReflectionProbe.h"
+#include "CommonlyUsedStates.h"
 
 namespace Diligent
 {	
@@ -192,29 +193,26 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	//sky
 	const auto& SCDesc = m_pSwapChain->GetDesc();
 	m_apSkyScattering.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
+	m_apSkyScatteringCube.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, TEX_FORMAT_RGBA32_FLOAT, TEX_FORMAT_D32_FLOAT, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
 
 	//cubemap
-	m_pReflectionProbe = new ReflectionProbe(float3(0.0f, 0.0f, 0.0f));
+	m_pReflectionProbe = new ReflectionProbe(float3(0.0f, 5000.0f, 0.0f));
 	CreateGPUTexture();
 }
 
 // Render a frame
 void My_Water::Render()
 {
-	//set rt for sky atmosphere 
-	const float Zero[] = { 0.f, 0.f, 0.f, 0.f };
-	auto* pRTV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
-	auto* pDSV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
-	//m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	//m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-	//m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
 	//cube map
 	{
 		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Gen CubeMap", Colors::emerald);
 		CubeMapRender();
 	}
 
+	//set rt for sky atmosphere 
+	const float Zero[] = { 0.f, 0.f, 0.f, 0.f };
+	auto* pRTV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_RENDER_TARGET);
+	auto* pDSV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
 	m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 	m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -271,6 +269,7 @@ void My_Water::Render()
 		//WRenderData.pFoamDiffuseMap = mWaterData.FoamDiffuseTexture;
 		//WRenderData.pFoamMaskMap = m_apFFTFoamTexture;
 		WRenderData.pOceanWave = m_pOceanWave;
+		WRenderData.pDiffIrradianceMap = m_pIrradianceCubeSRV->GetTexture();
 		m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), WRenderData);
 	}
 
@@ -338,7 +337,7 @@ void My_Water::Render()
 		//// Perform the post processing
 		//m_apSkyScattering->PerformPostProcessing();
 
-		AtmosphereRender(&m_Camera, m_pSwapChain->GetCurrentBackBufferRTV(), m_pSwapChain->GetDepthBufferDSV());
+		AtmosphereRender(&m_Camera, m_pSwapChain->GetCurrentBackBufferRTV(), m_pSwapChain->GetDepthBufferDSV(), m_apSkyScattering.get());
 	}
 }
 
@@ -588,8 +587,8 @@ void My_Water::CreateGPUTexture()
 
 	TextureDesc DepthBuffDesc;
 	DepthBuffDesc.Type = RESOURCE_DIM_TEX_2D;
-	DepthBuffDesc.Width = 128;
-	DepthBuffDesc.Height = 128;
+	DepthBuffDesc.Width = width;
+	DepthBuffDesc.Height = width;
 	DepthBuffDesc.MipLevels = 1;
 	DepthBuffDesc.Name = "render cubemap depth buffer";
 	DepthBuffDesc.Format = TEX_FORMAT_D32_FLOAT;
@@ -598,7 +597,11 @@ void My_Water::CreateGPUTexture()
 }
 
 void My_Water::CubeMapRender()
-{			
+{		
+	if (m_PrecomputeEnvMapAttribsCB)
+	{
+		return;
+	}
 	/*if (!m_apEnvMapAttribsCB)
 	{
 		CreateUniformBuffer(m_pDevice, sizeof(PrecomputeEnvMapAttribs), "env map attribs CB", &m_apEnvMapAttribsCB);
@@ -617,17 +620,22 @@ void My_Water::CubeMapRender()
 		ITextureView* ppRTVs[] = { pRTV };		
 
 		//set rt for cubemap rendering
-		const float Zero[] = { 0.f, 0.f, 0.f, 0.f };
+		//const float Zero[] = { 0.f, 0.f, 0.f, 0.f };
 		auto* pDSV = m_apEnvCubemapDepth->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
 		m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		//m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		//m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-		AtmosphereRender(&(pCameras[face]), pRTV, pDSV);
+		AtmosphereRender(&(pCameras[face]), pRTV, pDSV, m_apSkyScatteringCube.get(), false);
 	}
+
+	//Generate sky light map
+	InitCubeMapFilterPSO();
+	GetSkyDiffuse();
+	GetSkySpec();
 }
 
-void My_Water::AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor, ITextureView *pDstDepth)
+void My_Water::AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor, ITextureView *pDstDepth, EpipolarLightScattering *pScattering, bool bNeedSun/* = true*/)
 {
 	CameraAttribs CamAttribs;
 	CamAttribs.mViewT = pCam->GetViewMatrix().Transpose();
@@ -678,13 +686,274 @@ void My_Water::AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor
 	//FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
 
 	// Begin new frame
-	m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
+	pScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
 
 	// Render the sun
-	m_apSkyScattering->RenderSun(pDstColor->GetDesc().Format, pDstDepth->GetDesc().Format, 1);
+	if(bNeedSun)
+		pScattering->RenderSun(m_pOffscreenColorBuffer->GetDesc().Format, m_pOffscreenDepthBuffer->GetDesc().Format, 1);
 
 	// Perform the post processing
-	m_apSkyScattering->PerformPostProcessing();
+	pScattering->PerformPostProcessing();
+}
+
+void My_Water::InitCubeMapFilterPSO()
+{	
+	TextureDesc TexDesc;
+	TexDesc.Name = "Irradiance cube map for GLTF renderer";
+	TexDesc.Type = RESOURCE_DIM_TEX_CUBE;
+	TexDesc.Usage = USAGE_DEFAULT;
+	TexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET;
+	TexDesc.Width = IrradianceCubeDim;
+	TexDesc.Height = IrradianceCubeDim;
+	TexDesc.Format = IrradianceCubeFmt;
+	TexDesc.ArraySize = 6;
+	TexDesc.MipLevels = 1;
+
+	RefCntAutoPtr<ITexture> IrradainceCubeTex;
+	m_pDevice->CreateTexture(TexDesc, nullptr, &IrradainceCubeTex);
+	m_pIrradianceCubeSRV = IrradainceCubeTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
+	TexDesc.Name = "Prefiltered environment map for GLTF renderer";
+	TexDesc.Width = PrefilteredEnvMapDim;
+	TexDesc.Height = PrefilteredEnvMapDim;
+	TexDesc.Format = PrefilteredEnvMapFmt;
+	RefCntAutoPtr<ITexture> PrefilteredEnvMapTex;
+	m_pDevice->CreateTexture(TexDesc, nullptr, &PrefilteredEnvMapTex);
+	m_pPrefilteredEnvMapSRV = PrefilteredEnvMapTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+
+	if (!m_PrecomputeEnvMapAttribsCB)
+	{
+		CreateUniformBuffer(m_pDevice, sizeof(PrecomputeEnvMapAttribs), "Precompute env map attribs CB", &m_PrecomputeEnvMapAttribsCB);
+	}
+
+	ShaderCreateInfo ShaderCI;
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	ShaderCI.UseCombinedTextureSamplers = true;
+	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;// &DiligentFXShaderSourceStreamFactory::GetInstance();
+
+	{
+		ShaderMacroHelper Macros;
+		Macros.AddShaderMacro("NUM_PHI_SAMPLES", 64);
+		Macros.AddShaderMacro("NUM_THETA_SAMPLES", 32);
+		ShaderCI.Macros = Macros;
+		RefCntAutoPtr<IShader> pVS;
+		{
+			ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
+			ShaderCI.EntryPoint = "main";
+			ShaderCI.Desc.Name = "Cubemap face VS";
+			ShaderCI.FilePath = "CubemapFace.vsh";
+			m_pDevice->CreateShader(ShaderCI, &pVS);
+		}
+
+		// Create pixel shader
+		RefCntAutoPtr<IShader> pPS;
+		{
+			ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
+			ShaderCI.EntryPoint = "main";
+			ShaderCI.Desc.Name = "Precompute irradiance cube map PS";
+			ShaderCI.FilePath = "ComputeIrradianceMap.psh";
+			m_pDevice->CreateShader(ShaderCI, &pPS);
+		}
+
+		GraphicsPipelineStateCreateInfo PSOCreateInfo;
+		PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
+		GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+		PSODesc.Name = "Precompute irradiance cube PSO";
+		PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
+
+		GraphicsPipeline.NumRenderTargets = 1;
+		GraphicsPipeline.RTVFormats[0] = IrradianceCubeFmt;
+		GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+		GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+		GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+
+		PSOCreateInfo.pVS = pVS;
+		PSOCreateInfo.pPS = pPS;
+
+		PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+		// clang-format off
+		ShaderResourceVariableDesc Vars[] =
+		{
+			{SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
+		};
+		// clang-format on
+		PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+		PSODesc.ResourceLayout.Variables = Vars;
+
+		// clang-format off
+		ImmutableSamplerDesc ImtblSamplers[] =
+		{
+			{SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp}
+		};
+		// clang-format on
+		PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+		PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+
+		m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrecomputeIrradianceCubePSO);
+		m_pPrecomputeIrradianceCubePSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
+		m_pPrecomputeIrradianceCubePSO->CreateShaderResourceBinding(&m_pPrecomputeIrradianceCubeSRB, true);
+	}
+
+	//Specular
+	{
+		ShaderMacroHelper Macros;
+		Macros.AddShaderMacro("OPTIMIZE_SAMPLES", 1);
+		ShaderCI.Macros = Macros;
+
+		RefCntAutoPtr<IShader> pVS;
+		{
+			ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
+			ShaderCI.EntryPoint = "main";
+			ShaderCI.Desc.Name = "Cubemap face VS";
+			ShaderCI.FilePath = "CubemapFace.vsh";
+			m_pDevice->CreateShader(ShaderCI, &pVS);
+		}
+
+		// Create pixel shader
+		RefCntAutoPtr<IShader> pPS;
+		{
+			ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
+			ShaderCI.EntryPoint = "main";
+			ShaderCI.Desc.Name = "Prefilter environment map PS";
+			ShaderCI.FilePath = "PrefilterEnvMap.psh";
+			m_pDevice->CreateShader(ShaderCI, &pPS);
+		}
+
+		GraphicsPipelineStateCreateInfo PSOCreateInfo;
+		PipelineStateDesc&              PSODesc = PSOCreateInfo.PSODesc;
+		GraphicsPipelineDesc&           GraphicsPipeline = PSOCreateInfo.GraphicsPipeline;
+
+		PSODesc.Name = "Prefilter environment map PSO";
+		PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS;
+
+		GraphicsPipeline.NumRenderTargets = 1;
+		GraphicsPipeline.RTVFormats[0] = PrefilteredEnvMapFmt;
+		GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+		GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_NONE;
+		GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+
+		PSOCreateInfo.pVS = pVS;
+		PSOCreateInfo.pPS = pPS;
+
+		PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+		// clang-format off
+		ShaderResourceVariableDesc Vars[] =
+		{
+			{SHADER_TYPE_PIXEL, "g_EnvironmentMap", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
+		};
+		// clang-format on
+		PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+		PSODesc.ResourceLayout.Variables = Vars;
+
+		// clang-format off
+		ImmutableSamplerDesc ImtblSamplers[] =
+		{
+			{SHADER_TYPE_PIXEL, "g_EnvironmentMap", Sam_LinearClamp}
+		};
+		// clang-format on
+		PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+		PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+
+		m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPrefilterEnvMapPSO);
+		m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "cbTransform")->Set(m_PrecomputeEnvMapAttribsCB);
+		m_pPrefilterEnvMapPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "FilterAttribs")->Set(m_PrecomputeEnvMapAttribsCB);
+		m_pPrefilterEnvMapPSO->CreateShaderResourceBinding(&m_pPrefilterEnvMapSRB, true);
+	}	
+}
+
+void My_Water::GetSkyDiffuse()
+{
+	const std::array<float4x4, 6> Matrices =
+	{
+		/* +X */ float4x4::RotationY(+PI_F / 2.f),
+		/* -X */ float4x4::RotationY(-PI_F / 2.f),
+		/* +Y */ float4x4::RotationX(-PI_F / 2.f),
+		/* -Y */ float4x4::RotationX(+PI_F / 2.f),
+		/* +Z */ float4x4::Identity(),
+		/* -Z */ float4x4::RotationY(PI_F)
+	};
+
+	m_pImmediateContext->SetPipelineState(m_pPrecomputeIrradianceCubePSO);
+	m_pPrecomputeIrradianceCubeSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(m_apEnvCubemap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	m_pImmediateContext->CommitShaderResources(m_pPrecomputeIrradianceCubeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	auto*       pIrradianceCube = m_pIrradianceCubeSRV->GetTexture();
+	const auto& IrradianceCubeDesc = pIrradianceCube->GetDesc();
+	for (Uint32 mip = 0; mip < IrradianceCubeDesc.MipLevels; ++mip)
+	{
+		for (Uint32 face = 0; face < 6; ++face)
+		{
+			TextureViewDesc RTVDesc(TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY);
+			RTVDesc.Name = "RTV for irradiance cube texture";
+			RTVDesc.MostDetailedMip = mip;
+			RTVDesc.FirstArraySlice = face;
+			RTVDesc.NumArraySlices = 1;
+			RefCntAutoPtr<ITextureView> pRTV;
+			pIrradianceCube->CreateView(RTVDesc, &pRTV);
+			ITextureView* ppRTVs[] = { pRTV };
+			m_pImmediateContext->SetRenderTargets(_countof(ppRTVs), ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+			{
+				MapHelper<PrecomputeEnvMapAttribs> Attribs(m_pImmediateContext, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD);
+				Attribs->Rotation = Matrices[face];
+			}
+			DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);
+			m_pImmediateContext->Draw(drawAttrs);
+		}
+	}
+}
+
+void My_Water::GetSkySpec()
+{
+	const std::array<float4x4, 6> Matrices =
+	{
+		/* +X */ float4x4::RotationY(+PI_F / 2.f),
+		/* -X */ float4x4::RotationY(-PI_F / 2.f),
+		/* +Y */ float4x4::RotationX(-PI_F / 2.f),
+		/* -Y */ float4x4::RotationX(+PI_F / 2.f),
+		/* +Z */ float4x4::Identity(),
+		/* -Z */ float4x4::RotationY(PI_F)
+	};
+
+	m_pImmediateContext->SetPipelineState(m_pPrefilterEnvMapPSO);
+	m_pPrefilterEnvMapSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_EnvironmentMap")->Set(m_apEnvCubemap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	m_pImmediateContext->CommitShaderResources(m_pPrefilterEnvMapSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	auto*       pPrefilteredEnvMap = m_pPrefilteredEnvMapSRV->GetTexture();
+	const auto& PrefilteredEnvMapDesc = pPrefilteredEnvMap->GetDesc();
+	for (Uint32 mip = 0; mip < PrefilteredEnvMapDesc.MipLevels; ++mip)
+	{
+		for (Uint32 face = 0; face < 6; ++face)
+		{
+			TextureViewDesc RTVDesc(TEXTURE_VIEW_RENDER_TARGET, RESOURCE_DIM_TEX_2D_ARRAY);
+			RTVDesc.Name = "RTV for prefiltered env map cube texture";
+			RTVDesc.MostDetailedMip = mip;
+			RTVDesc.FirstArraySlice = face;
+			RTVDesc.NumArraySlices = 1;
+			RefCntAutoPtr<ITextureView> pRTV;
+			pPrefilteredEnvMap->CreateView(RTVDesc, &pRTV);
+			ITextureView* ppRTVs[] = { pRTV };
+			m_pImmediateContext->SetRenderTargets(_countof(ppRTVs), ppRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+			{
+				MapHelper<PrecomputeEnvMapAttribs> Attribs(m_pImmediateContext, m_PrecomputeEnvMapAttribsCB, MAP_WRITE, MAP_FLAG_DISCARD);
+				Attribs->Rotation = Matrices[face];
+				Attribs->Roughness = static_cast<float>(mip) / static_cast<float>(PrefilteredEnvMapDesc.MipLevels);
+				Attribs->EnvMapDim = static_cast<float>(PrefilteredEnvMapDesc.Width);
+				Attribs->NumSamples = 256;
+			}
+
+			DrawAttribs drawAttrs(4, DRAW_FLAG_VERIFY_ALL);
+			m_pImmediateContext->Draw(drawAttrs);
+		}
+	}
+
+	// clang-format off
+	StateTransitionDesc Barriers[] =
+	{
+		{m_pPrefilteredEnvMapSRV->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true},
+		{m_pIrradianceCubeSRV->GetTexture(),    RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_SHADER_RESOURCE, true}
+	};
+	// clang-format on
+	m_pImmediateContext->TransitionResourceStates(_countof(Barriers), Barriers);
 }
 
 WaterTimer::WaterTimer()

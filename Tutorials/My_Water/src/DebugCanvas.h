@@ -12,8 +12,8 @@
 namespace Diligent
 {
 	struct IRenderDevice;
-	class ISwapChain;
-	class IDeviceContext;
+	struct ISwapChain;
+	struct IDeviceContext;
 	class FirstPersonCamera;
 	struct IShaderSourceInputStreamFactory;
 

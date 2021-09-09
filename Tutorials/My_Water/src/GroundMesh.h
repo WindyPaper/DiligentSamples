@@ -56,10 +56,12 @@ namespace Diligent
 	struct WaterRenderData
 	{
 		float4 L_RepeatScale_NormalIntensity_N;
-		ITexture *pHeightMap;
+		/*ITexture *pHeightMap;
 		ITexture *pFoamMaskMap;
 		ITexture *pFoamDiffuseMap;
-		ITexture *pDetailNormalMap;
+		ITexture *pDetailNormalMap;*/
+
+		ITexture *pDiffIrradianceMap;
 
 		OceanWave *pOceanWave;
 	};

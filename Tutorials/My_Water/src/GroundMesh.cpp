@@ -276,6 +276,12 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, const Wa
 			{
 				pShaderHM->Set(OceanRenderShaderParams.OceanRenderTexs[2].pTurb->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 			}
+			//lighting tex
+			pShaderHM = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_IrradianceCube");
+			if (pShaderHM)
+			{
+				pShaderHM->Set(WRenderData.pDiffIrradianceMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+			}
 			CBConstants->LengthScale0 = OceanRenderShaderParams.LengthScales[0];
 			CBConstants->LengthScale1 = OceanRenderShaderParams.LengthScales[1];
 			CBConstants->LengthScale2 = OceanRenderShaderParams.LengthScales[2];
@@ -486,7 +492,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		{SHADER_TYPE_PIXEL, "g_derivatives_texL2", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
 		{SHADER_TYPE_PIXEL, "g_turbulence_texL0", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
 		{SHADER_TYPE_PIXEL, "g_turbulence_texL1", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
-		{SHADER_TYPE_PIXEL, "g_turbulence_texL2", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL2", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+		{SHADER_TYPE_PIXEL, "g_IrradianceCube", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE}
 	};
 	// clang-format on
 	ResourceLayout.Variables = Vars;
@@ -514,7 +521,8 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		{SHADER_TYPE_PIXEL, "g_derivatives_texL2", SamAnisoWrapDesc},
 		{SHADER_TYPE_PIXEL, "g_turbulence_texL0", SamAnisoWrapDesc},
 		{SHADER_TYPE_PIXEL, "g_turbulence_texL1", SamAnisoWrapDesc},
-		{SHADER_TYPE_PIXEL, "g_turbulence_texL2", SamAnisoWrapDesc}
+		{SHADER_TYPE_PIXEL, "g_turbulence_texL2", SamAnisoWrapDesc},
+		{SHADER_TYPE_PIXEL, "g_IrradianceCube", SamLinearWrapDesc}
 	};
 	// clang-format on
 	ResourceLayout.ImmutableSamplers = ImtblSamplers;

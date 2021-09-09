@@ -139,6 +139,16 @@ struct WaterRenderParam
 	}
 };
 
+struct PrecomputeEnvMapAttribs
+{
+	float4x4 Rotation;
+
+	float Roughness;
+	float EnvMapDim;
+	uint  NumSamples;
+	float Dummy;
+};
+
 class My_Water final : public SampleBase
 {
 public:
@@ -165,10 +175,11 @@ protected:
 
 	//Env 
 	void CubeMapRender();
+	void InitCubeMapFilterPSO();
 	void GetSkyDiffuse();
 	void GetSkySpec();
 
-	void AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor, ITextureView *pDstDepth);
+	void AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor, ITextureView *pDstDepth, EpipolarLightScattering *pScattering, bool bNeedSun = true);
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
@@ -209,6 +220,7 @@ private:
 
 	//Sky
 	std::unique_ptr<EpipolarLightScattering> m_apSkyScattering;
+	std::unique_ptr<EpipolarLightScattering> m_apSkyScatteringCube;
 	RefCntAutoPtr<ITexture> m_pOffscreenColorBuffer;
 	RefCntAutoPtr<ITexture> m_pOffscreenDepthBuffer;	
 	EpipolarLightScatteringAttribs m_PPAttribs;
@@ -219,6 +231,17 @@ private:
 	RefCntAutoPtr<ITexture> m_apEnvCubemapDepth;
 	ReflectionProbe *m_pReflectionProbe;
 
+	static constexpr TEXTURE_FORMAT IrradianceCubeFmt = TEX_FORMAT_RGBA32_FLOAT;
+	static constexpr TEXTURE_FORMAT PrefilteredEnvMapFmt = TEX_FORMAT_RGBA16_FLOAT;
+	static constexpr Uint32         IrradianceCubeDim = 64;
+	static constexpr Uint32         PrefilteredEnvMapDim = 256;
+	RefCntAutoPtr<ITextureView>           m_pIrradianceCubeSRV;
+	RefCntAutoPtr<ITextureView>           m_pPrefilteredEnvMapSRV;
+	RefCntAutoPtr<IPipelineState>         m_pPrecomputeIrradianceCubePSO;
+	RefCntAutoPtr<IPipelineState>         m_pPrefilterEnvMapPSO;
+	RefCntAutoPtr<IShaderResourceBinding> m_pPrecomputeIrradianceCubeSRB;
+	RefCntAutoPtr<IShaderResourceBinding> m_pPrefilterEnvMapSRB;
+	RefCntAutoPtr<IBuffer> m_PrecomputeEnvMapAttribsCB;
 	
 	int m_Log2_N;
 	int m_CSGroupSize;

@@ -16,8 +16,8 @@
 
 namespace Diligent
 {
-	class IDeviceContext;
-	class IRenderDevice;
+	struct IDeviceContext;
+	struct IRenderDevice;
 
 	class RenderProfileMgr;
 

@@ -40,6 +40,9 @@ SamplerState g_turbulence_texL1_sampler;
 Texture2D g_turbulence_texL2;
 SamplerState g_turbulence_texL2_sampler;
 
+TextureCube g_IrradianceCube;
+SamplerState g_IrradianceCube_sampler;
+
 cbuffer cbLightStructure
 {
     XLightStructure g_LightStructure;
@@ -112,7 +115,9 @@ void main(in  PSInput  PSIn,
     float3 DirectLighting = PBR_ApplyDirectionalLight(LightDir, DLIntensity, SrfInfo, WorldNormal, ViewDir);
 
 
-    PSOut.Color.rgb = DirectLighting;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;
+    float3 IndirectedDiff = g_IrradianceCube.Sample(g_IrradianceCube_sampler, WorldNormal).rgb;
+
+    PSOut.Color.rgb = DirectLighting + IndirectedDiff * 10000000.0;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
 
     //degamma
     //PSOut.Color.rgb = pow(PSOut.Color.rgb, 2.2);

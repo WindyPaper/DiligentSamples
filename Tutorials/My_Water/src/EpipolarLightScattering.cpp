@@ -2342,7 +2342,7 @@ void EpipolarLightScattering::PrepareForNewFrame(FrameAttribs&                  
 
     if (m_PostProcessingAttribs.bEnableLightShafts && m_PostProcessingAttribs.bUse1DMinMaxTree && !m_ptex2DMinMaxShadowMapSRV[0])
     {
-        CreateMinMaxShadowMap(m_FrameAttribs.pDevice);
+        //CreateMinMaxShadowMap(m_FrameAttribs.pDevice);
     }
 
     {
@@ -2453,30 +2453,11 @@ void EpipolarLightScattering::PerformPostProcessing()
             FixInscatteringAtDepthBreaks(m_PostProcessingAttribs.uiNumSamplesOnTheRayAtDepthBreak, EFixInscatteringMode::FixInscattering);
         }
 
-        if (m_PostProcessingAttribs.bShowSampling)
+       /* if (m_PostProcessingAttribs.bShowSampling)
         {
             RenderSampleLocations();
-        }
-    }
-    //else if (m_PostProcessingAttribs.iLightSctrTechnique == LIGHT_SCTR_TECHNIQUE_BRUTE_FORCE)
-    //{
-        //if (m_PostProcessingAttribs.ToneMapping.bAutoExposure)
-        //{
-        //    // Render scene luminance to low-resolution texture
-        //    ITextureView* pRTVs[] = {m_ptex2DLowResLuminanceRTV};
-        //    m_FrameAttribs.pDeviceContext->SetRenderTargets(_countof(pRTVs), pRTVs, nullptr, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-        //    FixInscatteringAtDepthBreaks(m_PostProcessingAttribs.uiMaxSamplesOnTheRay, EFixInscatteringMode::LuminanceOnly);
-        //    m_FrameAttribs.pDeviceContext->GenerateMips(m_ptex2DLowResLuminanceSRV);
-
-        //    UpdateAverageLuminance();
-        //}
-
-        // Set the main back & depth buffers
-        //m_FrameAttribs.pDeviceContext->SetRenderTargets(1, &m_FrameAttribs.ptex2DDstColorBufferRTV, m_FrameAttribs.ptex2DDstDepthBufferDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-        //FixInscatteringAtDepthBreaks(m_PostProcessingAttribs.uiMaxSamplesOnTheRay, EFixInscatteringMode::FullScreenRayMarching);
-    //}
+        }*/
+    }    
 }
 
 
