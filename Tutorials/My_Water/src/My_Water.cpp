@@ -624,7 +624,7 @@ void My_Water::CubeMapRender()
 		auto* pDSV = m_apEnvCubemapDepth->GetDefaultView(TEXTURE_VIEW_DEPTH_STENCIL);
 		m_pImmediateContext->SetRenderTargets(1, &pRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 		//m_pImmediateContext->ClearRenderTarget(pRTV, Zero, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		//m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 		AtmosphereRender(&(pCameras[face]), pRTV, pDSV, m_apSkyScatteringCube.get(), false);
 	}
@@ -680,7 +680,15 @@ void My_Water::AtmosphereRender(FirstPersonCamera *pCam, ITextureView *pDstColor
 	m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
 
 	FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-	FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	if (bNeedSun)
+	{
+		FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	}
+	else
+	{
+		FrameAttribs.ptex2DSrcDepthBufferSRV = pDstDepth->GetTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);//m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	}
+	
 	FrameAttribs.ptex2DDstColorBufferRTV = pDstColor; //m_pSwapChain->GetCurrentBackBufferRTV();
 	FrameAttribs.ptex2DDstDepthBufferDSV = pDstDepth;// m_pSwapChain->GetDepthBufferDSV();
 	//FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();

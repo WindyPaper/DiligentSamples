@@ -117,7 +117,8 @@ void main(in  PSInput  PSIn,
 
     float3 IndirectedDiff = g_IrradianceCube.Sample(g_IrradianceCube_sampler, WorldNormal).rgb;
 
-    PSOut.Color.rgb = DirectLighting + IndirectedDiff * 10000000.0;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
+    //PSOut.Color.rgb = DirectLighting;// + IndirectedDiff * 10000000.0;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
+    PSOut.Color.rgb = DirectLighting * 1.000001f + IndirectedDiff * 1.0f;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
 
     //degamma
     //PSOut.Color.rgb = pow(PSOut.Color.rgb, 2.2);
