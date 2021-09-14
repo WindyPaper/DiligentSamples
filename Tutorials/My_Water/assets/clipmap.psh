@@ -43,6 +43,9 @@ SamplerState g_turbulence_texL2_sampler;
 TextureCube g_IrradianceCube;
 SamplerState g_IrradianceCube_sampler;
 
+TextureCube g_IBLSpecCube;
+SamplerState g_IBLSpecCube_sampler;
+
 cbuffer cbLightStructure
 {
     XLightStructure g_LightStructure;
@@ -99,7 +102,7 @@ void main(in  PSInput  PSIn,
                 + g_turbulence_texL2.Sample(g_turbulence_texL2_sampler, PSIn.UV / LengthScale2).x;
     jacobian = min(1, max(0, (-jacobian + 2.52f) * 2.4f));
 
-    float3 Albedo = lerp(0.1, 1, jacobian);
+    float3 Albedo = lerp(0.1, 5, jacobian);
     float _Roughness = 0.3f;
     float _RoughnessScale = 0.004f;
     float _MaxGloss = 0.9f;
@@ -115,13 +118,17 @@ void main(in  PSInput  PSIn,
     float3 DirectLighting = PBR_ApplyDirectionalLight(LightDir, DLIntensity, SrfInfo, WorldNormal, ViewDir);
 
 
-    float3 IndirectedDiff = g_IrradianceCube.Sample(g_IrradianceCube_sampler, WorldNormal).rgb;
+    //float3 IndirectedDiff = g_IrradianceCube.Sample(g_IrradianceCube_sampler, WorldNormal).rgb;
 
     //PSOut.Color.rgb = DirectLighting;// + IndirectedDiff * 10000000.0;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
-    PSOut.Color.rgb = DirectLighting * 1.000001f + IndirectedDiff * 1.0f;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
+    //PSOut.Color.rgb = DirectLighting * 1.000001f + IndirectedDiff * 1.0f;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
 
-    //degamma
-    //PSOut.Color.rgb = pow(PSOut.Color.rgb, 2.2);
+    //IBL Lighting
+    PBR_IBL_Contribution IBLLighting = PBR_GetIBLContribution(SrfInfo, WorldNormal, ViewDir, 8, \
+        g_IrradianceCube, g_IrradianceCube_sampler, g_IBLSpecCube, g_IBLSpecCube_sampler);
+
+    float3 IndirectedLighting = IBLLighting.f3Diffuse + IBLLighting.f3Specular;
+    PSOut.Color.rgb = DirectLighting * 1.000001f + IndirectedLighting * 1.0f;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
 
     PSOut.Color.a = 1.0;
 

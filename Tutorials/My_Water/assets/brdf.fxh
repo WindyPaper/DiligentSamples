@@ -244,3 +244,63 @@ float3 PBR_ApplyDirectionalLight(float3 lightDir, float3 lightColor, SurfaceRefl
     float3 shade = (diffuseContrib + specContrib) * NdotL;
     return lightColor * shade;
 }
+
+float EnvBRDFApproxNonmetal( float Roughness, float NoV )
+{
+    // Same as EnvBRDFApprox( 0.04, Roughness, NoV )
+    const float2 c0 = { -1, -0.0275 };
+    const float2 c1 = { 1, 0.0425 };
+    half2 r = Roughness * c0 + c1;
+    return min( r.x * r.x, exp2( -9.28 * NoV ) ) * r.x + r.y;
+}
+
+struct PBR_IBL_Contribution
+{
+    float3 f3Diffuse;
+    float3 f3Specular;
+};
+
+// Calculation of the lighting contribution from an optional Image Based Light source.
+// Precomputed Environment Maps are required uniform inputs and are computed as outlined in [1].
+// See our README.md on Environment Maps [3] for additional discussion.
+PBR_IBL_Contribution PBR_GetIBLContribution(
+                        in SurfaceReflectanceInfo SrfInfo,
+                        in float3                 n,
+                        in float3                 v,
+                        in float                  PrefilteredCubeMipLevels,
+                        in TextureCube            IrradianceMap,
+                        in SamplerState           IrradianceMap_sampler,
+                        in TextureCube            PrefilteredEnvMap,
+                        in SamplerState           PrefilteredEnvMap_sampler)
+{
+    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+
+    float lod = clamp(SrfInfo.PerceptualRoughness * PrefilteredCubeMipLevels, 0.0, PrefilteredCubeMipLevels);
+    float3 reflection = normalize(reflect(-v, n));
+
+    //float2 brdfSamplePoint = clamp(float2(NdotV, SrfInfo.PerceptualRoughness), float2(0.0, 0.0), float2(1.0, 1.0));
+    // retrieve a scale and bias to F0. See [1], Figure 3
+    float brdf_ibl = EnvBRDFApproxNonmetal(SrfInfo.PerceptualRoughness, NdotV);
+
+    float4 diffuseSample = IrradianceMap.Sample(IrradianceMap_sampler, n);
+
+//#ifdef GLTF_PBR_USE_ENV_MAP_LOD
+    float4 specularSample = PrefilteredEnvMap.SampleLevel(PrefilteredEnvMap_sampler, reflection, lod);
+//#else
+    //float4 specularSample = PrefilteredEnvMap.Sample(PrefilteredEnvMap_sampler, reflection);
+//#endif
+
+//#ifdef GLTF_PBR_USE_HDR_CUBEMAPS
+    // Already linear.
+    float3 diffuseLight  = diffuseSample.rgb;
+    float3 specularLight = specularSample.rgb;
+//#else
+    //float3 diffuseLight  = SRGBtoLINEAR(diffuseSample).rgb;
+    //float3 specularLight = SRGBtoLINEAR(specularSample).rgb;
+//#endif
+
+    PBR_IBL_Contribution IBLContrib;
+    IBLContrib.f3Diffuse  = diffuseLight * SrfInfo.DiffuseColor;
+    IBLContrib.f3Specular = specularLight * brdf_ibl;
+    return IBLContrib;
+}

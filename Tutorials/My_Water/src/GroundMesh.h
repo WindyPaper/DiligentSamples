@@ -62,6 +62,7 @@ namespace Diligent
 		ITexture *pDetailNormalMap;*/
 
 		ITexture *pDiffIrradianceMap;
+		ITexture *pIBLSPecMap;
 
 		OceanWave *pOceanWave;
 	};

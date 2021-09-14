@@ -270,6 +270,7 @@ void My_Water::Render()
 		//WRenderData.pFoamMaskMap = m_apFFTFoamTexture;
 		WRenderData.pOceanWave = m_pOceanWave;
 		WRenderData.pDiffIrradianceMap = m_pIrradianceCubeSRV->GetTexture();
+		WRenderData.pIBLSPecMap = m_pPrefilteredEnvMapSRV->GetTexture();
 		m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), WRenderData);
 	}
 
@@ -469,9 +470,9 @@ void My_Water::UpdateUI()
 	{		
 		float3 CamPos = m_Camera.GetPos();
 		ImGui::Text("Cam pos %.2f, %.2f, %.2f", CamPos.x, CamPos.y, CamPos.z);
-		float3 CamForward = m_Camera.GetWorldAhead();
+		/*float3 CamForward = m_Camera.GetWorldAhead();
 		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
-		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
+		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);*/
 
 		ImGui::gizmo3D("Directional Light", m_LightManager.DirLight.dir, ImGui::GetTextLineHeight() * 10);	
 		ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);
@@ -484,15 +485,37 @@ void My_Water::UpdateUI()
 	}
 	ImGui::End();
 
+	auto UISwellSettingFunc = [](WaveDisplaySetting *pSetting)
+	{
+		ImGui::SliderFloat("Scale", &pSetting->scale, 0.01f, 1.0f);
+		ImGui::SliderFloat("WindSpeed", &pSetting->WindSpeed, 0.01f, 10.0f);
+		ImGui::SliderFloat("WindDirectionalAngle", &pSetting->WindDirectionalAngle, 0.01f, 360.0f);		
+		ImGui::SliderFloat("Fetch", &pSetting->fetch, 0.01f, 1.0f);
+		ImGui::SliderFloat("SpreadBlend", &pSetting->SpreadBlend, 0.01f, 1.0f);
+		ImGui::SliderFloat("Swell", &pSetting->swell, 0.01f, 1.0f);
+		ImGui::SliderFloat("PeakEnhancement", &pSetting->PeakEnhancement, 0.01f, 1.0f);
+		ImGui::SliderFloat("ShortWavesFade", &pSetting->ShortWavesFade, 0.01f, 1.0f);
+	};
+
 	if (ImGui::Begin("Ocean params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
-		ImGui::SliderFloat("Amplitude", &m_WaterRenderParam.Amplitude, 0.1f, 10.0f);
-		ImGui::SliderFloat("L", &m_WaterRenderParam.size_L, 100, 10000);
-		ImGui::gizmo3D("Wind Direction Light", m_WaterRenderParam.WindDir, ImGui::GetTextLineHeight() * 10);
-		ImGui::SliderFloat("WindIntensity", &m_WaterRenderParam.WindIntensity, 0.01f, 100.0f);
-		ImGui::SliderFloat("ChoppyScale", &m_WaterRenderParam.ChoppyScale, 0.01f, 10.0f);		
-		ImGui::SliderFloat("RepeatScale", &m_WaterRenderParam.RepeatScale, 1.0f, 50.0f);
-		ImGui::SliderFloat("BaseNormal Intensity", &m_WaterRenderParam.BaseNormalIntensity, 0.1f, 10.0f);
+		//if (ImGui::Button("LocalSpectrumSetting"))
+		{
+			if (ImGui::Begin("local spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+			{
+				UISwellSettingFunc(m_WaveSwellSetting[0]);
+			}
+			ImGui::End();
+		}
+
+		//if (ImGui::Button("SwellSpectrumSetting"))
+		{
+			if (ImGui::Begin("swell spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+			{
+				UISwellSettingFunc(m_WaveSwellSetting[1]);
+			}
+			ImGui::End();
+		}		
 	}	
 	ImGui::End();
 }
