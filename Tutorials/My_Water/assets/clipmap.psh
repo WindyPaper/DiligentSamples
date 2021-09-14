@@ -19,7 +19,26 @@ cbuffer Constants
 
 cbuffer OceanMaterialParams
 {
+    float4 OceanColor;
+    float4 SSSColor;
 
+    float SSSStrength;
+    float SSSScale;
+    float SSSBase;
+    float LodScale;
+
+    float MaxGloss;
+    float RoughnessScale;
+
+    float4 FoamColor;
+
+    float FoamBiasLod0;
+    float FoamBiasLod1;
+    float FoamBiasLod2;
+    float FoamScale;
+
+    float ContactFoam;
+    float Padding;
 };
 
 Texture2D g_derivatives_texL0;
