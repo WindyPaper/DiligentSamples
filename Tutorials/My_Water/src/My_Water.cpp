@@ -490,10 +490,10 @@ void My_Water::UpdateUI()
 		ImGui::SliderFloat("Scale", &pSetting->scale, 0.01f, 1.0f);
 		ImGui::SliderFloat("WindSpeed", &pSetting->WindSpeed, 0.01f, 10.0f);
 		ImGui::SliderFloat("WindDirectionalAngle", &pSetting->WindDirectionalAngle, 0.01f, 360.0f);		
-		ImGui::SliderFloat("Fetch", &pSetting->fetch, 0.01f, 1.0f);
+		ImGui::SliderFloat("Fetch", &pSetting->fetch, 0.01f, 1000000.0f);
 		ImGui::SliderFloat("SpreadBlend", &pSetting->SpreadBlend, 0.01f, 1.0f);
 		ImGui::SliderFloat("Swell", &pSetting->swell, 0.01f, 1.0f);
-		ImGui::SliderFloat("PeakEnhancement", &pSetting->PeakEnhancement, 0.01f, 1.0f);
+		ImGui::SliderFloat("PeakEnhancement", &pSetting->PeakEnhancement, 0.01f, 120.0f);
 		ImGui::SliderFloat("ShortWavesFade", &pSetting->ShortWavesFade, 0.01f, 1.0f);
 	};
 
