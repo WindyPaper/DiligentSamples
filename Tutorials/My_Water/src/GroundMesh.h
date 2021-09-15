@@ -13,6 +13,8 @@
 
 #include "CDLODTree.h"
 
+#include "ShaderUniformDataMgr.h"
+
 namespace Diligent
 {
 	class FirstPersonCamera;
@@ -61,11 +63,13 @@ namespace Diligent
 		ITexture *pFoamDiffuseMap;
 		ITexture *pDetailNormalMap;*/
 
+		OceanMaterialParams OceanRMatParams;
+
 		ITexture *pDiffIrradianceMap;
 		ITexture *pIBLSPecMap;
 
 		OceanWave *pOceanWave;
-	};
+	};	
 
 	class GroundMesh
 	{
@@ -102,7 +106,8 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_pIndexGPUBuffer;
 		RefCntAutoPtr<IBuffer> m_pVsConstBuf;
 		RefCntAutoPtr<IBuffer> m_pVSTerrainInfoBuf;
-		RefCntAutoPtr<IBuffer> m_pVsPatchBuf;		
+		RefCntAutoPtr<IBuffer> m_pVsPatchBuf;	
+		RefCntAutoPtr<IBuffer> m_pPsOceanMatParamBuf;
 		RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 
 		RefCntAutoPtr<IPipelineState> m_pPSO;

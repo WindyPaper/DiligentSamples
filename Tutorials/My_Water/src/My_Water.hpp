@@ -215,6 +215,8 @@ private:
 	//shader const params manager
 	ShaderUniformDataMgr m_ShaderUniformDataMgr;
 
+	OceanMaterialParams m_OceanMaterialParams;
+
 	WaveDisplaySetting *m_WaveSwellSetting[2];
 	OceanWave* m_pOceanWave;
 

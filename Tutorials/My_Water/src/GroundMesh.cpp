@@ -292,6 +292,11 @@ void GroundMesh::Render(IDeviceContext* pContext, const float3& CamPos, const Wa
 			CBConstants->LengthScale2 = OceanRenderShaderParams.LengthScales[2];
 			CBConstants->LOD_scale = 7.0f;
 		}
+		{
+			//Ocean render material params
+			MapHelper<OceanMaterialParams> OceanRMatParams(pContext, m_pPsOceanMatParamBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+			*OceanRMatParams = WRenderData.OceanRMatParams;
+		}
 
 		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
 		// makes sure that resources are transitioned to required states.
@@ -470,7 +475,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		PatchCBDesc.Usage = USAGE_DYNAMIC;
 		PatchCBDesc.BindFlags = BIND_UNIFORM_BUFFER;
 		PatchCBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
-		pDevice->CreateBuffer(PatchCBDesc, nullptr, &m_pVsPatchBuf);
+		pDevice->CreateBuffer(PatchCBDesc, nullptr, &m_pVsPatchBuf);		
 	}
 
 	// Create a pixel shader
@@ -482,6 +487,14 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		//ShaderCI.Source          = PSSource;
 		ShaderCI.FilePath = "clipmap.psh";
 		pDevice->CreateShader(ShaderCI, &pPS);
+
+		BufferDesc OceanMatParamsDesc;
+		OceanMatParamsDesc.Name = "Ocean material params CB";
+		OceanMatParamsDesc.uiSizeInBytes = sizeof(OceanMaterialParams);
+		OceanMatParamsDesc.Usage = USAGE_DYNAMIC;
+		OceanMatParamsDesc.BindFlags = BIND_UNIFORM_BUFFER;
+		OceanMatParamsDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+		pDevice->CreateBuffer(OceanMatParamsDesc, nullptr, &m_pPsOceanMatParamBuf);
 	}
 
 	// Shader variables should typically be mutable, which means they are expected
@@ -548,6 +561,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "PerPatchData")->Set(m_pVsPatchBuf);	
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "Constants")->Set(m_pVsConstBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbLightStructure")->Set(pShaderUniformDataMgr->GetLightStructure());
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "OceanMaterialParams")->Set(m_pPsOceanMatParamBuf);
 
 	// Create a shader resource binding object and bind all static resources in it
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);

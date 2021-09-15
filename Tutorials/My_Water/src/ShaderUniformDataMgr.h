@@ -13,6 +13,30 @@ namespace Diligent
 {
 #include "../assets/lighting_structure.fxh"
 
+	struct OceanMaterialParams
+	{
+		float4 OceanColor;
+		float4 SSSColor;
+
+		float SSSStrength;
+		float SSSScale;
+		float SSSBase;
+		float LodScale;
+
+		float MaxGloss;
+		float Roughness;
+		float RoughnessScale;
+
+		float4 FoamColor;
+
+		float FoamBiasLod0;
+		float FoamBiasLod1;
+		float FoamBiasLod2;
+		float FoamScale;
+
+		float ContactFoam;
+	};
+
 	class ShaderUniformDataMgr
 	{
 	public:

@@ -28,6 +28,7 @@ cbuffer OceanMaterialParams
     float LodScale;
 
     float MaxGloss;
+    float Roughness;
     float RoughnessScale;
 
     float4 FoamColor;
@@ -38,7 +39,6 @@ cbuffer OceanMaterialParams
     float FoamScale;
 
     float ContactFoam;
-    float Padding;
 };
 
 Texture2D g_derivatives_texL0;
@@ -119,9 +119,10 @@ void main(in  PSInput  PSIn,
     float jacobian = g_turbulence_texL0.Sample(g_turbulence_texL0_sampler, PSIn.UV / LengthScale0).x
                 + g_turbulence_texL1.Sample(g_turbulence_texL1_sampler, PSIn.UV / LengthScale1).x
                 + g_turbulence_texL2.Sample(g_turbulence_texL2_sampler, PSIn.UV / LengthScale2).x;
-    jacobian = min(1, max(0, (-jacobian + 2.52f) * 2.4f));
+    //jacobian = min(1, max(0, (-jacobian + 2.52f) * 2.4f));
+    jacobian = min(1, max(0, (-jacobian + FoamBiasLod2) * FoamScale));
 
-    float3 Albedo = lerp(0.1, 5, jacobian);
+    float3 Albedo = lerp(0.1, FoamColor * 3.0f, jacobian);
     float _Roughness = 0.3f;
     float _RoughnessScale = 0.004f;
     float _MaxGloss = 0.9f;

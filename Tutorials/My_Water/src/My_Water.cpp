@@ -195,6 +195,22 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	m_apSkyScattering.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
 	m_apSkyScatteringCube.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, TEX_FORMAT_RGBA32_FLOAT, TEX_FORMAT_D32_FLOAT, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
 
+	m_OceanMaterialParams.OceanColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+	m_OceanMaterialParams.SSSColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+	m_OceanMaterialParams.SSSStrength = 0.2f;
+	m_OceanMaterialParams.SSSScale = 4.0f;
+	m_OceanMaterialParams.SSSBase = 0.0;
+	m_OceanMaterialParams.LodScale = 0.0f;
+	m_OceanMaterialParams.MaxGloss = 0.0f;
+	m_OceanMaterialParams.Roughness = 0.0f;
+	m_OceanMaterialParams.RoughnessScale = 0.1f;
+	m_OceanMaterialParams.FoamColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+	m_OceanMaterialParams.FoamBiasLod0 = 0.84f;
+	m_OceanMaterialParams.FoamBiasLod1 = 1.83f;
+	m_OceanMaterialParams.FoamBiasLod2 = 2.75f;
+	m_OceanMaterialParams.FoamScale = 2.4f;
+	m_OceanMaterialParams.ContactFoam = 0.0f;
+
 	//cubemap
 	m_pReflectionProbe = new ReflectionProbe(float3(0.0f, 5000.0f, 0.0f));
 	CreateGPUTexture();
@@ -226,14 +242,6 @@ void My_Water::Render()
 	//water mesh
 	{
 		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Water", Colors::alizarin);
-
-		// Clear the back buffer
-		//const float ClearColor[] = { 0.350f, 0.350f, 0.350f, 1.0f };
-		//// Let the engine perform required state transitions
-		//auto* pRTV = m_pSwapChain->GetCurrentBackBufferRTV();
-		//auto* pDSV = m_pSwapChain->GetDepthBufferDSV();
-		//m_pImmediateContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-		//m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 		// Bind vertex and index buffers
 		Uint32   offset = 0;
@@ -271,6 +279,7 @@ void My_Water::Render()
 		WRenderData.pOceanWave = m_pOceanWave;
 		WRenderData.pDiffIrradianceMap = m_pIrradianceCubeSRV->GetTexture();
 		WRenderData.pIBLSPecMap = m_pPrefilteredEnvMapSRV->GetTexture();
+		WRenderData.OceanRMatParams = m_OceanMaterialParams;
 		m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos(), WRenderData);
 	}
 
@@ -280,64 +289,6 @@ void My_Water::Render()
 	//sky atmosphere sky
 	{
 		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Atmosphere", Colors::amethyst);
-
-		//CameraAttribs CamAttribs;
-		//CamAttribs.mViewT = m_Camera.GetViewMatrix().Transpose();
-		//CamAttribs.mProjT = m_Camera.GetProjMatrix().Transpose();
-		//CamAttribs.mViewProjT = m_Camera.GetViewProjMatrix().Transpose();
-		//CamAttribs.mViewProjInvT = m_Camera.GetViewProjMatrix().Inverse().Transpose();
-		//float fNearPlane = 0.f, fFarPlane = 0.f;
-		//m_Camera.GetProjMatrix().GetNearFarClipPlanes(fNearPlane, fFarPlane, false);
-		//CamAttribs.fNearPlaneZ = fNearPlane;
-		//CamAttribs.fFarPlaneZ = fFarPlane * 0.999999f;
-		//CamAttribs.f4Position = m_Camera.GetPos();
-		//CamAttribs.f4ViewportSize.x = static_cast<float>(m_pSwapChain->GetDesc().Width);
-		//CamAttribs.f4ViewportSize.y = static_cast<float>(m_pSwapChain->GetDesc().Height);
-		//CamAttribs.f4ViewportSize.z = 1.f / CamAttribs.f4ViewportSize.x;
-		//CamAttribs.f4ViewportSize.w = 1.f / CamAttribs.f4ViewportSize.y;
-
-		//EpipolarLightScattering::FrameAttribs FrameAttribs;
-
-		//FrameAttribs.pDevice = m_pDevice;
-		//FrameAttribs.pDeviceContext = m_pImmediateContext;
-		////FrameAttribs.dElapsedTime = m_fElapsedTime;
-		//LightAttribs lattris;
-		//lattris.f4Direction = float4(m_LightManager.DirLight.dir, 0.0f);
-		//lattris.f4AmbientLight = float4(1, 1, 1, 1);
-		//float4 f4ExtraterrestrialSunColor = float4(10, 10, 10, 10) * m_LightManager.DirLight.intensity;
-		//lattris.f4Intensity = f4ExtraterrestrialSunColor; // *m_fScatteringScale;
-		////lattris.f4AmbientLight = float4(0, 0, 0, 0);
-		////lattris.f4Intensity = float4(m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity, m_LightManager.DirLight.intensity);
-		//FrameAttribs.pLightAttribs = &lattris;
-		//FrameAttribs.pCameraAttribs = &CamAttribs;
-
-		///*FrameAttribs.pcbLightAttribs = m_pcbLightAttribs;
-		//FrameAttribs.pcbCameraAttribs = m_pcbCameraAttribs;	*/
-
-		//m_PPAttribs.uiNumSamplesOnTheRayAtDepthBreak = 32u;
-
-		//// During the ray marching, on each step we move by the texel size in either horz
-		//// or vert direction. So resolution of min/max mipmap should be the same as the
-		//// resolution of the original shadow map
-		////m_PPAttribs.uiMinMaxShadowMapResolution = m_ShadowSettings.Resolution;
-		//m_PPAttribs.uiInitialSampleStepInSlice = std::min(m_PPAttribs.uiInitialSampleStepInSlice, m_PPAttribs.uiMaxSamplesInSlice);
-		//m_PPAttribs.uiEpipoleSamplingDensityFactor = std::min(m_PPAttribs.uiEpipoleSamplingDensityFactor, m_PPAttribs.uiInitialSampleStepInSlice);
-
-		//FrameAttribs.ptex2DSrcColorBufferSRV = m_pOffscreenColorBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-		//FrameAttribs.ptex2DSrcDepthBufferSRV = m_pOffscreenDepthBuffer->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
-		//FrameAttribs.ptex2DDstColorBufferRTV = m_pSwapChain->GetCurrentBackBufferRTV();
-		//FrameAttribs.ptex2DDstDepthBufferDSV = m_pSwapChain->GetDepthBufferDSV();
-		////FrameAttribs.ptex2DShadowMapSRV = m_ShadowMapMgr.GetSRV();
-
-		//// Begin new frame
-		//m_apSkyScattering->PrepareForNewFrame(FrameAttribs, m_PPAttribs);
-
-		//// Render the sun
-		//m_apSkyScattering->RenderSun(pRTV->GetDesc().Format, pDSV->GetDesc().Format, 1);
-
-		//// Perform the post processing
-		//m_apSkyScattering->PerformPostProcessing();
-
 		AtmosphereRender(&m_Camera, m_pSwapChain->GetCurrentBackBufferRTV(), m_pSwapChain->GetDepthBufferDSV(), m_apSkyScattering.get());
 	}
 }
