@@ -26,15 +26,14 @@ namespace Diligent
 		float MaxGloss;
 		float Roughness;
 		float RoughnessScale;
+		float ContactFoam;
 
 		float4 FoamColor;
 
 		float FoamBiasLod0;
 		float FoamBiasLod1;
 		float FoamBiasLod2;
-		float FoamScale;
-
-		float ContactFoam;
+		float FoamScale;		
 	};
 
 	class ShaderUniformDataMgr

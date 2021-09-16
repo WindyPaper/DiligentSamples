@@ -195,20 +195,20 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 	m_apSkyScattering.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
 	m_apSkyScatteringCube.reset(new EpipolarLightScattering(m_pDevice, m_pImmediateContext, TEX_FORMAT_RGBA32_FLOAT, TEX_FORMAT_D32_FLOAT, TEX_FORMAT_R11G11B10_FLOAT, m_pShaderSourceFactory));
 
-	m_OceanMaterialParams.OceanColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
-	m_OceanMaterialParams.SSSColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
-	m_OceanMaterialParams.SSSStrength = 0.2f;
-	m_OceanMaterialParams.SSSScale = 4.0f;
-	m_OceanMaterialParams.SSSBase = 0.0;
-	m_OceanMaterialParams.LodScale = 0.0f;
+	m_OceanMaterialParams.OceanColor = float4(0.002f, 0.026f, 0.044f, 1.0f);
+	m_OceanMaterialParams.SSSColor = float4(0.154f, 0.885f, 0.99f, 1.0f);
+	m_OceanMaterialParams.SSSStrength = 0.1f;
+	m_OceanMaterialParams.SSSScale = 4.8f;
+	m_OceanMaterialParams.SSSBase = -0.1;
+	m_OceanMaterialParams.LodScale = 7.5f;
 	m_OceanMaterialParams.MaxGloss = 0.0f;
 	m_OceanMaterialParams.Roughness = 0.0f;
 	m_OceanMaterialParams.RoughnessScale = 0.1f;
 	m_OceanMaterialParams.FoamColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
 	m_OceanMaterialParams.FoamBiasLod0 = 0.84f;
 	m_OceanMaterialParams.FoamBiasLod1 = 1.83f;
-	m_OceanMaterialParams.FoamBiasLod2 = 2.75f;
-	m_OceanMaterialParams.FoamScale = 2.4f;
+	m_OceanMaterialParams.FoamBiasLod2 = 2.52f;
+	m_OceanMaterialParams.FoamScale = 3.5f;
 	m_OceanMaterialParams.ContactFoam = 0.0f;
 
 	//cubemap
@@ -451,22 +451,42 @@ void My_Water::UpdateUI()
 	if (ImGui::Begin("Ocean params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
 		//if (ImGui::Button("LocalSpectrumSetting"))
+		if (ImGui::Begin("local spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
-			if (ImGui::Begin("local spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-			{
-				UISwellSettingFunc(m_WaveSwellSetting[0]);
-			}
-			ImGui::End();
+			UISwellSettingFunc(m_WaveSwellSetting[0]);
 		}
+		ImGui::End();
 
 		//if (ImGui::Button("SwellSpectrumSetting"))
+		if (ImGui::Begin("swell spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 		{
-			if (ImGui::Begin("swell spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-			{
-				UISwellSettingFunc(m_WaveSwellSetting[1]);
-			}
-			ImGui::End();
-		}		
+			UISwellSettingFunc(m_WaveSwellSetting[1]);
+		}
+		ImGui::End();
+
+		if (ImGui::Begin("ocean material params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::ColorEdit4("OceanColor", &m_OceanMaterialParams.OceanColor[0]);
+			ImGui::ColorEdit4("SSSColor", &m_OceanMaterialParams.SSSColor[0]);
+
+			ImGui::SliderFloat("SSSStrength", &m_OceanMaterialParams.SSSStrength, 0.01f, 1.0f);
+			ImGui::SliderFloat("SSSScale", &m_OceanMaterialParams.SSSScale, 0.01f, 50.0f);
+			ImGui::SliderFloat("SSSBase", &m_OceanMaterialParams.SSSBase, -5.0f, 1.0f);
+			ImGui::SliderFloat("LodScale", &m_OceanMaterialParams.LodScale, 0.01f, 100.0f);
+
+			ImGui::SliderFloat("MaxGloss", &m_OceanMaterialParams.MaxGloss, 0.01f, 1.0f);
+			ImGui::SliderFloat("Roughness", &m_OceanMaterialParams.Roughness, 0.01f, 1.0f);
+			ImGui::SliderFloat("RoughnessScale", &m_OceanMaterialParams.RoughnessScale, 0.0f, 0.5f);
+			ImGui::SliderFloat("ContactFoam", &m_OceanMaterialParams.ContactFoam, 0.01f, 1.0f);
+
+			ImGui::ColorEdit4("FoamColor", &m_OceanMaterialParams.FoamColor[0]);
+
+			ImGui::SliderFloat("FoamBiasLod0", &m_OceanMaterialParams.FoamBiasLod0, 0.01f, 7.0f);
+			ImGui::SliderFloat("FoamBiasLod1", &m_OceanMaterialParams.FoamBiasLod1, 0.01f, 7.0f);
+			ImGui::SliderFloat("FoamBiasLod2", &m_OceanMaterialParams.FoamBiasLod2, 0.01f, 7.0f);
+			ImGui::SliderFloat("FoamScale", &m_OceanMaterialParams.FoamScale, 0.01f, 20.0f);
+		}
+		ImGui::End();
 	}	
 	ImGui::End();
 }

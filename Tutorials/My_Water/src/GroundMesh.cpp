@@ -559,6 +559,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_pVsConstBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "TerrainDimension")->Set(m_pVSTerrainInfoBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "PerPatchData")->Set(m_pVsPatchBuf);	
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "OceanMaterialParams")->Set(m_pPsOceanMatParamBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "Constants")->Set(m_pVsConstBuf);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "cbLightStructure")->Set(pShaderUniformDataMgr->GetLightStructure());
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "OceanMaterialParams")->Set(m_pPsOceanMatParamBuf);

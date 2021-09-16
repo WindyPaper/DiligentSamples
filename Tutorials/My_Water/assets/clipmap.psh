@@ -30,15 +30,14 @@ cbuffer OceanMaterialParams
     float MaxGloss;
     float Roughness;
     float RoughnessScale;
+    float ContactFoam;
 
     float4 FoamColor;
 
     float FoamBiasLod0;
     float FoamBiasLod1;
     float FoamBiasLod2;
-    float FoamScale;
-
-    float ContactFoam;
+    float FoamScale;    
 };
 
 Texture2D g_derivatives_texL0;
@@ -149,6 +148,20 @@ void main(in  PSInput  PSIn,
 
     float3 IndirectedLighting = IBLLighting.f3Diffuse + IBLLighting.f3Specular;
     PSOut.Color.rgb = DirectLighting * 1.000001f + IndirectedLighting * 1.0f;// + lerp(LightingColor, float3(1, 1, 1), FoamIntensity) * 0.0001f;    
+
+    //SSS    
+    float3 H = normalize(-WorldNormal + LightDir);
+    float ViewDotH = Pow5(saturate(dot(ViewDir, -H))) * 30 * SSSStrength;
+    float3 color = lerp(OceanColor.rgb, saturate(OceanColor.rgb + SSSColor.rgb * ViewDotH * PSIn.LodScales.w), PSIn.LodScales.z);
+
+    float fresnel = dot(WorldNormal, ViewDir);
+    fresnel = saturate(1 - fresnel);
+    fresnel = Pow5(fresnel);
+
+    float3 OutOceanSSS = lerp(color * (1 - fresnel), 0, jacobian);
+    //PSOut.Color.rgb *= 0.00000000001f;
+    PSOut.Color.rgb += OutOceanSSS;//PSIn.LodScales.w;//ViewDotH;
+
 
     PSOut.Color.a = 1.0;
 

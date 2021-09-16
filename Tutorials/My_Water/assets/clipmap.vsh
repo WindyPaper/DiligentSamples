@@ -19,6 +19,29 @@ cbuffer TerrainDimension
 	Dimension g_TerrainInfo;	
 };
 
+cbuffer OceanMaterialParams
+{
+    float4 OceanColor;
+    float4 SSSColor;
+
+    float SSSStrength;
+    float SSSScale;
+    float SSSBase;
+    float LodScale;
+
+    float MaxGloss;
+    float Roughness;
+    float RoughnessScale;
+    float ContactFoam;
+
+    float4 FoamColor;
+
+    float FoamBiasLod0;
+    float FoamBiasLod1;
+    float FoamBiasLod2;
+    float FoamScale;    
+};
+
 cbuffer Constants
 {
     float4x4 g_ViewProj;
@@ -87,16 +110,17 @@ void main(in  VSInput VSIn,
     float morphLerpK  = 1.0f - clamp( g_MorphK.x - eyeDist * g_MorphK.y, 0.0, 1.0 );
     WPos.xz = MorphVertex(VSIn.Pos.xy, WPos.xz, morphLerpK);
 
-    float lod_c0 = min(LOD_scale * LengthScale0 / eyeDist, 1);
-    float lod_c1 = min(LOD_scale * LengthScale1 / eyeDist, 1);
-    float lod_c2 = min(LOD_scale * LengthScale2 / eyeDist, 1);
+    float lod_c0 = min(LodScale * LengthScale0 / eyeDist, 1);
+    float lod_c1 = min(LodScale * LengthScale1 / eyeDist, 1);
+    float lod_c2 = min(LodScale * LengthScale2 / eyeDist, 1);
 
     //recalculate by new xz position
     TerrainMapUV = (WPos.xz - g_TerrainInfo.Min.xz);
     WPos.y = g_TerrainInfo.Min.y;
-    float3 WaterVertexOffset = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0, 0).rgb * lod_c0;
+    float3 WaterVertexOffset = g_displacement_texL0.SampleLevel(g_displacement_texL0_sampler, TerrainMapUV / LengthScale0, 0).rgb * lod_c0;    
     //WPos.y = WaterVertexOffset.y + g_TerrainInfo.Min.y;
     WPos += WaterVertexOffset;
+    float largeWavesBias = WPos.y;
 
     float3 DisplaceL1 = g_displacement_texL1.SampleLevel(g_displacement_texL1_sampler, TerrainMapUV / LengthScale1, 0).rgb * lod_c1;
     WPos += DisplaceL1;
@@ -111,5 +135,7 @@ void main(in  VSInput VSIn,
     PSIn.WorldPos = WPos;
     PSIn.CamPos = g_CameraPos.xyz;
 
-    PSIn.LodScales = float4(lod_c0, lod_c1, lod_c2, 1.0f);    
+
+    float sss_param = max(WPos.y - largeWavesBias * 0.8 - SSSBase, 0) / SSSScale;
+    PSIn.LodScales = float4(lod_c0, lod_c1, lod_c2, sss_param);    
 }
