@@ -118,6 +118,22 @@ float4x4 FirstPersonCamera::GetReferenceRotiation() const
     // clang-format on
 }
 
+void FirstPersonCamera::InvalidUpdate()
+{
+	float4x4 ReferenceRotation = GetReferenceRotiation();
+
+	float4x4 CameraRotation = float4x4::RotationArbitrary(m_ReferenceUpAxis, m_fYawAngle) *
+		float4x4::RotationArbitrary(m_ReferenceRightAxis, m_fPitchAngle) *
+		ReferenceRotation;
+	float4x4 WorldRotation = CameraRotation.Transpose();
+
+	//float3 PosDeltaWorld = PosDelta * WorldRotation;
+	//m_Pos += PosDeltaWorld;
+
+	m_ViewMatrix = float4x4::Translation(-m_Pos) * CameraRotation;
+	m_WorldMatrix = WorldRotation * float4x4::Translation(m_Pos);
+}
+
 void FirstPersonCamera::SetReferenceAxes(const float3& ReferenceRightAxis, const float3& ReferenceUpAxis, bool IsRightHanded)
 {
     m_ReferenceRightAxis    = normalize(ReferenceRightAxis);
@@ -196,7 +212,7 @@ void FirstPersonCamera::SetProjAttribs(Float32           NearClipPlane,
     Proj._22 = YScale;
     Proj.SetNearFarClipPlanes(NearClipPlane, FarClipPlane, IsGL);
 
-    m_ProjMatrix = float4x4::Projection(m_ProjAttribs.FOV, m_ProjAttribs.AspectRatio, m_ProjAttribs.NearClipPlane, m_ProjAttribs.FarClipPlane, IsGL);
+    m_ProjMatrix = float4x4::Projection(m_ProjAttribs.FOV, m_ProjAttribs.AspectRatio, m_ProjAttribs.NearClipPlane, m_ProjAttribs.FarClipPlane, IsGL);	
 }
 
 void FirstPersonCamera::SetSpeedUpScales(Float32 SpeedUpScale, Float32 SuperSpeedUpScale)

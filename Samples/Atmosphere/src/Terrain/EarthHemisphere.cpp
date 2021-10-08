@@ -985,7 +985,7 @@ void EarthHemsiphere::Render(IDeviceContext*        pContext,
         {
             pContext->SetIndexBuffer(MeshIt->pIndBuff, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
             DrawIndexedAttribs DrawAttrs(MeshIt->uiNumIndices, VT_UINT32, DRAW_FLAG_VERIFY_ALL);
-            pContext->DrawIndexed(DrawAttrs);
+            //pContext->DrawIndexed(DrawAttrs);
         }
     }
 }

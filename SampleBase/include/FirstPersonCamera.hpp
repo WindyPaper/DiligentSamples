@@ -78,6 +78,8 @@ public:
 
     float3 GetPos() const { return m_Pos; }
     float  GetCurrentSpeed() const { return m_fCurrentSpeed; }
+
+	void InvalidUpdate();
     
     const ProjectionAttribs& GetProjAttribs() const { return m_ProjAttribs; }
 

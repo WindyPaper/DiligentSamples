@@ -156,7 +156,7 @@ void AtmosphereSample::UpdateUI()
     if (ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
         ImGui::gizmo3D("Light direction", static_cast<float3&>(m_f3LightDir), ImGui::GetTextLineHeight() * 10);
-        ImGui::SliderFloat("Camera altitude", &m_f3CameraPos.y, 2000, 100000);
+        ImGui::SliderFloat("Camera altitude", &m_f3CameraPos.y, -100.0f, 100000);
 
         ImGui::SetNextTreeNodeOpen(true, ImGuiCond_FirstUseEver);
         if (ImGui::TreeNode("Shadows"))
@@ -791,7 +791,7 @@ void AtmosphereSample::Update(double CurrTime, double ElapsedTime)
         Quaternion::RotationFromAxisAngle(float3{1, 0, 0}, -m_fCameraPitch) *
         Quaternion::RotationFromAxisAngle(float3{0, 1, 0}, -m_fCameraYaw);
     m_f3CameraPos.y += mouseState.WheelDelta * 500.f;
-    m_f3CameraPos.y = std::max(m_f3CameraPos.y, 2000.f);
+    m_f3CameraPos.y = std::max(m_f3CameraPos.y, -100.0f);
     m_f3CameraPos.y = std::min(m_f3CameraPos.y, 100000.f);
 
     auto CameraRotationMatrix = m_CameraRotation.ToMatrix();
