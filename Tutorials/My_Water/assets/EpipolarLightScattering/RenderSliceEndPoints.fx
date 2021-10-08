@@ -1,5 +1,5 @@
 
-#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
+#include "assets/EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 cbuffer cbPostProcessingAttribs
 {

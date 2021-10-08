@@ -3,8 +3,8 @@
 
 //#include "EpipolarLightScattering/FullScreenTriangleVSOutput.fxh"
 //#include "ToneMappingStructures.fxh"
-#include "EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
-#include "EpipolarLightScattering/ShaderUtilities.fxh"
+#include "assets/EpipolarLightScattering/public/EpipolarLightScatteringStructures.fxh"
+#include "assets/EpipolarLightScattering/ShaderUtilities.fxh"
 
 struct FullScreenTriangleVSOutput
 {

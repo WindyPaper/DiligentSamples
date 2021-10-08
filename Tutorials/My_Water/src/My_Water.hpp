@@ -159,7 +159,7 @@ public:
     virtual void Render() override final;
     virtual void Update(double CurrTime, double ElapsedTime) override final;
 
-    virtual const Char* GetSampleName() const override final { return "Tutorial01: Hello Triangle"; }
+    virtual const Char* GetSampleName() const override final { return "OceanDemo"; }
 
 	virtual void WindowResize(Uint32 Width, Uint32 Height);
 

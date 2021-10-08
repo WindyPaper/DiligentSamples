@@ -1,8 +1,8 @@
 // RefineSampleLocations.fx
 // Refines sample locations using inscattering difference or z difference
 
-#include "BasicStructures.fxh"
-#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
+#include "assets/BasicStructures.fxh"
+#include "assets/EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 // In fact we only need RG16U texture to store
 // interpolation source indices. However, NVidia GLES does

@@ -1,5 +1,5 @@
-#include "BasicStructures.fxh"
-#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
+#include "assets/BasicStructures.fxh"
+#include "assets/EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 cbuffer cbCameraAttribs
 {

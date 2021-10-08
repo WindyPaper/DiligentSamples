@@ -1,7 +1,7 @@
 #ifndef _GLTF_PBR_PRECOMPUTE_COMMON_FXH_
 #define _GLTF_PBR_PRECOMPUTE_COMMON_FXH_
 
-#include "PBR_Common.fxh"
+#include "assets/PBR_Common.fxh"
 
 #ifndef PI
 #   define PI 3.1415926536
