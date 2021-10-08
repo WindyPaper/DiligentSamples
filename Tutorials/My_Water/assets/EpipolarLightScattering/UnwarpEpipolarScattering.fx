@@ -50,6 +50,24 @@ Texture2D<float>  g_tex2DAverageLuminance;
 #include "EpipolarLightScattering/Extinction.fxh"
 //#include "ToneMapping.fxh"
 
+float3 rgb2hsv(float3 c)
+{
+    float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    float4 p = lerp(float4(c.bg, K.wz), float4(c.gb, K.xy), step(c.b, c.g));
+    float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
+
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+float3 hsv2rgb(float3 c)
+{
+    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
+}
+
 void UnwarpEpipolarInsctrImage( in float2 f2PosPS, 
                                 in float fCamSpaceZ,
                                 out float3 f3Inscattering,
@@ -298,6 +316,8 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
         f3BackgroundColor *= f3Extinction;
     }
 
+
+
 // #if PERFORM_TONE_MAPPING
 //     float fAveLogLum = GetAverageSceneLuminance(g_tex2DAverageLuminance);
 //     f4Color.rgb = ToneMap(f3BackgroundColor + f3Inscttering, g_PPAttribs.ToneMapping, fAveLogLum);
@@ -306,5 +326,10 @@ void ApplyInscatteredRadiancePS(FullScreenTriangleVSOutput VSOut,
     //float2 LogLum_W = GetWeightedLogLum(f3BackgroundColor + f3Inscttering, MinLumn);
     f4Color.rgb = f3BackgroundColor + f3Inscttering;//f3BackgroundColor + f3Inscttering;//float3(LogLum_W.x, LogLum_W.y, 0.0);
 // #endif
+
+    float3 HsvValue = rgb2hsv(f4Color.rgb);
+    float3 OutRGBValue = hsv2rgb(float3(HsvValue.x, HsvValue.y + 0.15f, HsvValue.z));
+
+    f4Color.rgb = OutRGBValue;
     f4Color.a = 1.0;
 }
