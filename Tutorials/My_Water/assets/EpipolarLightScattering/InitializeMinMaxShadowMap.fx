@@ -1,4 +1,4 @@
-#include "AtmosphereShadersCommon.fxh"
+#include "assets/AtmosphereShadersCommon.fxh"
 
 Texture2D<float4> g_tex2DSliceUVDirAndOrigin;
 

@@ -1,8 +1,8 @@
 //RayMarch.fx
 //Performs ray marching and computes shadowed scattering
 
-#include "BasicStructures.fxh"
-#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
+#include "assets/BasicStructures.fxh"
+#include "assets/EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams
 {
@@ -65,10 +65,10 @@ Texture3D<float3> g_tex3DMultipleSctrLUT;
 SamplerState      g_tex3DMultipleSctrLUT_sampler;
 
 
-#include "EpipolarLightScattering/LookUpTables.fxh"
-#include "EpipolarLightScattering/ScatteringIntegrals.fxh"
-#include "EpipolarLightScattering/Extinction.fxh"
-#include "EpipolarLightScattering/UnshadowedScattering.fxh"
+#include "assets/EpipolarLightScattering/LookUpTables.fxh"
+#include "assets/EpipolarLightScattering/ScatteringIntegrals.fxh"
+#include "assets/EpipolarLightScattering/Extinction.fxh"
+#include "assets/EpipolarLightScattering/UnshadowedScattering.fxh"
 //#include "EpipolarLightScattering/ToneMapping.fxh"
 
 

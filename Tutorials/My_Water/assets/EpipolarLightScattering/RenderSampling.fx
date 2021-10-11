@@ -1,4 +1,4 @@
-#include "AtmosphereShadersCommon.fxh"
+#include "assets/AtmosphereShadersCommon.fxh"
 
 cbuffer cbPostProcessingAttribs
 {

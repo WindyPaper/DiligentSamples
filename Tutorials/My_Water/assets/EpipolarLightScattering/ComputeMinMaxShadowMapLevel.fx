@@ -1,4 +1,4 @@
-#include "AtmosphereShadersCommon.fxh"
+#include "assets/AtmosphereShadersCommon.fxh"
 
 Texture2D<float2> g_tex2DMinMaxLightSpaceDepth;
 

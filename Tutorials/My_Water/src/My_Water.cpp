@@ -123,7 +123,7 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
         ShaderCI.EntryPoint      = "main";
         ShaderCI.Desc.Name       = "Terrain vertex shader";
         //ShaderCI.Source          = VSSource;
-		ShaderCI.FilePath		 = "cube.vsh";
+		ShaderCI.FilePath		 = "assets/cube.vsh";
         m_pDevice->CreateShader(ShaderCI, &pVS);
 
 		//Create dynamic buffer
@@ -143,7 +143,7 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
         ShaderCI.EntryPoint      = "main";
         ShaderCI.Desc.Name       = "Terrain pixel shader";
         //ShaderCI.Source          = PSSource;
-		ShaderCI.FilePath		 = "cube.psh";
+		ShaderCI.FilePath		 = "assets/cube.psh";
         m_pDevice->CreateShader(ShaderCI, &pPS);
     }
 
@@ -164,12 +164,12 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 
 	m_ShaderUniformDataMgr.CreateGPUBuffer(m_pDevice);
 
-	m_Camera.SetPos(float3(0.0f, 2.0f, -5.f));		
+	m_Camera.SetPos(float3(0.0f, 4.0f, -5.f));		
 	m_Camera.SetRotationSpeed(0.005f);
 	m_Camera.SetMoveSpeed(5.f);
 	m_Camera.SetSpeedUpScales(5.f, 10.f);
 
-	m_Camera.SetLookAt(float3(0.0, 0.0, 1000.0));
+	m_Camera.SetLookAt(float3(0.0, 0.0, -1000.0));
 
 	m_apClipMap.reset(new GroundMesh(LOD_MESH_GRID_SIZE, LOD_COUNT, 0.115f));
 
@@ -187,7 +187,7 @@ void My_Water::Initialize(const SampleInitInfo& InitInfo)
 
 	m_pOceanWave = new OceanWave(WATER_FFT_N, m_pDevice, m_pShaderSourceFactory);
 	m_pOceanWave->Init(WATER_FFT_N);
-	m_WaveSwellSetting[0] = new WaveDisplaySetting({1.0f, 0.5f, -30.0f, 100000.0f, 1.0f, 0.198f, 3.3f, 0.01f, 9.8f});
+	m_WaveSwellSetting[0] = new WaveDisplaySetting({1.0f, 1.0f, -30.0f, 100000.0f, 1.0f, 0.198f, 3.3f, 0.01f, 9.8f});
 	m_WaveSwellSetting[1] = new WaveDisplaySetting({0.555f, 1.0f, 0.0f, 300000.0f, 1.0f, 1.0f, 5.82f, 0.01f, 9.8f});
 
 	//sky
@@ -244,32 +244,32 @@ void My_Water::Render()
 		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Water", Colors::alizarin);
 
 		// Bind vertex and index buffers
-		Uint32   offset = 0;
-		IBuffer* pBuffs[] = { m_TerrainData.pVertexBuf };
-		m_pImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
-		m_pImmediateContext->SetIndexBuffer(m_TerrainData.pIdxBuf, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		//Uint32   offset = 0;
+		//IBuffer* pBuffs[] = { m_TerrainData.pVertexBuf };
+		//m_pImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+		//m_pImmediateContext->SetIndexBuffer(m_TerrainData.pIdxBuf, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-		// Set uniform
-		{
-			// Map the buffer and write current world-view-projection matrix
-			MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
+		//// Set uniform
+		//{
+		//	// Map the buffer and write current world-view-projection matrix
+		//	MapHelper<float4x4> CBConstants(m_pImmediateContext, m_pVsConstBuf, MAP_WRITE, MAP_FLAG_DISCARD);
 
-			*CBConstants = m_Camera.GetViewProjMatrix();
-		}
+		//	*CBConstants = m_Camera.GetViewProjMatrix();
+		//}
 
-		// Set the pipeline state in the immediate context
-		m_pImmediateContext->SetPipelineState(m_pPSO);
+		//// Set the pipeline state in the immediate context
+		//m_pImmediateContext->SetPipelineState(m_pPSO);
 
-		// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
-		// makes sure that resources are transitioned to required states.
-		m_pImmediateContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		//// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+		//// makes sure that resources are transitioned to required states.
+		//m_pImmediateContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-		DrawIndexedAttribs drawAttrs;
-		drawAttrs.IndexType = VT_UINT32; // Index type
-		drawAttrs.NumIndices = m_TerrainData.IdxNum;
-		// Verify the state of vertex and index buffers
-		drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
-		m_pImmediateContext->DrawIndexed(drawAttrs);
+		//DrawIndexedAttribs drawAttrs;
+		//drawAttrs.IndexType = VT_UINT32; // Index type
+		//drawAttrs.NumIndices = m_TerrainData.IdxNum;
+		//// Verify the state of vertex and index buffers
+		//drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+		//m_pImmediateContext->DrawIndexed(drawAttrs);
 		
 		WaterRenderData WRenderData;
 		WRenderData.L_RepeatScale_NormalIntensity_N = float4(m_WaterRenderParam.size_L, m_WaterRenderParam.RepeatScale, m_WaterRenderParam.BaseNormalIntensity, WATER_FFT_N);
@@ -286,7 +286,7 @@ void My_Water::Render()
 	//render debug view
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
 
-	//sky atmosphere sky
+	//atmosphere sky
 	{
 		CPUAndGPUProfileScope scope(&gRenderProfileMgr, "Atmosphere", Colors::amethyst);
 		AtmosphereRender(&m_Camera, m_pSwapChain->GetCurrentBackBufferRTV(), m_pSwapChain->GetDepthBufferDSV(), m_apSkyScattering.get());
@@ -743,7 +743,7 @@ void My_Water::InitCubeMapFilterPSO()
 			ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
 			ShaderCI.EntryPoint = "main";
 			ShaderCI.Desc.Name = "Cubemap face VS";
-			ShaderCI.FilePath = "CubemapFace.vsh";
+			ShaderCI.FilePath = "assets/CubemapFace.vsh";
 			m_pDevice->CreateShader(ShaderCI, &pVS);
 		}
 
@@ -753,7 +753,7 @@ void My_Water::InitCubeMapFilterPSO()
 			ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
 			ShaderCI.EntryPoint = "main";
 			ShaderCI.Desc.Name = "Precompute irradiance cube map PS";
-			ShaderCI.FilePath = "ComputeIrradianceMap.psh";
+			ShaderCI.FilePath = "assets/ComputeIrradianceMap.psh";
 			m_pDevice->CreateShader(ShaderCI, &pPS);
 		}
 
@@ -808,7 +808,7 @@ void My_Water::InitCubeMapFilterPSO()
 			ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
 			ShaderCI.EntryPoint = "main";
 			ShaderCI.Desc.Name = "Cubemap face VS";
-			ShaderCI.FilePath = "CubemapFace.vsh";
+			ShaderCI.FilePath = "assets/CubemapFace.vsh";
 			m_pDevice->CreateShader(ShaderCI, &pVS);
 		}
 
@@ -818,7 +818,7 @@ void My_Water::InitCubeMapFilterPSO()
 			ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
 			ShaderCI.EntryPoint = "main";
 			ShaderCI.Desc.Name = "Prefilter environment map PS";
-			ShaderCI.FilePath = "PrefilterEnvMap.psh";
+			ShaderCI.FilePath = "assets/PrefilterEnvMap.psh";
 			m_pDevice->CreateShader(ShaderCI, &pPS);
 		}
 

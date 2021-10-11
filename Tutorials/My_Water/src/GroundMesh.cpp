@@ -150,7 +150,7 @@ DrawIndexedAttribs GroundMesh::GetDrawIndex(const uint16_t start, const uint16_t
 void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, ShaderUniformDataMgr *pShaderUniformDataMgr)
 {	
 	//m_Heightmap.LoadHeightMap("./wm_heightmap.png", pDevice);
-	m_Heightmap.LoadMap("./wm_diffuse_map.png", "./wm_heightmap.png", pDevice);
+	m_Heightmap.LoadMap("./assets/wm_diffuse_map.png", "./assets/wm_heightmap.png", pDevice);
 
 	Dimension TerrainDim;
 	TerrainDim.Min = float3({ -5690.0f, 0.00f, -7090.0f });
@@ -437,7 +437,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		ShaderCI.EntryPoint = "main";
 		ShaderCI.Desc.Name = "ClipMap Terrain vertex shader";
 		//ShaderCI.Source          = VSSource;
-		ShaderCI.FilePath = "clipmap.vsh";
+		ShaderCI.FilePath = "assets/clipmap.vsh";
 		pDevice->CreateShader(ShaderCI, &pVS);
 
 		//Create dynamic const buffer		
@@ -485,7 +485,7 @@ void GroundMesh::InitPSO(IRenderDevice *pDevice, ISwapChain *pSwapChain, const D
 		ShaderCI.EntryPoint = "main";
 		ShaderCI.Desc.Name = "ClipMap Terrain pixel shader";
 		//ShaderCI.Source          = PSSource;
-		ShaderCI.FilePath = "clipmap.psh";
+		ShaderCI.FilePath = "assets/clipmap.psh";
 		pDevice->CreateShader(ShaderCI, &pPS);
 
 		BufferDesc OceanMatParamsDesc;

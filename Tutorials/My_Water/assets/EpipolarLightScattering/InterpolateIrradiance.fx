@@ -1,7 +1,7 @@
 // InterpolateIrradiance.fx
 // Interpolates irradiance from ray marching samples to all epipolar samples
 
-#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
+#include "assets/EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 Texture2D<uint2>  g_tex2DInterpolationSource;
 Texture2D<float3> g_tex2DInitialInsctrIrradiance;

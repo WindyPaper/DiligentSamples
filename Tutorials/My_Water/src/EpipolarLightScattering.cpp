@@ -286,7 +286,7 @@ static RefCntAutoPtr<IShader> CreateShader(IRenderDevice*     pDevice,
 										   IShaderSourceInputStreamFactory* pShaderIFactory,
                                            const ShaderMacro* Macros = nullptr)
 {
-	std::string append_name = std::string("EpipolarLightScattering/") + FileName;
+	std::string append_name = std::string("assets/EpipolarLightScattering/") + FileName;
     ShaderCreateInfo ShaderCI;
     ShaderCI.EntryPoint                 = EntryPoint;
     ShaderCI.FilePath                   = append_name.c_str();

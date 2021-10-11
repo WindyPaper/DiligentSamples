@@ -1,4 +1,4 @@
-#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
+#include "assets/EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 #ifndef THREAD_GROUP_SIZE
 #   define THREAD_GROUP_SIZE 16
@@ -12,9 +12,9 @@ cbuffer cbParticipatingMediaScatteringParams
 Texture2D<float2> g_tex2DOccludedNetDensityToAtmTop;
 SamplerState g_tex2DOccludedNetDensityToAtmTop_sampler;
 
-#include "EpipolarLightScattering/LookUpTables.fxh"
-#include "EpipolarLightScattering/ScatteringIntegrals.fxh"
-#include "EpipolarLightScattering/precompute/PrecomputeCommon.fxh"
+#include "assets/EpipolarLightScattering/LookUpTables.fxh"
+#include "assets/EpipolarLightScattering/ScatteringIntegrals.fxh"
+#include "assets/EpipolarLightScattering/precompute/PrecomputeCommon.fxh"
 
 RWTexture3D</*format = rgba16f*/float3> g_rwtex3DSingleScattering;
 

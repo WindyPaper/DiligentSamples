@@ -1,5 +1,5 @@
-#include "BasicStructures.fxh"
-#include "AtmosphereShadersCommon.fxh"
+#include "assets/BasicStructures.fxh"
+#include "assets/AtmosphereShadersCommon.fxh"
 
 Texture2D<float4> g_tex2DSliceEndPoints;
 

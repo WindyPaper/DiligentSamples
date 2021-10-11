@@ -2,8 +2,8 @@
 // Transforms scattering and extinction from epipolar space to camera space and combines with the
 // back buffer
 
-#include "BasicStructures.fxh"
-#include "EpipolarLightScattering/AtmosphereShadersCommon.fxh"
+#include "assets/BasicStructures.fxh"
+#include "assets/EpipolarLightScattering/AtmosphereShadersCommon.fxh"
 
 cbuffer cbParticipatingMediaScatteringParams
 {
@@ -47,7 +47,7 @@ Texture2D<float>  g_tex2DAverageLuminance;
     SamplerState      g_tex2DEpipolarExtinction_sampler; // Linear clamp
 #endif
 
-#include "EpipolarLightScattering/Extinction.fxh"
+#include "assets/EpipolarLightScattering/Extinction.fxh"
 //#include "ToneMapping.fxh"
 
 float3 rgb2hsv(float3 c)

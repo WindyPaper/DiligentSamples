@@ -377,7 +377,7 @@ void Diligent::OceanWave::_CreateSpectrumPSO(IRenderDevice *pDevice, IShaderSour
 		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
 		ShaderCI.EntryPoint = "CalculateInitialSpectrum";
 		ShaderCI.Desc.Name = "Wave H0 Calculate";
-		ShaderCI.FilePath = "wave_h0.csh";
+		ShaderCI.FilePath = "assets/wave_h0.csh";
 		//ShaderCI.Macros = Macros;
 		pDevice->CreateShader(ShaderCI, &pCalculateSpectrumCS);
 	}
@@ -424,7 +424,7 @@ void Diligent::OceanWave::_CreateIFFTRowPSO(IRenderDevice *pDevice, IShaderSourc
 		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
 		ShaderCI.EntryPoint = "RowInverseFFT";
 		ShaderCI.Desc.Name = "Wave IFFT Row Calculate";
-		ShaderCI.FilePath = "wave_ifft.csh";
+		ShaderCI.FilePath = "assets/wave_ifft.csh";
 		ShaderCI.Macros = Macros;
 		pDevice->CreateShader(ShaderCI, &pIFFTRowCS);
 	}
@@ -461,7 +461,7 @@ void Diligent::OceanWave::_CreateIFFTColumnPSO(IRenderDevice *pDevice, IShaderSo
 		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
 		ShaderCI.EntryPoint = "ColumnInverseFFT";
 		ShaderCI.Desc.Name = "Wave IFFT Column Calculate";
-		ShaderCI.FilePath = "wave_ifft.csh";
+		ShaderCI.FilePath = "assets/wave_ifft.csh";
 		ShaderCI.Macros = Macros;
 		pDevice->CreateShader(ShaderCI, &pIFFTColumnCS);
 	}
@@ -498,7 +498,7 @@ void Diligent::OceanWave::_CreateResultMergePSO(IRenderDevice *pDevice, IShaderS
 		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
 		ShaderCI.EntryPoint = "FillResultTextures";
 		ShaderCI.Desc.Name = "Wave Result merge";
-		ShaderCI.FilePath = "wave_result_merge.csh";
+		ShaderCI.FilePath = "assets/wave_result_merge.csh";
 		ShaderCI.Macros = Macros;
 		pDevice->CreateShader(ShaderCI, &pResultMergeCS);
 	}
