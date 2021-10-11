@@ -1,0 +1,31 @@
+#ifndef _PCG_NODE_POOL_H_
+#define _PCG_NODE_POOL_H_
+
+#include <unordered_map>
+
+namespace Diligent
+{
+	class CDLODNode;
+	class SelectionInfo;
+
+	struct PCGNodeInfo
+	{
+		CDLODNode *pNode;
+		bool IsFinished;
+	};
+
+	class PCGNodePool
+	{
+	public:
+		PCGNodePool();
+		~PCGNodePool();
+
+		void QueryNodes(SelectionInfo *pNodeInfo);
+
+	private:
+		std::unordered_map<CDLODNode*, PCGNodeInfo> mPrimaryNodes;
+		std::unordered_map<CDLODNode*, PCGNodeInfo> mNormalNodes;
+	};
+}
+
+#endif
