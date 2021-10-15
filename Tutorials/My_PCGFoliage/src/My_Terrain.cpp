@@ -32,6 +32,7 @@
 #include "imgui.h"
 #include "imGuIZMO.h"
 #include "ImGuiUtils.hpp"
+#include "PCGSystem.h"
 
 namespace Diligent
 {	
@@ -153,6 +154,8 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 	m_apClipMap.reset(new GroundMesh(LOD_MESH_GRID_SIZE, LOD_COUNT, 0.115f));
 
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
+
+	m_pPCGSystem = new PCGSystem(m_pImmediateContext, m_pDevice);
 }
 
 // Render a frame
@@ -296,6 +299,15 @@ void My_Terrain::UpdateUI()
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 	}
 	ImGui::End();
+}
+
+My_Terrain::~My_Terrain()
+{
+	if (m_pPCGSystem)
+	{
+		delete m_pPCGSystem;
+		m_pPCGSystem = nullptr;
+	}
 }
 
 } // namespace Diligent

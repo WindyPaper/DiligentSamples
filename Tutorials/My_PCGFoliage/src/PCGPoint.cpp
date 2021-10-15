@@ -7,6 +7,11 @@ Diligent::PCGPoint::PCGPoint(float radius, float2 min_c, float2 max_c, std::uint
 	GeneratePoints(radius, min_c, max_c, seed);
 }
 
+Diligent::PCGPoint::PCGPoint()
+{
+
+}
+
 Diligent::PCGPoint::~PCGPoint()
 {
 

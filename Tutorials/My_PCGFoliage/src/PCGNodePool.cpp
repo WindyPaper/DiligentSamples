@@ -37,3 +37,8 @@ void Diligent::PCGNodePool::QueryNodes(SelectionInfo *pNodeInfo)
 		}
 	}
 }
+
+void Diligent::PCGNodePool::GetGPUNodeData(GPUNodeData *pOutData, int Num)
+{
+
+}

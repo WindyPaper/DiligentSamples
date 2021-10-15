@@ -5,13 +5,18 @@
 
 namespace Diligent
 {
-	class CDLODNode;
-	class SelectionInfo;
+	struct CDLODNode;
+	struct SelectionInfo;
 
 	struct PCGNodeInfo
 	{
 		CDLODNode *pNode;
 		bool IsFinished;
+	};
+
+	struct GPUNodeData
+	{
+		int rx, ry, size, padding;
 	};
 
 	class PCGNodePool
@@ -21,6 +26,8 @@ namespace Diligent
 		~PCGNodePool();
 
 		void QueryNodes(SelectionInfo *pNodeInfo);
+
+		void GetGPUNodeData(GPUNodeData *pOutData, int Num);
 
 	private:
 		std::unordered_map<CDLODNode*, PCGNodeInfo> mPrimaryNodes;

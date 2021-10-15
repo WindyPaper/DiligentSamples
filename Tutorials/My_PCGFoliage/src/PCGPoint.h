@@ -12,6 +12,7 @@ namespace Diligent
 	class PCGPoint
 	{
 	public:
+		PCGPoint();
 		PCGPoint(float radius, float2 min_c, float2 max_c, std::uint32_t seed = 0);
 
 		~PCGPoint();

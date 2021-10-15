@@ -16,16 +16,23 @@ namespace Diligent
 	struct PlantParam
 	{
 		float footprint;
+		int size;
 	};
 
+	typedef std::vector<std::vector<PlantParam>> PlantParamLayer;
 	class PCGLayer
 	{
 	public:
 		PCGLayer();
 		~PCGLayer();
 
+		const PlantParamLayer &GetPlantParamLayer();
+
+	protected:
+		void SetupPlantParam();
+
 	private:
-		std::vector<std::uint32_t> mLayer;
+		PlantParamLayer mLayer;
 	};
 }
 

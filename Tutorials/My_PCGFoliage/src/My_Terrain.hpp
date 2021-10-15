@@ -57,9 +57,13 @@ struct TerrainData
 	int IdxNum = 0;
 };
 
+class PCGSystem;
+
 class My_Terrain final : public SampleBase
 {
 public:
+	virtual ~My_Terrain();
+
     virtual void Initialize(const SampleInitInfo& InitInfo) override final;
 
     virtual void Render() override final;
@@ -91,6 +95,8 @@ private:
 	MouseState        m_LastMouseState;
 
 	std::shared_ptr<GroundMesh> m_apClipMap;
+
+	PCGSystem *m_pPCGSystem;
 };
 
 } // namespace Diligent
