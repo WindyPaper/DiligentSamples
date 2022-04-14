@@ -48,7 +48,7 @@ namespace Diligent
 		GroundMesh(const uint SizeM, const uint Level, const float ClipScale);
 		~GroundMesh();
 
-		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain);		
+		void InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension &TerrainDim);
 		void Render(IDeviceContext *pContext, const float3 &CamPos);
 
 		void Update(const FirstPersonCamera *pCam);		

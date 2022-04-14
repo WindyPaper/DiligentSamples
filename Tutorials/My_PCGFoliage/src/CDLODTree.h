@@ -22,7 +22,7 @@
 
 namespace Diligent
 {
-	class SelectionInfo;	
+	struct SelectionInfo;	
 
 	enum class LODNodeState
 	{

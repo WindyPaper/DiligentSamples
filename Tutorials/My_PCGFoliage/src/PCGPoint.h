@@ -13,11 +13,18 @@ namespace Diligent
 	{
 	public:
 		PCGPoint();
-		PCGPoint(float radius, float2 min_c, float2 max_c, std::uint32_t seed = 0);
+		//PCGPoint(float radius, float2 min_c, float2 max_c, std::uint32_t seed = 0);
+		void ReadPoints(const uint Layer);
 
 		~PCGPoint();
 
 		void GeneratePoints(float radius, float2 min_c, float2 max_c, std::uint32_t seed);
+
+		size_t GetNum() const { return mPoints.size(); }
+
+		const float *GetData() const { return &mPoints[0][0]; }
+
+		
 
 	private:
 		std::vector<std::array<float, 2>> mPoints;

@@ -13,22 +13,37 @@ Diligent::PCGLayer::~PCGLayer()
 
 }
 
-const Diligent::PlantParamLayer & Diligent::PCGLayer::GetPlantParamLayer()
+const Diligent::PlantParamLayer & Diligent::PCGLayer::GetPlantParamLayer() const
 {
 	return mLayer;
 }
 
 void Diligent::PCGLayer::SetupPlantParam()
 {
-	/*PlantParam TestLargeTree;
-	TestLargeTree.footprint = 0.3f;
-	TestLargeTree.size = LEAF_RENDER_NODE_SIZE * 2;
+	for (int i = 0; i < F_LAYER_NUM; ++i)
+	{
+		PlantParam pt;
 
-	mLayer[F_LARGE_TREE_LAYER].push_back(TestLargeTree);*/
+		pt.size = PCG_TEX_DEFAULT_SIZE >> i;
 
-	PlantParam TestMediumTree;
-	TestMediumTree.footprint = 0.1f;
-	TestMediumTree.size = LEAF_RENDER_NODE_SIZE;
+		switch (i)
+		{
+		case F_LARGE_TREE_LAYER:
+			pt.footprint = 0.8f;
+			break;
 
-	mLayer[F_MEDIUM_TERR_LAYER].push_back(TestMediumTree);
+		case F_MEDIUM_TREE_LAYER:
+			pt.footprint = 0.5f;
+			break;
+
+		case F_GRASS_LAYER:
+			pt.footprint = 0.1f;
+			break;
+
+		default:
+			break;
+		}
+
+		mLayer[i].push_back(pt);
+	}
 }

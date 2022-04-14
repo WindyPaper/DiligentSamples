@@ -67,7 +67,7 @@ void Diligent::GroundMesh::Render(IDeviceContext *pContext, const float3 &CamPos
 	//CBConstants->MeshGridUnit.x = LOD_MESH_GRID_SIZE;
 
 	const SelectionInfo &SelectInfo = mpCDLODTree->GetSelectInfo();
-	LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
+	//LOG_INFO_MESSAGE("Select Node Number = ", SelectInfo.SelectionNodes.size());
 
 	for (int i = 0; i < SelectInfo.SelectionNodes.size(); ++i)
 	{
@@ -144,14 +144,11 @@ DrawIndexedAttribs GroundMesh::GetDrawIndex(const uint16_t start, const uint16_t
 	return drawAttrs;
 }
 
-void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain)
+void GroundMesh::InitClipMap(IRenderDevice *pDevice, ISwapChain *pSwapChain, const Dimension &TerrainDim)
 {	
 	//m_Heightmap.LoadHeightMap("./wm_heightmap.png", pDevice);
 	m_Heightmap.LoadMap("./wm_diffuse_map.png", "./wm_heightmap.png", pDevice);
-
-	Dimension TerrainDim;
-	TerrainDim.Min = float3({ -5690.0f, -3000.00f, -7090.0f });
-	TerrainDim.Size = float3({ 11380.0f, 3000.0f, 12180.0f });
+	
 	mpCDLODTree = new CDLODTree(m_Heightmap, TerrainDim);
 	mpCDLODTree->Create();
 

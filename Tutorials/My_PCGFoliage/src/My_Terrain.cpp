@@ -153,9 +153,13 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 
 	m_apClipMap.reset(new GroundMesh(LOD_MESH_GRID_SIZE, LOD_COUNT, 0.115f));
 
-	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain);
+	Dimension TerrainDim;
+	TerrainDim.Min = float3({ -5690.0f, -3000.00f, -7090.0f });
+	TerrainDim.Size = float3({ 11380.0f, 3000.0f, 12180.0f });
+	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain, TerrainDim);
 
-	m_pPCGSystem = new PCGSystem(m_pImmediateContext, m_pDevice);
+	m_pPCGSystem = new PCGSystem(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, TerrainDim);
+	m_pPCGSystem->DoProcedural();
 }
 
 // Render a frame

@@ -5,10 +5,12 @@
 
 namespace Diligent
 {
+	static const int PCG_TEX_DEFAULT_SIZE = 2048;
+
 	enum FoliageLayerType
 	{
 		F_LARGE_TREE_LAYER,
-		F_MEDIUM_TERR_LAYER,
+		F_MEDIUM_TREE_LAYER,
 		F_GRASS_LAYER,
 		F_LAYER_NUM
 	};
@@ -26,7 +28,7 @@ namespace Diligent
 		PCGLayer();
 		~PCGLayer();
 
-		const PlantParamLayer &GetPlantParamLayer();
+		const PlantParamLayer &GetPlantParamLayer() const;
 
 	protected:
 		void SetupPlantParam();
