@@ -3,6 +3,9 @@
 
 #include "RenderDevice.h"
 
+#include "TextureLoader.h"
+#include "TextureUtilities.h"
+
 Diligent::PCGSystem::PCGSystem(IDeviceContext *pContext, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, const Dimension &TerrainDim) :
 	m_pContext(pContext),
 	m_pRenderDevice(pDevice),
@@ -25,7 +28,7 @@ void Diligent::PCGSystem::Init()
 	float2 tile_size = float2(mTerrainDim.Size.x, mTerrainDim.Size.z);
 	mTerrainTile = new PCGTerrainTile(m_pContext, m_pRenderDevice, tile_min, tile_size);
 
-	CreatePoissonDiskSamplerData();
+	//CreatePoissonDiskSamplerData();	
 }
 
 void Diligent::PCGSystem::CreatePoissonDiskSamplerData()
@@ -55,7 +58,7 @@ void Diligent::PCGSystem::DoProcedural()
 {
 	//mNodePool.QueryNodes(pNodeInfo);
 	mTerrainTile->GenerateNodes(&mPlantLayer, mPointVec);
-	mTerrainTile->GeneratePosMap(&mPCGCSCall);	
+	mTerrainTile->GeneratePosMap(&mPCGCSCall);		
 }
 
 void Diligent::PCGTerrainTile::CreateSpecificPCGTexture(const uint32_t Layer, const uint32_t LinearQuadIndex)
@@ -145,9 +148,10 @@ void Diligent::PCGTerrainTile::DivideTile(const PCGLayer *pLayer, const std::vec
 				PCGNodeData pcgData = PCGNodeData();
 				pcgData.LayerIdx = i;
 				pcgData.MortonCode = MortonVal;
-				pcgData.Origin = float2(x * cellWidth, y * cellHeight) + mTileMin;
-				pcgData.Size = float2(cellWidth, cellHeight);
-				pcgData.PointNum = PointVec[i].GetNum();
+				pcgData.TerrainOrigin = mTileMin;
+				pcgData.NodeOrigin = float2(x * cellWidth, y * cellHeight) + mTileMin;
+				pcgData.CellSize = float2(cellWidth, cellHeight);
+				pcgData.PointNum = 0;// PointVec[i].GetNum();
 				pcgData.TexSize = PCG_TEX_DEFAULT_SIZE >> i;
 				pcgData.PlantRadius = pLayer->GetPlantParamLayer()[i][0].footprint;
 				pcgData.PlantZOI = pcgData.PlantRadius + pLayer->GetPlantParamLayer()[i][0].footprint;
@@ -168,6 +172,14 @@ Diligent::PCGTerrainTile::PCGTerrainTile(IDeviceContext *pContext, IRenderDevice
 	mTileMin(min),
 	mTileSize(size)
 {
+	InitGlobalRes();
+}
+
+void Diligent::PCGTerrainTile::InitGlobalRes()
+{
+	TextureLoadInfo loadInfo;
+	loadInfo.IsSRGB = false;
+	CreateTextureFromFile("./PCGRoadMask.png", loadInfo, m_pRenderDevice, &mGlobalTerrainMaskTex);
 }
 
 void Diligent::PCGTerrainTile::GenerateNodes(const PCGLayer *pLayer, const std::vector<PCGPoint> &PointVec)
@@ -176,17 +188,19 @@ void Diligent::PCGTerrainTile::GenerateNodes(const PCGLayer *pLayer, const std::
 }
 
 void Diligent::PCGTerrainTile::GeneratePosMap(PCGCSCall *pPCGCall)
-{
+{	
 	pPCGCall->PosMapSetPSO(m_pContext);
 
+	pPCGCall->BindTerrainMaskMap(m_pContext, mGlobalTerrainMaskTex);
+
 	uint lastLayer = F_LAYER_NUM;
-	//for (int i = 0; i < mGPUDensityTexArray.size(); ++i)
-	for (int i = 0; i < 1; ++i)
+	for (int i = 0; i < mGPUDensityTexArray.size(); ++i)
+	//for (int i = 0; i < 1; ++i)
 	{
 		uint currLayerIdx = mPCGNodeDataVec[i].LayerIdx;
 		if (lastLayer != currLayerIdx)
 		{
-			pPCGCall->BindPosMapPoints(currLayerIdx);
+			pPCGCall->BindPoissonPosMap(currLayerIdx);
 			lastLayer = currLayerIdx;
 		}
 		

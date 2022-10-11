@@ -1,13 +1,18 @@
+#include <fstream>      // std::ifstream
+
 #include "PCGCSCall.h"
 #include "MapHelper.hpp"
 
 #include <assert.h>
 #include "ShaderMacroHelper.hpp"
+#include "PCGLayer.h"
 
 Diligent::PCGCSCall::PCGCSCall(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :
 	m_pDevice(pDevice)
 {
 	CreatePSO(pDevice, pShaderFactory);
+
+	CreateGlobalPointTextureuBuffer();
 }
 
 Diligent::PCGCSCall::~PCGCSCall()
@@ -46,6 +51,62 @@ void Diligent::PCGCSCall::CreateGlobalPointBuffer(const std::vector<PCGPoint> &p
 	}
 }
 
+void Diligent::PCGCSCall::CreateGlobalPointTextureuBuffer()
+{
+	mPointTextureDeviceDataVec.resize(F_LAYER_NUM);
+
+	for (int i = 0; i < F_LAYER_NUM; ++i)
+	{
+		char DatName[128];
+		sprintf(DatName, "./PoissonLayer%d.dat", i);
+
+		std::ifstream is(DatName, std::ifstream::binary);
+
+		int TextureSize, PointLen;
+
+		is.read((char*)&TextureSize, sizeof(int));
+		is.read((char*)&PointLen, sizeof(int));
+
+		std::vector<float2> Points;
+		Points.resize(PointLen);
+
+		is.read((char*)&Points[0], sizeof(float2) * PointLen);
+		is.close();
+
+		const int TextureDataSize = TextureSize * TextureSize;
+		std::vector<float> SrcTextureData;
+		SrcTextureData.resize(TextureDataSize);
+
+		memset(&SrcTextureData[0], 0, sizeof(float) * TextureDataSize);
+		for (int pi = 0; pi < Points.size(); ++pi)
+		{
+			float2 &v = Points[pi];
+			int x = v[0];
+			int y = v[1];
+
+			SrcTextureData[y * TextureSize + x] = 1.0f;
+		}
+
+		//float type
+		TextureDesc InitFloat4Type;
+		InitFloat4Type.Type = RESOURCE_DIM_TEX_2D;
+		InitFloat4Type.Width = TextureSize;
+		InitFloat4Type.Height = TextureSize;
+		InitFloat4Type.MipLevels = 1;
+		InitFloat4Type.Format = TEX_FORMAT_R32_FLOAT;
+		InitFloat4Type.Usage = USAGE_DYNAMIC;
+		InitFloat4Type.BindFlags = BIND_SHADER_RESOURCE;
+
+		TextureData InitData;
+		TextureSubResData TexData;
+		TexData.pData = &SrcTextureData[0];
+		TexData.Stride = sizeof(float) * TextureSize;
+		InitData.pSubResources = &TexData;
+		InitData.NumSubresources = 1;
+		m_pDevice->CreateTexture(InitFloat4Type, &InitData, &mPointTextureDeviceDataVec[i]);
+	}
+}
+
 void Diligent::PCGCSCall::PosMapSetPSO(IDeviceContext *pContext)
 {
 	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];
@@ -59,19 +120,32 @@ void Diligent::PCGCSCall::BindPosMapPoints(uint Layer)
 		mPointDeviceDataVec[Layer]->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 }
 
+void Diligent::PCGCSCall::BindPoissonPosMap(uint Layer)
+{
+	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];
+	ITextureView *pPoissonTex = mPointTextureDeviceDataVec[Layer]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "PoissonPosMapData")->Set(pPoissonTex);
+}
+
 void Diligent::PCGCSCall::BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex)
 {
 	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];
 
 	/*pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPosMapData")->SetArray(\
 		&TexDefaultArray[0], 0, TexDefaultArray.size());*/
-	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPosMapData")->Set(pOutTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPosMapData")->Set(pOutTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));	
 
 	{
 		MapHelper<PCGNodeData> CBConstants(pContext, pNodeConstBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
 		memcpy((void*)CBConstants.GetMapData(), &NodeData, sizeof(PCGNodeData));
 	}
 	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGPointData")->Set(pNodeConstBuffer);
+}
+
+void Diligent::PCGCSCall::BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex)
+{
+	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];	
+	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TerrainMaskMap")->Set(pMaskTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void Diligent::PCGCSCall::PosMapDispatch(IDeviceContext *pContext, uint MapSize)
@@ -127,14 +201,13 @@ void Diligent::PCGCSCall::CreateCalPosMapPSO(IRenderDevice *pDevice, IShaderSour
 	// clang-format off
 	// Shader variables should typically be mutable, which means they are expected
 	// to change on a per-instance basis
-	//ShaderResourceVariableDesc Vars[] =
-	//{
-	//	{SHADER_TYPE_COMPUTE, "cbPCGPointData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-	//	{SHADER_TYPE_COMPUTE, "OutPosMapData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC}
-	//};
-	//// clang-format on
-	//PSODesc.ResourceLayout.Variables = Vars;
-	//PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "cbPCGPointData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
 
 	PSODesc.Name = "PCG cal map pos compute shader";
 	PSOCreateInfo.pCS = pCalculatePOSMapCS;

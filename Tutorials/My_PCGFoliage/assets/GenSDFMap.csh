@@ -36,7 +36,7 @@ cbuffer cbPCGPointData
 //StructuredBuffer<float2> InPCGPointDatas;
 
 [numthreads(4, 4, 1)]
-void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
+void GenSDFMapMain(uint3 id : SV_DispatchThreadID)
 {
 	//Get texture size
 	uint tex_x = id.x;

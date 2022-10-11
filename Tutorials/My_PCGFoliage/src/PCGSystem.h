@@ -26,6 +26,8 @@ namespace Diligent
 	public:
 		PCGTerrainTile(IDeviceContext *pContext, IRenderDevice *pDevice, const float2 &min, const float2 &size);
 
+		void InitGlobalRes();
+
 		void GenerateNodes(const PCGLayer *pLayer, const std::vector<PCGPoint> &PointVec);
 
 		void GeneratePosMap(PCGCSCall *pPCGCall);
@@ -44,6 +46,8 @@ namespace Diligent
 		MortonCode mMortonCode;
 		std::vector<RefCntAutoPtr<ITexture>> mGPUDensityTexArray; //quad tree
 		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFTexArray; //quad tree
+
+		RefCntAutoPtr<ITexture> mGlobalTerrainMaskTex;
 
 		RefCntAutoPtr<IBuffer> mPCGGPUNodeConstBuffer;
 		std::vector<PCGNodeData> mPCGNodeDataVec;

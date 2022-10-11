@@ -39,10 +39,15 @@ namespace Diligent
 		~PCGCSCall();
 
 		void CreateGlobalPointBuffer(const std::vector<PCGPoint> &points);
+		void CreateGlobalPointTextureuBuffer();
 
 		void PosMapSetPSO(IDeviceContext *pContext);
 		void BindPosMapPoints(uint Layer);
+		void BindPoissonPosMap(uint Layer);
 		void BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex);
+
+		void BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex);
+
 		void PosMapDispatch(IDeviceContext *pContext, uint MapSize);
 
 		//void UpdatePosMapData(const PCGNodeData *pPCGNode);
@@ -56,6 +61,8 @@ namespace Diligent
 		PCGCSGpuRes mPCGCSGPUResVec[PCG_CS_NUM];
 
 		std::vector<RefCntAutoPtr<IBuffer>> mPointDeviceDataVec;
+
+		std::vector<RefCntAutoPtr<ITexture>> mPointTextureDeviceDataVec;
 		//RefCntAutoPtr<IBuffer> mPosMapNodeData;
 
 		IRenderDevice *m_pDevice;
