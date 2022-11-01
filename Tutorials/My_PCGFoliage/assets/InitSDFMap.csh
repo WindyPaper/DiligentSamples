@@ -3,21 +3,18 @@
 // #   define NUM_TEXTURES 1
 // #endif
 
-// RWTexture2D<float> OutPosMapData;
+// RWTexture2D<float> OutInputTexture;
 
 Texture2D InputTexture;
-Texture2D OriginalTexture;
-
-RWTexture2D<float4> OutputTexture;
+RWTexture2D<float4> OutInitSDFMap;
 
 // const static int TerrainMaskTexSize = 512;
-// Texture2D PosMapData; //512
+// Texture2D InputTexture; //512
 //SamplerState TerrainMaskMap_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
-cbuffer cbPCGGenSDFData
+cbuffer cbInitSDFMapData
 {
-	float2 TextureSize;
-	float2 Padding;
+	float4 TexSizeAndInvertSize; //w, h, 1/w, 1/h	
 };
 
 // cbuffer cbPCGPointDatas
@@ -28,7 +25,7 @@ cbuffer cbPCGGenSDFData
 //StructuredBuffer<float2> InPCGPointDatas;
 
 [numthreads(4, 4, 1)]
-void GenSDFMain(uint3 id : SV_DispatchThreadID)
+void InitSDFMapMain(uint3 id : SV_DispatchThreadID)
 {
 	//Get texture size
 	uint tex_x = id.x;
@@ -42,20 +39,16 @@ void GenSDFMain(uint3 id : SV_DispatchThreadID)
 
 	// float4 global_terrain_mask_value = TerrainMaskMap.Load(int3(global_mask_uv * TerrainMaskTexSize, 0));
 
-	float4 input_texture = InputTexture.Load(int3(id.xy, 0));
-	float4 original_texture = OriginalTexture.Load(int3(id.xy, 0));
+	float4 pos_val = InputTexture.Load(int3(id.xy, 0));
 
-	float determin = original_texture.x;
+	float determin = pos_val.x;
 
-	float distance = 0.0;
-	if(determin >= 0.5f)
+	if(determin >= 0.5)
 	{
-		distance = -length(id.xy - input_texture.xy * TextureSize.xy);
-		OutputTexture[id.xy] = float4(distance, distance, distance, 1.0f);
+		OutInitSDFMap[id.xy] = float4(-1.0, -1.0, tex_x * TexSizeAndInvertSize.z, tex_y * TexSizeAndInvertSize.w);
 	}
 	else
 	{
-		distance = -length(id.xy - input_texture.zw * TextureSize.xy);
-		OutputTexture[id.xy] = float4(distance, distance, distance, 0.0f);
+		OutInitSDFMap[id.xy] = float4(tex_x * TexSizeAndInvertSize.z, tex_y * TexSizeAndInvertSize.w, -1.0, -1.0);
 	}
 }
