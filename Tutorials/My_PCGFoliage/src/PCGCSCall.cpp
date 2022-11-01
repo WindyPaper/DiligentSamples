@@ -74,17 +74,17 @@ void Diligent::PCGCSCall::CreateGlobalPointTextureuBuffer()
 		is.close();
 
 		const int TextureDataSize = TextureSize * TextureSize;
-		std::vector<float> SrcTextureData;
+		std::vector<unsigned char> SrcTextureData;
 		SrcTextureData.resize(TextureDataSize);
 
-		memset(&SrcTextureData[0], 0, sizeof(float) * TextureDataSize);
+		memset(&SrcTextureData[0], 0, sizeof(unsigned char) * TextureDataSize);
 		for (int pi = 0; pi < Points.size(); ++pi)
 		{
 			float2 &v = Points[pi];
 			int x = v[0];
 			int y = v[1];
 
-			SrcTextureData[y * TextureSize + x] = 1.0f;
+			SrcTextureData[y * TextureSize + x] = 255;
 		}
 
 		//float type
@@ -93,18 +93,40 @@ void Diligent::PCGCSCall::CreateGlobalPointTextureuBuffer()
 		InitFloat4Type.Width = TextureSize;
 		InitFloat4Type.Height = TextureSize;
 		InitFloat4Type.MipLevels = 1;
-		InitFloat4Type.Format = TEX_FORMAT_R32_FLOAT;
+		InitFloat4Type.Format = TEX_FORMAT_R8_UNORM;
 		InitFloat4Type.Usage = USAGE_DYNAMIC;
 		InitFloat4Type.BindFlags = BIND_SHADER_RESOURCE;
 
 		TextureData InitData;
 		TextureSubResData TexData;
 		TexData.pData = &SrcTextureData[0];
-		TexData.Stride = sizeof(float) * TextureSize;
+		TexData.Stride = sizeof(unsigned char) * TextureSize;
 		InitData.pSubResources = &TexData;
 		InitData.NumSubresources = 1;
 		m_pDevice->CreateTexture(InitFloat4Type, &InitData, &mPointTextureDeviceDataVec[i]);
 	}
+}
+
+void Diligent::PCGCSCall::CreateGPUGenSDFMapBuffer()
+{
+	//init
+	uint TypeSize = sizeof(float4);
+	BufferDesc BuffDesc;
+	BuffDesc.Name = "PCG Init SDF Map Buffer";
+	BuffDesc.Usage = USAGE_DYNAMIC;
+	BuffDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	BuffDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	BuffDesc.uiSizeInBytes = sizeof(PCGNodeData);
+	
+	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apInitSDFMapBuffer);
+
+	//jump flood
+	BuffDesc.Name = "PCG SDF Jump Flood buffer";
+	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apSDFJumpFloodBuffer);
+
+	//gen composite SDF
+	BuffDesc.Name = "PCG Gen composite SDF buffer";
+	m_pDevice->CreateBuffer(BuffDesc, nullptr, &m_apGenSDFMapBuffer);
 }
 
 void Diligent::PCGCSCall::PosMapSetPSO(IDeviceContext *pContext)
@@ -142,6 +164,56 @@ void Diligent::PCGCSCall::BindPosMapRes(IDeviceContext *pContext, IBuffer *pNode
 	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGPointData")->Set(pNodeConstBuffer);
 }
 
+void Diligent::PCGCSCall::BindInitSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pInputTex, ITexture *pOutputTex)
+{
+	PCGCSGpuRes *pInitSDFMapRes = &mPCGCSGPUResVec[PCG_CS_INIT_SDF_MAP];
+
+	{
+		MapHelper<InitSDFMapData> CBConstants(pContext, m_apInitSDFMapBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+		InitSDFMapData inData;
+		inData.TexSizeAndInvertSize = float4(NodeData.TexSize, NodeData.TexSize, 1.0f / NodeData.TexSize, 1.0f / NodeData.TexSize);
+		memcpy((void*)CBConstants.GetMapData(), &inData, sizeof(InitSDFMapData));
+	}
+	pInitSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbInitSDFMapData")->Set(m_apInitSDFMapBuffer);
+
+	pInitSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	pInitSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutInitSDFMap")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+}
+
+void Diligent::PCGCSCall::BindSDFJumpFloodData(IDeviceContext *pContext, const PCGNodeData &NodeData, float2 SampleStep, ITexture *pInputTex, ITexture *pOutputTex)
+{
+	PCGCSGpuRes *pSDFJumpFloodRes = &mPCGCSGPUResVec[PCG_CS_SDF_JUMP_FLOOD_MAP];
+
+	{
+		MapHelper<PCGSDFJumpFloodData> CBConstants(pContext, m_apSDFJumpFloodBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+		PCGSDFJumpFloodData inData;
+		inData.Step = SampleStep;
+		inData.TextureSize = NodeData.TexSize;
+		memcpy((void*)CBConstants.GetMapData(), &inData, sizeof(PCGSDFJumpFloodData));
+	}
+	pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGSDFJumpFloodData")->Set(m_apSDFJumpFloodBuffer);
+
+	pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+}
+
+void Diligent::PCGCSCall::BindGenSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pOriginalTex, ITexture *pInputTex, ITexture *pOutputTex)
+{
+	PCGCSGpuRes *pGenSDFMapRes = &mPCGCSGPUResVec[PCG_CS_GENERATE_SDF];
+
+	{
+		MapHelper<PCGGenSDFData> CBConstants(pContext, m_apGenSDFMapBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+		PCGGenSDFData inData;
+		inData.TextureSize = float2(NodeData.TexSize, NodeData.TexSize);
+		memcpy((void*)CBConstants.GetMapData(), &inData, sizeof(InitSDFMapData));
+	}
+	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGGenSDFData")->Set(m_apGenSDFMapBuffer);
+
+	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OriginalTexture")->Set(pOriginalTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+}
+
 void Diligent::PCGCSCall::BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex)
 {
 	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];	
@@ -162,6 +234,10 @@ void Diligent::PCGCSCall::CreatePSO(IRenderDevice *pDevice, IShaderSourceInputSt
 	assert(pDevice->GetDeviceCaps().Features.BindlessResources);
 
 	CreateCalPosMapPSO(pDevice, pShaderFactory);
+
+	CreateInitSDFMapPSO(pDevice, pShaderFactory);
+	CreateSDFJumpFloodPSO(pDevice, pShaderFactory);
+	CreateGenSDFMapPSO(pDevice, pShaderFactory);
 }
 
 void Diligent::PCGCSCall::CreateCalPosMapPSO(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory)
@@ -215,5 +291,164 @@ void Diligent::PCGCSCall::CreateCalPosMapPSO(IRenderDevice *pDevice, IShaderSour
 
 	//SRB
 	pCalPosMapRes->apBindlessPSO->CreateShaderResourceBinding(&pCalPosMapRes->apBindlessSRB, true);
+}
+
+void Diligent::PCGCSCall::CreateInitSDFMapPSO(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory)
+{
+	PCGCSGpuRes *pInitSDFMapRes = &mPCGCSGPUResVec[PCG_CS_INIT_SDF_MAP];
+
+	ShaderCreateInfo ShaderCI;
+	ShaderCI.pShaderSourceStreamFactory = pShaderFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	/*ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("PCG_TILE_MAP_NUM", 8);
+	Macros.Finalize();*/
+
+	RefCntAutoPtr<IShader> pInitSDFMapCS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "InitSDFMapMain";
+		ShaderCI.Desc.Name = "InitSDFMapMain CS";
+		ShaderCI.FilePath = "InitSDFMap.csh";
+		//ShaderCI.Macros = Macros;
+		pDevice->CreateShader(ShaderCI, &pInitSDFMapCS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "cbInitSDFMapData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "PCG generate sdf map compute shader";
+	PSOCreateInfo.pCS = pInitSDFMapCS;
+	pDevice->CreateComputePipelineState(PSOCreateInfo, &pInitSDFMapRes->apBindlessPSO);
+
+	//SRB
+	pInitSDFMapRes->apBindlessPSO->CreateShaderResourceBinding(&pInitSDFMapRes->apBindlessSRB, true);
+}
+
+void Diligent::PCGCSCall::CreateSDFJumpFloodPSO(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory)
+{
+	PCGCSGpuRes *pSDFJumpFloodMapRes = &mPCGCSGPUResVec[PCG_CS_SDF_JUMP_FLOOD_MAP];
+
+	ShaderCreateInfo ShaderCI;
+	ShaderCI.pShaderSourceStreamFactory = pShaderFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	/*ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("PCG_TILE_MAP_NUM", 8);
+	Macros.Finalize();*/
+
+	RefCntAutoPtr<IShader> pSDFJumpFloodCS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "SDFJumpFloodMain";
+		ShaderCI.Desc.Name = "SDFJumpFloodMain CS";
+		ShaderCI.FilePath = "SDFJumpFlood.csh";
+		//ShaderCI.Macros = Macros;
+		pDevice->CreateShader(ShaderCI, &pSDFJumpFloodCS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "cbPCGSDFJumpFloodData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "PCG generate sdf map compute shader";
+	PSOCreateInfo.pCS = pSDFJumpFloodCS;
+	pDevice->CreateComputePipelineState(PSOCreateInfo, &pSDFJumpFloodMapRes->apBindlessPSO);
+
+	//SRB
+	pSDFJumpFloodMapRes->apBindlessPSO->CreateShaderResourceBinding(&pSDFJumpFloodMapRes->apBindlessSRB, true);
+}
+
+void Diligent::PCGCSCall::CreateGenSDFMapPSO(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory)
+{
+	PCGCSGpuRes *pGenPosSDFMapRes = &mPCGCSGPUResVec[PCG_CS_GENERATE_SDF];
+
+	ShaderCreateInfo ShaderCI;
+	ShaderCI.pShaderSourceStreamFactory = pShaderFactory;
+	// Tell the system that the shader source code is in HLSL.
+	// For OpenGL, the engine will convert this into GLSL under the hood.
+	ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
+	// OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
+	ShaderCI.UseCombinedTextureSamplers = true;
+
+	/*ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("PCG_TILE_MAP_NUM", 8);
+	Macros.Finalize();*/
+
+	RefCntAutoPtr<IShader> pGenSDFMapCS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_COMPUTE;
+		ShaderCI.EntryPoint = "GenSDFMain";
+		ShaderCI.Desc.Name = "GenSDFMain CS";
+		ShaderCI.FilePath = "GenSDFMap.csh";
+		//ShaderCI.Macros = Macros;
+		pDevice->CreateShader(ShaderCI, &pGenSDFMapCS);
+	}
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	PipelineStateDesc&             PSODesc = PSOCreateInfo.PSODesc;
+
+	// This is a compute pipeline
+	PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+
+	PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "cbPCGGenSDFData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSODesc.ResourceLayout.Variables = Vars;
+	PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	PSODesc.Name = "PCG generate sdf map compute shader";
+	PSOCreateInfo.pCS = pGenSDFMapCS;
+	pDevice->CreateComputePipelineState(PSOCreateInfo, &pGenPosSDFMapRes->apBindlessPSO);
+
+	//SRB
+	pGenPosSDFMapRes->apBindlessPSO->CreateShaderResourceBinding(&pGenPosSDFMapRes->apBindlessSRB, true);
 }
 

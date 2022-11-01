@@ -31,6 +31,7 @@ namespace Diligent
 		void GenerateNodes(const PCGLayer *pLayer, const std::vector<PCGPoint> &PointVec);
 
 		void GeneratePosMap(PCGCSCall *pPCGCall);
+		void GenerateSDFMap(PCGCSCall *pPCGCall);
 
 	protected:
 		void CreateSpecificPCGTexture(const uint32_t Layer, const uint32_t LinearQuadIndex);
@@ -45,7 +46,8 @@ namespace Diligent
 		//Generate texture hierarchy
 		MortonCode mMortonCode;
 		std::vector<RefCntAutoPtr<ITexture>> mGPUDensityTexArray; //quad tree
-		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFTexArray; //quad tree
+		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFTexArrayPing; //quad tree
+		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFTexArrayPong; //quad tree
 
 		RefCntAutoPtr<ITexture> mGlobalTerrainMaskTex;
 

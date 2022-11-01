@@ -72,6 +72,17 @@ void Diligent::PCGTerrainTile::CreateSpecificPCGTexture(const uint32_t Layer, co
 	DensityTexType.Usage = USAGE_DYNAMIC;
 	DensityTexType.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pRenderDevice->CreateTexture(DensityTexType, nullptr, &mGPUDensityTexArray[LinearQuadIndex]);
+
+	TextureDesc SDFTexType;
+	SDFTexType.Type = RESOURCE_DIM_TEX_2D;
+	SDFTexType.Width = PCG_TEX_DEFAULT_SIZE >> Layer;
+	SDFTexType.Height = SDFTexType.Width;
+	SDFTexType.MipLevels = 1;
+	SDFTexType.Format = TEX_FORMAT_RGBA32_FLOAT;
+	SDFTexType.Usage = USAGE_DYNAMIC;
+	SDFTexType.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pRenderDevice->CreateTexture(SDFTexType, nullptr, &mGPUSDFTexArrayPing[LinearQuadIndex]);
+	m_pRenderDevice->CreateTexture(SDFTexType, nullptr, &mGPUSDFTexArrayPong[LinearQuadIndex]);
 }
 
 void Diligent::PCGTerrainTile::CreatePCGNodeDataBuffer(const std::vector<PCGNodeData> &PCGNodeDataVec)
@@ -124,6 +135,8 @@ void Diligent::PCGTerrainTile::DivideTile(const PCGLayer *pLayer, const std::vec
 	}
 	mPCGNodeDataVec.resize(texNum);
 	mGPUDensityTexArray.resize(texNum);
+	mGPUSDFTexArrayPing.resize(texNum);
+	mGPUSDFTexArrayPong.resize(texNum);
 
 	float width = mTileSize.x;
 	float height = mTileSize.y;
@@ -209,4 +222,9 @@ void Diligent::PCGTerrainTile::GeneratePosMap(PCGCSCall *pPCGCall)
 		uint mapSize = PCG_TEX_DEFAULT_SIZE >> currLayerIdx;
 		pPCGCall->PosMapDispatch(m_pContext, mapSize);
 	}
+}
+
+void Diligent::PCGTerrainTile::GenerateSDFMap(PCGCSCall *pPCGCall)
+{
+
 }
