@@ -17,7 +17,9 @@ RWTexture2D<float4> OutputTexture;
 cbuffer cbPCGGenSDFData
 {
 	float2 TextureSize;
-	float2 Padding;
+	//float2 Padding;
+	float PlantRadius;
+	float PlantZOI; // zone of influence
 };
 
 // cbuffer cbPCGPointDatas
@@ -50,12 +52,14 @@ void GenSDFMain(uint3 id : SV_DispatchThreadID)
 	float distance = 0.0;
 	if(determin >= 0.5f)
 	{
-		distance = -length(id.xy - input_texture.xy * TextureSize.xy);
-		OutputTexture[id.xy] = float4(distance, distance, distance, 1.0f);
+		distance = length(id.xy - input_texture.xy * TextureSize.xy);
+		float final_ret = 1.0 - saturate((distance - PlantRadius)/(PlantZOI - PlantRadius));
+		OutputTexture[id.xy] = float4(final_ret, final_ret, final_ret, 1.0f);
 	}
 	else
 	{
-		distance = -length(id.xy - input_texture.zw * TextureSize.xy);
-		OutputTexture[id.xy] = float4(distance, distance, distance, 0.0f);
+		distance = length(id.xy - input_texture.zw * TextureSize.xy);
+		float final_ret = 1.0 - saturate((distance - PlantRadius)/(PlantZOI - PlantRadius));
+		OutputTexture[id.xy] = float4(final_ret, final_ret, final_ret, 0.0f);
 	}
 }

@@ -13,6 +13,7 @@ Diligent::PCGCSCall::PCGCSCall(IRenderDevice *pDevice, IShaderSourceInputStreamF
 	CreatePSO(pDevice, pShaderFactory);
 
 	CreateGlobalPointTextureuBuffer();
+	CreateGPUGenSDFMapBuffer();
 }
 
 Diligent::PCGCSCall::~PCGCSCall()
@@ -164,6 +165,12 @@ void Diligent::PCGCSCall::BindPosMapRes(IDeviceContext *pContext, IBuffer *pNode
 	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGPointData")->Set(pNodeConstBuffer);
 }
 
+void Diligent::PCGCSCall::InitSDFMapSetPSO(IDeviceContext *pContext)
+{
+	PCGCSGpuRes *pInitSDFMapRes = &mPCGCSGPUResVec[PCG_CS_INIT_SDF_MAP];
+	pContext->SetPipelineState(pInitSDFMapRes->apBindlessSRB->GetPipelineState());
+}
+
 void Diligent::PCGCSCall::BindInitSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pInputTex, ITexture *pOutputTex)
 {
 	PCGCSGpuRes *pInitSDFMapRes = &mPCGCSGPUResVec[PCG_CS_INIT_SDF_MAP];
@@ -180,7 +187,22 @@ void Diligent::PCGCSCall::BindInitSDFMapData(IDeviceContext *pContext, const PCG
 	pInitSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutInitSDFMap")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 }
 
-void Diligent::PCGCSCall::BindSDFJumpFloodData(IDeviceContext *pContext, const PCGNodeData &NodeData, float2 SampleStep, ITexture *pInputTex, ITexture *pOutputTex)
+void Diligent::PCGCSCall::InitSDFDispatch(IDeviceContext *pContext, uint MapSize)
+{
+	PCGCSGpuRes *pInitSDFMapRes = &mPCGCSGPUResVec[PCG_CS_INIT_SDF_MAP];
+	pContext->CommitShaderResources(pInitSDFMapRes->apBindlessSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(MapSize / 4, MapSize / 4);
+	pContext->DispatchCompute(attr);
+}
+
+void Diligent::PCGCSCall::SDFJumpFloodSetPSO(IDeviceContext *pContext)
+{
+	PCGCSGpuRes *pSDFJumpFloodMapRes = &mPCGCSGPUResVec[PCG_CS_SDF_JUMP_FLOOD_MAP];
+	pContext->SetPipelineState(pSDFJumpFloodMapRes->apBindlessSRB->GetPipelineState());
+}
+
+void Diligent::PCGCSCall::BindSDFJumpFloodData(IDeviceContext *pContext, const PCGNodeData &NodeData, float2 SampleStep, ITexture *pInputTex, ITexture *pOutputTex, bool reverse)
 {
 	PCGCSGpuRes *pSDFJumpFloodRes = &mPCGCSGPUResVec[PCG_CS_SDF_JUMP_FLOOD_MAP];
 
@@ -193,11 +215,34 @@ void Diligent::PCGCSCall::BindSDFJumpFloodData(IDeviceContext *pContext, const P
 	}
 	pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGSDFJumpFloodData")->Set(m_apSDFJumpFloodBuffer);
 
-	pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	if (!reverse)
+	{
+		pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
+	else
+	{
+		pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		pSDFJumpFloodRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
 }
 
-void Diligent::PCGCSCall::BindGenSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pOriginalTex, ITexture *pInputTex, ITexture *pOutputTex)
+void Diligent::PCGCSCall::SDFJumpFloodDispatch(IDeviceContext *pContext, uint MapSize)
+{
+	PCGCSGpuRes *pSDFJumpFloodMapRes = &mPCGCSGPUResVec[PCG_CS_SDF_JUMP_FLOOD_MAP];
+	pContext->CommitShaderResources(pSDFJumpFloodMapRes->apBindlessSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(MapSize / 4, MapSize / 4);
+	pContext->DispatchCompute(attr);
+}
+
+void Diligent::PCGCSCall::GenSDFMapSetPSO(IDeviceContext *pContext)
+{
+	PCGCSGpuRes *pGenSDFMapRes = &mPCGCSGPUResVec[PCG_CS_GENERATE_SDF];
+	pContext->SetPipelineState(pGenSDFMapRes->apBindlessSRB->GetPipelineState());
+}
+
+void Diligent::PCGCSCall::BindGenSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pOriginalTex, ITexture *pInputTex, ITexture *pOutputTex, bool reverse)
 {
 	PCGCSGpuRes *pGenSDFMapRes = &mPCGCSGPUResVec[PCG_CS_GENERATE_SDF];
 
@@ -205,13 +250,33 @@ void Diligent::PCGCSCall::BindGenSDFMapData(IDeviceContext *pContext, const PCGN
 		MapHelper<PCGGenSDFData> CBConstants(pContext, m_apGenSDFMapBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
 		PCGGenSDFData inData;
 		inData.TextureSize = float2(NodeData.TexSize, NodeData.TexSize);
+		inData.PlantRadius = NodeData.PlantRadius;
+		inData.PlantZOI = NodeData.PlantZOI;
 		memcpy((void*)CBConstants.GetMapData(), &inData, sizeof(InitSDFMapData));
 	}
 	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGGenSDFData")->Set(m_apGenSDFMapBuffer);
 
 	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OriginalTexture")->Set(pOriginalTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+	if (reverse)
+	{
+		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
+	else
+	{
+		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
+}
+
+void Diligent::PCGCSCall::GenSDFMapDispatch(IDeviceContext *pContext, uint MapSize)
+{
+	PCGCSGpuRes *pGenSDFMapRes = &mPCGCSGPUResVec[PCG_CS_GENERATE_SDF];
+	pContext->CommitShaderResources(pGenSDFMapRes->apBindlessSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(MapSize / 4, MapSize / 4);
+	pContext->DispatchCompute(attr);
 }
 
 void Diligent::PCGCSCall::BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex)

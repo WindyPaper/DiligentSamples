@@ -48,7 +48,8 @@ namespace Diligent
 	struct PCGGenSDFData
 	{
 		float2 TextureSize;
-		float2 Padding;
+		float PlantRadius;
+		float PlantZOI; // zone of influence
 	};
 
 	class PCGCSCall
@@ -67,9 +68,17 @@ namespace Diligent
 		void BindPoissonPosMap(uint Layer);
 		void BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex);
 
+		void InitSDFMapSetPSO(IDeviceContext *pContext);
 		void BindInitSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pInputTex, ITexture *pOutputTex);
-		void BindSDFJumpFloodData(IDeviceContext *pContext, const PCGNodeData &NodeData, float2 SampleStep, ITexture *pInputTex, ITexture *pOutputTex);
-		void BindGenSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pOriginalTex, ITexture *pInputTex, ITexture *pOutputTex);
+		void InitSDFDispatch(IDeviceContext *pContext, uint MapSize);
+
+		void SDFJumpFloodSetPSO(IDeviceContext *pContext);
+		void BindSDFJumpFloodData(IDeviceContext *pContext, const PCGNodeData &NodeData, float2 SampleStep, ITexture *pInputTex, ITexture *pOutputTex, bool reverse);
+		void SDFJumpFloodDispatch(IDeviceContext *pContext, uint MapSize);
+
+		void GenSDFMapSetPSO(IDeviceContext *pContext);
+		void BindGenSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pOriginalTex, ITexture *pInputTex, ITexture *pOutputTex, bool reverse);
+		void GenSDFMapDispatch(IDeviceContext *pContext, uint MapSize);
 
 		void BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex);
 

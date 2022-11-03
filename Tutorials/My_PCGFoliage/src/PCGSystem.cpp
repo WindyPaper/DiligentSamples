@@ -58,7 +58,8 @@ void Diligent::PCGSystem::DoProcedural()
 {
 	//mNodePool.QueryNodes(pNodeInfo);
 	mTerrainTile->GenerateNodes(&mPlantLayer, mPointVec);
-	mTerrainTile->GeneratePosMap(&mPCGCSCall);		
+	mTerrainTile->GeneratePosMap(&mPCGCSCall);	
+	mTerrainTile->GenerateSDFMap(&mPCGCSCall);
 }
 
 void Diligent::PCGTerrainTile::CreateSpecificPCGTexture(const uint32_t Layer, const uint32_t LinearQuadIndex)
@@ -167,7 +168,7 @@ void Diligent::PCGTerrainTile::DivideTile(const PCGLayer *pLayer, const std::vec
 				pcgData.PointNum = 0;// PointVec[i].GetNum();
 				pcgData.TexSize = PCG_TEX_DEFAULT_SIZE >> i;
 				pcgData.PlantRadius = pLayer->GetPlantParamLayer()[i][0].footprint;
-				pcgData.PlantZOI = pcgData.PlantRadius + pLayer->GetPlantParamLayer()[i][0].footprint;
+				pcgData.PlantZOI = pcgData.PlantRadius + pLayer->GetPlantParamLayer()[i][0].footprint / 2.0f;
 				pcgData.PCGPointGSize = pLayer->GetPlantParamLayer()[i][0].size;
 				mPCGNodeDataVec[LinearArrayIdx] = pcgData;
 
@@ -226,5 +227,40 @@ void Diligent::PCGTerrainTile::GeneratePosMap(PCGCSCall *pPCGCall)
 
 void Diligent::PCGTerrainTile::GenerateSDFMap(PCGCSCall *pPCGCall)
 {
+	for (int i = 0; i < mGPUDensityTexArray.size(); ++i)
+	{
+		const PCGNodeData &nodeData = mPCGNodeDataVec[i];
+
+		//init sdf map
+		pPCGCall->InitSDFMapSetPSO(m_pContext);
+		pPCGCall->BindInitSDFMapData(m_pContext, nodeData, mGPUDensityTexArray[i], mGPUSDFTexArrayPing[i]);
+		pPCGCall->InitSDFDispatch(m_pContext, nodeData.TexSize);
+
+		//sdf jump flood
+		bool reverse_val = false;
+		int2 step = int2((mPCGNodeDataVec[i].TexSize + 1) >> 1, (mPCGNodeDataVec[i].TexSize + 1) >> 1);
+		pPCGCall->SDFJumpFloodSetPSO(m_pContext);
+		while (step.x > 1 || step.y > 1)
+		{			
+			pPCGCall->BindSDFJumpFloodData(m_pContext, nodeData, float2(step.x, step.y), mGPUSDFTexArrayPing[i], mGPUSDFTexArrayPong[i], reverse_val);			
+
+			reverse_val = !reverse_val;
+			step = int2((step.x + 1) >> 1, (step.y + 1) >> 1);
+			pPCGCall->SDFJumpFloodDispatch(m_pContext, nodeData.TexSize);
+		}
+		pPCGCall->BindSDFJumpFloodData(m_pContext, nodeData, float2(1.0f, 1.0f), mGPUSDFTexArrayPing[i], mGPUSDFTexArrayPong[i], reverse_val);
+		pPCGCall->SDFJumpFloodDispatch(m_pContext, nodeData.TexSize);
+		reverse_val = !reverse_val;
+		pPCGCall->BindSDFJumpFloodData(m_pContext, nodeData, float2(1.0f, 1.0f), mGPUSDFTexArrayPing[i], mGPUSDFTexArrayPong[i], reverse_val);
+		pPCGCall->SDFJumpFloodDispatch(m_pContext, nodeData.TexSize);
+		reverse_val = !reverse_val;		
+
+		//gen sdf composition
+		pPCGCall->GenSDFMapSetPSO(m_pContext);
+		pPCGCall->BindGenSDFMapData(m_pContext, nodeData, mGPUDensityTexArray[i], mGPUSDFTexArrayPing[i], mGPUSDFTexArrayPong[i], reverse_val);
+		pPCGCall->GenSDFMapDispatch(m_pContext, nodeData.TexSize);
+
+		reverse_val = !reverse_val;
+	}
 
 }
