@@ -29,15 +29,15 @@ void Diligent::PCGLayer::SetupPlantParam()
 		switch (i)
 		{
 		case F_LARGE_TREE_LAYER:
-			pt.footprint = 25.0f;
+			pt.footprint = 13.0f;
 			break;
 
 		case F_MEDIUM_TREE_LAYER:
-			pt.footprint = 15.0f;
+			pt.footprint = 7.0f;
 			break;
 
 		case F_GRASS_LAYER:
-			pt.footprint = 5.0f;
+			pt.footprint = 3.0f;
 			break;
 
 		default:
