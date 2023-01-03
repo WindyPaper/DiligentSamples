@@ -25,7 +25,9 @@ namespace Diligent
 		float PCGPointGSize;
 		//float Padding;
 
-		float3 Padding;
+		float2 TexSampOffsetInParent;
+
+		float PlantPlaceThreshold;
 
 		PCGNodeData()
 		{
@@ -41,6 +43,9 @@ namespace Diligent
 			PlantRadius = 0.0f;
 			PlantZOI = 0.0f;
 			PCGPointGSize = 0.0f;
+
+			TexSampOffsetInParent = float2(0.0f);
+			PlantPlaceThreshold = 0.1f;
 		}		
 	};
 

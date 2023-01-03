@@ -6,8 +6,9 @@
 #include <assert.h>
 #include "ShaderMacroHelper.hpp"
 #include "PCGLayer.h"
+#include "PCGSystem.h"
 
-Diligent::PCGCSCall::PCGCSCall(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :
+Diligent::PCGCSCall::PCGCSCall(IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :	
 	m_pDevice(pDevice)
 {
 	CreatePSO(pDevice, pShaderFactory);
@@ -150,13 +151,25 @@ void Diligent::PCGCSCall::BindPoissonPosMap(uint Layer)
 	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "PoissonPosMapData")->Set(pPoissonTex);
 }
 
-void Diligent::PCGCSCall::BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex)
+void Diligent::PCGCSCall::BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex, std::vector<RefCntAutoPtr<ITexture>> &pSDFDensityTex)
 {
 	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];
 
 	/*pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPosMapData")->SetArray(\
 		&TexDefaultArray[0], 0, TexDefaultArray.size());*/
 	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPosMapData")->Set(pOutTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));	
+
+	//if (SDFDensityNum > 0)
+	{
+		std::vector<IDeviceObject*> pTexSRVs(pSDFDensityTex.size());
+		//IDeviceObject* pTexSRVs = new IDeviceObject[pSDFDensityTex.size()];
+		//IDeviceObject*          pTexSRVs[84] = {};
+		for (int i = 0; i < pSDFDensityTex.size(); ++i)
+		{
+			pTexSRVs[i] = pSDFDensityTex[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+		}
+		pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DensityTextures")->SetArray(&pTexSRVs[0], 0, pSDFDensityTex.size());
+	}
 
 	{
 		MapHelper<PCGNodeData> CBConstants(pContext, pNodeConstBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
@@ -258,16 +271,8 @@ void Diligent::PCGCSCall::BindGenSDFMapData(IDeviceContext *pContext, const PCGN
 
 	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OriginalTexture")->Set(pOriginalTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
-	if (reverse)
-	{
-		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-	}
-	else
-	{
-		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-		pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
-	}
+	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputTexture")->Set(pInputTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	pGenSDFMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(pOutputTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));	
 }
 
 void Diligent::PCGCSCall::GenSDFMapDispatch(IDeviceContext *pContext, uint MapSize)
@@ -328,6 +333,12 @@ void Diligent::PCGCSCall::CreateCalPosMapPSO(IRenderDevice *pDevice, IShaderSour
 		ShaderCI.Desc.Name = "CalculatePOSMap CS";
 		ShaderCI.FilePath = "CalculatePOSMap.csh";
 		//ShaderCI.Macros = Macros;
+		ShaderMacroHelper Macros;
+
+		uint32_t density_texture_num = GetPCGTextureNum();
+		Macros.AddShaderMacro("NUM_DENSITY_TEXTURES", density_texture_num);
+		ShaderCI.Macros = Macros;
+
 		pDevice->CreateShader(ShaderCI, &pCalculatePOSMapCS);
 	}
 

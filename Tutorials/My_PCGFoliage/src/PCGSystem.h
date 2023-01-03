@@ -21,6 +21,17 @@ namespace Diligent
 	struct IRenderDevice;
 	struct IDeviceContext;
 
+	inline uint32_t GetPCGTextureNum()
+	{
+		uint32_t texNum = 0;
+		for (int i = 0; i < F_LAYER_NUM; ++i)
+		{
+			texNum += static_cast<uint32_t>(std::pow(4, i + 1));
+		}
+
+		return texNum;
+	}
+
 	class PCGTerrainTile
 	{
 	public:
@@ -31,13 +42,17 @@ namespace Diligent
 		void GenerateNodes(const PCGLayer *pLayer, const std::vector<PCGPoint> &PointVec);
 
 		void GeneratePosMap(PCGCSCall *pPCGCall);
-		void GenerateSDFMap(PCGCSCall *pPCGCall);
+		//void GenerateSDFMap(PCGCSCall *pPCGCall);
+
+		void GenerateSDFMap(PCGCSCall *pPCGCall, int index);
 
 	protected:
 		void CreateSpecificPCGTexture(const uint32_t Layer, const uint32_t LinearQuadIndex);
 		void CreatePCGNodeDataBuffer(const std::vector<PCGNodeData> &PCGNodeDataVec);
 
 		uint32_t GetLinearQuadIndex(const uint32_t Layer, const uint32_t MortonCode);
+		uint32_t GetParentIndex(const uint32_t LinearQuadIndex);
+
 		void DivideTile(const PCGLayer *pLayer, const std::vector<PCGPoint> &PointVec);
 
 	private:
@@ -48,6 +63,10 @@ namespace Diligent
 		std::vector<RefCntAutoPtr<ITexture>> mGPUDensityTexArray; //quad tree
 		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFTexArrayPing; //quad tree
 		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFTexArrayPong; //quad tree
+		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFResultTexArray; //quad tree
+
+		//position buffer  type-positions
+		RefCntAutoPtr<IBuffer> mPositionBuffers;
 
 		RefCntAutoPtr<ITexture> mGlobalTerrainMaskTex;
 

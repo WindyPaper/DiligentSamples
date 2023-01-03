@@ -6,6 +6,7 @@
 namespace Diligent
 {
 	static const int PCG_TEX_DEFAULT_SIZE = 2048;
+	static const int PCG_PLANT_MAX_POSITION_NUM = 4096;
 
 	enum FoliageLayerType
 	{

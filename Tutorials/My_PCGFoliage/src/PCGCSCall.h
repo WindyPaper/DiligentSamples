@@ -66,7 +66,7 @@ namespace Diligent
 		void PosMapSetPSO(IDeviceContext *pContext);
 		void BindPosMapPoints(uint Layer);
 		void BindPoissonPosMap(uint Layer);
-		void BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex);
+		void BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex, std::vector<RefCntAutoPtr<ITexture>> &pSDFDensityTex);
 
 		void InitSDFMapSetPSO(IDeviceContext *pContext);
 		void BindInitSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pInputTex, ITexture *pOutputTex);
@@ -96,6 +96,8 @@ namespace Diligent
 
 	private:
 		PCGCSGpuRes mPCGCSGPUResVec[PCG_CS_NUM];
+
+		//int mMaxDensityTexNum;
 
 		std::vector<RefCntAutoPtr<IBuffer>> mPointDeviceDataVec;
 		std::vector<RefCntAutoPtr<ITexture>> mPointTextureDeviceDataVec;

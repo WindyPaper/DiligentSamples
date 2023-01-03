@@ -11,6 +11,13 @@ const static int TerrainMaskTexSize = 512;
 Texture2D TerrainMaskMap; //512
 //SamplerState TerrainMaskMap_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
+#ifndef NUM_DENSITY_TEXTURES
+#   define NUM_DENSITY_TEXTURES 1
+#endif
+
+Texture2D DensityTextures[NUM_DENSITY_TEXTURES];
+SamplerState DensityTextures_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
 cbuffer cbPCGPointData
 {
 	float2 TerrainOrigin;
@@ -25,7 +32,10 @@ cbuffer cbPCGPointData
 	float PlantRadius;
 	float PlantZOI;
 	float PCGPointGSize;
-	float3 Padding;
+
+	float2 TexSampOffsetInParent;
+
+	float PlantPlaceThreshold;
 };
 
 // cbuffer cbPCGPointDatas
@@ -34,6 +44,24 @@ cbuffer cbPCGPointData
 // };
 
 //StructuredBuffer<float2> InPCGPointDatas;
+
+uint GetLinearQuadIndex(const uint Layer, const uint MortonCode)
+{
+	uint offset = 0;
+	for (uint i = 0; i < Layer; ++i)
+	{
+		offset += pow(4, i + 1);
+	}
+
+	return offset + MortonCode;
+}
+
+uint GetParentIndex(const uint LinearQuadIndex)
+{
+	uint parent_index = (LinearQuadIndex >> 2) - 1;
+
+	return parent_index;
+}
 
 [numthreads(4, 4, 1)]
 void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
@@ -50,5 +78,30 @@ void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
 
 	float4 global_terrain_mask_value = TerrainMaskMap.Load(int3(global_mask_uv * TerrainMaskTexSize, 0));
 
-	OutPosMapData[id.xy] = PoissonPosMapData.Load(int3(id.xy, 0)) * global_terrain_mask_value.r;
+	//OutPosMapData[id.xy] = PoissonPosMapData.Load(int3(id.xy, 0)) * global_terrain_mask_value.r;
+
+	float P = 1.0f;
+
+	float4 poisson_pos = PoissonPosMapData.Load(int3(id.xy, 0)) * global_terrain_mask_value.r;
+
+	P = poisson_pos.r;
+
+	if(LayerIdx > 0 && poisson_pos.r > 0.0f) //evaluate pos from last layer sdf
+	{
+		uint parent_tex_index = GetParentIndex(GetLinearQuadIndex(LayerIdx, MortonCode));
+		
+		int2 parent_tex_coord = int2(tex_x, tex_y) + int2(TexSampOffsetInParent);
+		float4 parent_sdf_tex = DensityTextures[parent_tex_index].Load(int3(parent_tex_coord, 0));
+
+		P *= (1.0f - parent_sdf_tex.r);
+	}
+
+	if(P > PlantPlaceThreshold)
+	{		
+		OutPosMapData[id.xy] = 1.0f;
+	}
+	else
+	{
+		OutPosMapData[id.xy] = 0.0f;
+	}
 }
