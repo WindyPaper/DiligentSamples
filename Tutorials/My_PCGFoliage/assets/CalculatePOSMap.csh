@@ -63,6 +63,17 @@ uint GetParentIndex(const uint LinearQuadIndex)
 	return parent_index;
 }
 
+uint GetLayerFstElementIdx(const uint Layer)
+{
+	uint offset = 0;
+	for (uint i = 0; i < Layer; ++i)
+	{
+		offset += pow(4, i + 1);
+	}
+
+	return offset;
+}
+
 [numthreads(4, 4, 1)]
 void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
 {
@@ -88,12 +99,28 @@ void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
 
 	if(LayerIdx > 0 && poisson_pos.r > 0.0f) //evaluate pos from last layer sdf
 	{
-		uint parent_tex_index = GetParentIndex(GetLinearQuadIndex(LayerIdx, MortonCode));
+		uint SampleLinearQuadIdx = GetLinearQuadIndex(LayerIdx, MortonCode);
+		for(uint SampleLayerId = LayerIdx; SampleLayerId > 0; --SampleLayerId)
+		{
+			uint parent_tex_index = GetParentIndex(SampleLinearQuadIdx);
 		
-		int2 parent_tex_coord = int2(tex_x, tex_y) + int2(TexSampOffsetInParent);
-		float4 parent_sdf_tex = DensityTextures[parent_tex_index].Load(int3(parent_tex_coord, 0));
+			int2 parent_tex_coord = int2(tex_x, tex_y) + int2(TexSampOffsetInParent);
 
-		P *= (1.0f - parent_sdf_tex.r);
+			if(SampleLayerId != LayerIdx)
+			{
+				uint layer_fst_element_idx = GetLayerFstElementIdx(SampleLayerId);
+				uint quad_idx = parent_tex_index - layer_fst_element_idx;
+				uint half_parent_tex_size = TexSize << ((LayerIdx - SampleLayerId) - 1);
+
+				parent_tex_coord += uint2(saturate(quad_idx & 1u), saturate(quad_idx & 2u)) * half_parent_tex_size;
+			}
+
+			float4 parent_sdf_tex = DensityTextures[parent_tex_index].Load(int3(parent_tex_coord, 0));
+
+			P *= (1.0f - parent_sdf_tex.r);
+
+			SampleLinearQuadIdx = parent_tex_index;
+		}		
 	}
 
 	if(P > PlantPlaceThreshold)
