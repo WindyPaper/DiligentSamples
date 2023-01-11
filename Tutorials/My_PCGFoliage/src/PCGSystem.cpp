@@ -5,6 +5,7 @@
 
 #include "TextureLoader.h"
 #include "TextureUtilities.h"
+#include "MapHelper.hpp"
 
 Diligent::PCGSystem::PCGSystem(IDeviceContext *pContext, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, const Dimension &TerrainDim) :
 	m_pContext(pContext),
@@ -58,7 +59,8 @@ void Diligent::PCGSystem::DoProcedural()
 {
 	//mNodePool.QueryNodes(pNodeInfo);
 	mTerrainTile->GenerateNodes(&mPlantLayer, mPointVec);
-	mTerrainTile->GeneratePosMap(&mPCGCSCall);	
+	mTerrainTile->GeneratePosMap(&mPCGCSCall);
+
 	//mTerrainTile->GenerateSDFMap(&mPCGCSCall);
 }
 
@@ -118,11 +120,22 @@ void Diligent::PCGTerrainTile::CreatePCGNodeDataBuffer(const std::vector<PCGNode
 	//init position buffer
 	BufferDesc PlantInitPosBuffDesc;
 	PlantInitPosBuffDesc.Name = "PCG init Plant Positions buffer";
-	PlantInitPosBuffDesc.Usage = USAGE_DYNAMIC;
-	PlantInitPosBuffDesc.BindFlags = BIND_UNIFORM_BUFFER;
-	PlantInitPosBuffDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
-	PlantInitPosBuffDesc.uiSizeInBytes = sizeof(float4) * PCG_PLANT_MAX_POSITION_NUM * F_LAYER_NUM;
-	m_pRenderDevice->CreateBuffer(PlantInitPosBuffDesc, nullptr, &mPositionBuffers);
+	PlantInitPosBuffDesc.Usage = USAGE_DEFAULT;
+	PlantInitPosBuffDesc.ElementByteStride = sizeof(float4);
+	PlantInitPosBuffDesc.Mode = BUFFER_MODE_FORMATTED;
+	PlantInitPosBuffDesc.uiSizeInBytes = PlantInitPosBuffDesc.ElementByteStride * PCG_PLANT_MAX_POSITION_NUM * F_LAYER_NUM;
+	PlantInitPosBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pRenderDevice->CreateBuffer(PlantInitPosBuffDesc, nullptr, &mPlantPositionBuffers);
+
+	//init layer plant type buffer
+	BufferDesc LayerPlantTypeBuffDesc;
+	LayerPlantTypeBuffDesc.Name = "PCG init layer plant type buffer";
+	LayerPlantTypeBuffDesc.Usage = USAGE_DEFAULT;
+	LayerPlantTypeBuffDesc.ElementByteStride = sizeof(uint32_t);
+	LayerPlantTypeBuffDesc.Mode = BUFFER_MODE_FORMATTED;
+	LayerPlantTypeBuffDesc.uiSizeInBytes = LayerPlantTypeBuffDesc.ElementByteStride * F_LAYER_NUM;
+	LayerPlantTypeBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pRenderDevice->CreateBuffer(LayerPlantTypeBuffDesc, nullptr, &mPlantTypeNumBuffer);
 }
 
 uint32_t Diligent::PCGTerrainTile::GetLinearQuadIndex(const uint32_t Layer, const uint32_t MortonCode)
@@ -241,6 +254,7 @@ void Diligent::PCGTerrainTile::GeneratePosMap(PCGCSCall *pPCGCall)
 		}
 		
 		pPCGCall->BindPosMapRes(m_pContext, mPCGGPUNodeConstBuffer, mPCGNodeDataVec[i], mGPUDensityTexArray[i], mGPUSDFResultTexArray);
+		pPCGCall->BindPosBuffer(m_pContext, mPlantTypeNumBuffer, mPlantPositionBuffers);
 
 		uint mapSize = PCG_TEX_DEFAULT_SIZE >> currLayerIdx;
 		pPCGCall->PosMapDispatch(m_pContext, mapSize);
@@ -248,6 +262,8 @@ void Diligent::PCGTerrainTile::GeneratePosMap(PCGCSCall *pPCGCall)
 		//Generate density map to evaluate pos data
 		GenerateSDFMap(pPCGCall, i);
 	}
+
+	ReadBackPositionDataToHost();
 }
 
 //void Diligent::PCGTerrainTile::GenerateSDFMap(PCGCSCall *pPCGCall)
@@ -333,4 +349,30 @@ void Diligent::PCGTerrainTile::GenerateSDFMap(PCGCSCall *pPCGCall, int index)
 	pPCGCall->GenSDFMapDispatch(m_pContext, nodeData.TexSize);
 
 	//reverse_val = !reverse_val;
+}
+
+void Diligent::PCGTerrainTile::ReadBackPositionDataToHost()
+{
+	MapHelper<uint32_t> map_plant_type_num_data(m_pContext, mPlantTypeNumBuffer, MAP_READ, MAP_FLAG_DISCARD);
+	MapHelper<float4> map_plant_position_data(m_pContext, mPlantPositionBuffers, MAP_READ, MAP_FLAG_DISCARD);
+
+	/*for (int i = 0; i < F_LAYER_NUM; ++i)
+	{
+		uint32_t plant_type_num = map_plant_type_num_data.GetMapData()[i];
+	}*/
+	uint32_t *pPlantTypeNum = new uint32_t[F_LAYER_NUM];
+	memcpy(pPlantTypeNum, map_plant_type_num_data.GetMapData(), sizeof(uint32_t) * F_LAYER_NUM);
+	mPlantTypeNumHostData.reset(pPlantTypeNum);
+
+	for (int i = 0; i < F_LAYER_NUM; ++i)
+	{
+		uint32_t plant_type_num = mPlantTypeNumHostData[i];
+
+		float4 *pPlantPosDatas = new float4[plant_type_num];
+		
+		float4 *pSrcData = reinterpret_cast<float4*>(map_plant_type_num_data.GetMapData() + i * PCG_PLANT_MAX_POSITION_NUM);
+		memcpy(pPlantPosDatas, pSrcData, sizeof(float4) * plant_type_num);
+
+		mPlantPositionHostDatas.reset(pPlantPosDatas);
+	}
 }

@@ -46,6 +46,8 @@ namespace Diligent
 
 		void GenerateSDFMap(PCGCSCall *pPCGCall, int index);
 
+		void ReadBackPositionDataToHost();
+
 	protected:
 		void CreateSpecificPCGTexture(const uint32_t Layer, const uint32_t LinearQuadIndex);
 		void CreatePCGNodeDataBuffer(const std::vector<PCGNodeData> &PCGNodeDataVec);
@@ -65,10 +67,17 @@ namespace Diligent
 		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFTexArrayPong; //quad tree
 		std::vector<RefCntAutoPtr<ITexture>> mGPUSDFResultTexArray; //quad tree
 
-		//position buffer  type-positions
-		RefCntAutoPtr<IBuffer> mPositionBuffers;
+		//position buffer  type-positions data of GPU
+		RefCntAutoPtr<IBuffer> mPlantPositionBuffers;
+
+		//layer plant type number data of GPU
+		RefCntAutoPtr<IBuffer> mPlantTypeNumBuffer;
 
 		RefCntAutoPtr<ITexture> mGlobalTerrainMaskTex;
+
+		//CPU data
+		std::shared_ptr<float4[]> mPlantPositionHostDatas;
+		std::shared_ptr<uint32_t[]> mPlantTypeNumHostData;
 
 		RefCntAutoPtr<IBuffer> mPCGGPUNodeConstBuffer;
 		std::vector<PCGNodeData> mPCGNodeDataVec;

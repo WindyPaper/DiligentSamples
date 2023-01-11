@@ -67,6 +67,7 @@ namespace Diligent
 		void BindPosMapPoints(uint Layer);
 		void BindPoissonPosMap(uint Layer);
 		void BindPosMapRes(IDeviceContext *pContext, IBuffer *pNodeConstBuffer, const PCGNodeData &NodeData, ITexture* pOutTex, std::vector<RefCntAutoPtr<ITexture>> &pSDFDensityTex);
+		void BindPosBuffer(IDeviceContext *pContext, IBuffer *pPlantTypeNumberBuffer, IBuffer *pPlantPositionBuffers);
 
 		void InitSDFMapSetPSO(IDeviceContext *pContext);
 		void BindInitSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pInputTex, ITexture *pOutputTex);

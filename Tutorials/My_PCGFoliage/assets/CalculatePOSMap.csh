@@ -7,7 +7,7 @@ RWTexture2D<float> OutPosMapData;
 
 Texture2D PoissonPosMapData;
 
-const static int TerrainMaskTexSize = 512;
+const static uint TerrainMaskTexSize = 512;
 Texture2D TerrainMaskMap; //512
 //SamplerState TerrainMaskMap_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
@@ -17,6 +17,10 @@ Texture2D TerrainMaskMap; //512
 
 Texture2D DensityTextures[NUM_DENSITY_TEXTURES];
 SamplerState DensityTextures_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
+const static uint PCG_PLANT_MAX_POSITION_NUM = 4096 * 32;
+RWBuffer<uint> PlantTypeNumBuffer;
+RWBuffer<float4> PlantPositionBuffers;
 
 cbuffer cbPCGPointData
 {
@@ -126,6 +130,13 @@ void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
 	if(P > PlantPlaceThreshold)
 	{		
 		OutPosMapData[id.xy] = 1.0f;
+
+		uint curr_idx = 0;
+		InterlockedAdd(PlantTypeNumBuffer[LayerIdx], 1u, curr_idx);
+
+		//plant position buffer index
+		uint plant_pos_buff_idx = LayerIdx * PCG_PLANT_MAX_POSITION_NUM + curr_idx;
+		PlantPositionBuffers[plant_pos_buff_idx] = float4(terrain_size * global_mask_uv, 1.0f, 1.0f);
 	}
 	else
 	{

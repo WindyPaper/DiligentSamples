@@ -178,6 +178,29 @@ void Diligent::PCGCSCall::BindPosMapRes(IDeviceContext *pContext, IBuffer *pNode
 	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "cbPCGPointData")->Set(pNodeConstBuffer);
 }
 
+void Diligent::PCGCSCall::BindPosBuffer(IDeviceContext *pContext, IBuffer *pPlantTypeNumberBuffer, IBuffer *pPlantPositionBuffers)
+{
+	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];
+
+	RefCntAutoPtr<IBufferView> plant_type_buffer_view;
+	RefCntAutoPtr<IBufferView> plant_position_buffer_views;
+	{
+		BufferViewDesc ViewDesc;
+		ViewDesc.ViewType = BUFFER_VIEW_UNORDERED_ACCESS;
+		ViewDesc.Format.ValueType = VT_UINT32;
+		ViewDesc.Format.NumComponents = 1;
+		pPlantTypeNumberBuffer->CreateView(ViewDesc, &plant_type_buffer_view);
+
+
+		ViewDesc.Format.ValueType = VT_FLOAT32;
+		ViewDesc.Format.NumComponents = 4;
+		pPlantPositionBuffers->CreateView(ViewDesc, &plant_position_buffer_views);
+	}
+
+	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "PlantTypeNumBuffer")->Set(plant_type_buffer_view);
+	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "PlantPositionBuffers")->Set(plant_position_buffer_views);
+}
+
 void Diligent::PCGCSCall::InitSDFMapSetPSO(IDeviceContext *pContext)
 {
 	PCGCSGpuRes *pInitSDFMapRes = &mPCGCSGPUResVec[PCG_CS_INIT_SDF_MAP];
