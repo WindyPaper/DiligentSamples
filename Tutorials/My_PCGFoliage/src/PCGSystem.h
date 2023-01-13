@@ -19,7 +19,7 @@
 namespace Diligent
 {
 	struct IRenderDevice;
-	struct IDeviceContext;
+	struct IDeviceContext;	
 
 	inline uint32_t GetPCGTextureNum()
 	{
@@ -78,6 +78,12 @@ namespace Diligent
 		//CPU data
 		std::shared_ptr<float4[]> mPlantPositionHostDatas;
 		std::shared_ptr<uint32_t[]> mPlantTypeNumHostData;
+
+		//To CPU stage data
+		RefCntAutoPtr<IBuffer> mPlantPosStageDatas;
+		RefCntAutoPtr<IBuffer> mPlantTypeNumStageData;
+
+		RefCntAutoPtr<IFence>  mPlantStageDataAvailable;
 
 		RefCntAutoPtr<IBuffer> mPCGGPUNodeConstBuffer;
 		std::vector<PCGNodeData> mPCGNodeDataVec;

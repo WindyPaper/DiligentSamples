@@ -136,6 +136,33 @@ void Diligent::PCGTerrainTile::CreatePCGNodeDataBuffer(const std::vector<PCGNode
 	LayerPlantTypeBuffDesc.uiSizeInBytes = LayerPlantTypeBuffDesc.ElementByteStride * F_LAYER_NUM;
 	LayerPlantTypeBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pRenderDevice->CreateBuffer(LayerPlantTypeBuffDesc, nullptr, &mPlantTypeNumBuffer);
+
+	//init stage buffer
+	BufferDesc PlantPosStageBufferDesc;
+	PlantPosStageBufferDesc.Name = "Plant position staging buffer";
+	PlantPosStageBufferDesc.Usage = USAGE_STAGING;
+	PlantPosStageBufferDesc.BindFlags = BIND_NONE;
+	PlantPosStageBufferDesc.Mode = BUFFER_MODE_UNDEFINED;
+	PlantPosStageBufferDesc.CPUAccessFlags = CPU_ACCESS_READ;
+	PlantPosStageBufferDesc.uiSizeInBytes = sizeof(float4) * PCG_PLANT_MAX_POSITION_NUM * F_LAYER_NUM;
+	PlantPosStageBufferDesc.ElementByteStride = sizeof(float4);
+	m_pRenderDevice->CreateBuffer(PlantPosStageBufferDesc, nullptr, &mPlantPosStageDatas);
+
+	BufferDesc PlantTypeNumStageBufferDesc;
+	PlantTypeNumStageBufferDesc.Name = "Plant type num staging buffer";
+	PlantTypeNumStageBufferDesc.Usage = USAGE_STAGING;
+	PlantTypeNumStageBufferDesc.BindFlags = BIND_NONE;
+	PlantTypeNumStageBufferDesc.Mode = BUFFER_MODE_UNDEFINED;
+	PlantTypeNumStageBufferDesc.CPUAccessFlags = CPU_ACCESS_READ;
+	PlantTypeNumStageBufferDesc.uiSizeInBytes = sizeof(uint32_t) * F_LAYER_NUM;
+	PlantTypeNumStageBufferDesc.ElementByteStride = sizeof(uint32_t);
+	m_pRenderDevice->CreateBuffer(PlantTypeNumStageBufferDesc, nullptr, &mPlantTypeNumStageData);
+
+	//VERIFY_EXPR(mPlantTypeNumStageData != nullptr);
+
+	FenceDesc FDesc;
+	FDesc.Name = "plant stage buffer available";
+	m_pRenderDevice->CreateFence(FDesc, &mPlantStageDataAvailable);
 }
 
 uint32_t Diligent::PCGTerrainTile::GetLinearQuadIndex(const uint32_t Layer, const uint32_t MortonCode)
@@ -352,14 +379,21 @@ void Diligent::PCGTerrainTile::GenerateSDFMap(PCGCSCall *pPCGCall, int index)
 }
 
 void Diligent::PCGTerrainTile::ReadBackPositionDataToHost()
-{
-	MapHelper<uint32_t> map_plant_type_num_data(m_pContext, mPlantTypeNumBuffer, MAP_READ, MAP_FLAG_DISCARD);
-	MapHelper<float4> map_plant_position_data(m_pContext, mPlantPositionBuffers, MAP_READ, MAP_FLAG_DISCARD);
+{		
+	m_pContext->CopyBuffer(mPlantTypeNumBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+		mPlantTypeNumStageData, 0, F_LAYER_NUM * sizeof(uint32_t),
+		RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	/*for (int i = 0; i < F_LAYER_NUM; ++i)
-	{
-		uint32_t plant_type_num = map_plant_type_num_data.GetMapData()[i];
-	}*/
+	m_pContext->CopyBuffer(mPlantPositionBuffers, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+		mPlantPosStageDatas, 0, F_LAYER_NUM * sizeof(float4) * PCG_PLANT_MAX_POSITION_NUM,
+		RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	//sync gpu finish copy operation.
+	m_pContext->WaitForIdle();
+
+	MapHelper<uint32_t> map_plant_type_num_data(m_pContext, mPlantTypeNumStageData, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+	MapHelper<float4> map_plant_position_data(m_pContext, mPlantPosStageDatas, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+	
 	uint32_t *pPlantTypeNum = new uint32_t[F_LAYER_NUM];
 	memcpy(pPlantTypeNum, map_plant_type_num_data.GetMapData(), sizeof(uint32_t) * F_LAYER_NUM);
 	mPlantTypeNumHostData.reset(pPlantTypeNum);
@@ -369,8 +403,8 @@ void Diligent::PCGTerrainTile::ReadBackPositionDataToHost()
 		uint32_t plant_type_num = mPlantTypeNumHostData[i];
 
 		float4 *pPlantPosDatas = new float4[plant_type_num];
-		
-		float4 *pSrcData = reinterpret_cast<float4*>(map_plant_type_num_data.GetMapData() + i * PCG_PLANT_MAX_POSITION_NUM);
+
+		float4 *pSrcData = reinterpret_cast<float4*>(map_plant_position_data.GetMapData() + i * PCG_PLANT_MAX_POSITION_NUM);
 		memcpy(pPlantPosDatas, pSrcData, sizeof(float4) * plant_type_num);
 
 		mPlantPositionHostDatas.reset(pPlantPosDatas);
