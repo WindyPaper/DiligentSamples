@@ -34,6 +34,10 @@
 #include "ImGuiUtils.hpp"
 #include "PCGSystem.h"
 
+#include <chrono>
+#include <iostream>
+#include <fstream>
+
 namespace Diligent
 {	
 	DebugCanvas gDebugCanvas;
@@ -158,8 +162,17 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 	TerrainDim.Size = float3({ 11380.0f, 3000.0f, 12180.0f });
 	m_apClipMap->InitClipMap(m_pDevice, m_pSwapChain, TerrainDim);
 
+	//auto start = std::chrono::high_resolution_clock::now();		
 	m_pPCGSystem = new PCGSystem(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, TerrainDim);
 	m_pPCGSystem->DoProcedural();
+//	auto end = std::chrono::high_resolution_clock::now();
+//	std::chrono::duration<double, std::milli> elapsed = end - start;
+//	//std::cout << "Waited " << elapsed.count() << " ms\n";
+//	std::ofstream myfile;
+//	myfile.open("test_log.txt");
+//	myfile << "Writing this to a file.\n";
+//	myfile << elapsed.count();
+//	myfile.close();
 }
 
 // Render a frame
