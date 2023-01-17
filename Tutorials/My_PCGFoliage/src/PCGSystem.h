@@ -32,6 +32,17 @@ namespace Diligent
 		return texNum;
 	}
 
+	struct PCGResultData
+	{
+		std::vector<std::shared_ptr<float4[]>> PlantPositionHostDatas;
+		std::shared_ptr<uint32_t[]> PlantTypeNumHostData;
+
+		PCGResultData(std::vector<std::shared_ptr<float4[]>> &PosDatas, std::shared_ptr<uint32_t[]> TypeNum) :
+			PlantPositionHostDatas(PosDatas),
+			PlantTypeNumHostData(TypeNum)
+		{}
+	};
+
 	class PCGTerrainTile
 	{
 	public:
@@ -47,6 +58,8 @@ namespace Diligent
 		void GenerateSDFMap(PCGCSCall *pPCGCall, int index);
 
 		void ReadBackPositionDataToHost();
+
+		PCGResultData GetPCGResultData();
 
 	protected:
 		void CreateSpecificPCGTexture(const uint32_t Layer, const uint32_t LinearQuadIndex);
@@ -76,7 +89,7 @@ namespace Diligent
 		RefCntAutoPtr<ITexture> mGlobalTerrainMaskTex;
 
 		//CPU data
-		std::shared_ptr<float4[]> mPlantPositionHostDatas;
+		std::vector<std::shared_ptr<float4[]>> mPlantPositionHostDatas;
 		std::shared_ptr<uint32_t[]> mPlantTypeNumHostData;
 
 		//To CPU stage data
@@ -103,6 +116,8 @@ namespace Diligent
 		void CreatePoissonDiskSamplerData();
 
 		void DoProcedural();
+
+		PCGResultData GetPCGResultData();
 
 		//void GeneratePCGTextureArray();
 

@@ -9,6 +9,9 @@ Texture2D PoissonPosMapData;
 
 const static uint TerrainMaskTexSize = 512;
 Texture2D TerrainMaskMap; //512
+
+Texture2D TerrainHeightMap;
+
 //SamplerState TerrainMaskMap_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
 #ifndef NUM_DENSITY_TEXTURES
@@ -136,7 +139,8 @@ void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
 
 		//plant position buffer index
 		uint plant_pos_buff_idx = LayerIdx * PCG_PLANT_MAX_POSITION_NUM + curr_idx;
-		PlantPositionBuffers[plant_pos_buff_idx] = float4(terrain_size * global_mask_uv, 1.0f, 1.0f);
+		float2 xz_pos = terrain_size * global_mask_uv + TerrainOrigin;
+		PlantPositionBuffers[plant_pos_buff_idx] = float4(xz_pos.r, 1.0f, xz_pos.g, 1.0f);
 	}
 	else
 	{

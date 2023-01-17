@@ -64,6 +64,11 @@ void Diligent::PCGSystem::DoProcedural()
 	//mTerrainTile->GenerateSDFMap(&mPCGCSCall);
 }
 
+Diligent::PCGResultData Diligent::PCGSystem::GetPCGResultData()
+{
+	return mTerrainTile->GetPCGResultData();
+}
+
 void Diligent::PCGTerrainTile::CreateSpecificPCGTexture(const uint32_t Layer, const uint32_t LinearQuadIndex)
 {
 	TextureDesc DensityTexType;
@@ -398,6 +403,7 @@ void Diligent::PCGTerrainTile::ReadBackPositionDataToHost()
 	memcpy(pPlantTypeNum, map_plant_type_num_data.GetMapData(), sizeof(uint32_t) * F_LAYER_NUM);
 	mPlantTypeNumHostData.reset(pPlantTypeNum);
 
+	mPlantPositionHostDatas.resize(F_LAYER_NUM);
 	for (int i = 0; i < F_LAYER_NUM; ++i)
 	{
 		uint32_t plant_type_num = mPlantTypeNumHostData[i];
@@ -407,6 +413,11 @@ void Diligent::PCGTerrainTile::ReadBackPositionDataToHost()
 		float4 *pSrcData = reinterpret_cast<float4*>(map_plant_position_data.GetMapData() + i * PCG_PLANT_MAX_POSITION_NUM);
 		memcpy(pPlantPosDatas, pSrcData, sizeof(float4) * plant_type_num);
 
-		mPlantPositionHostDatas.reset(pPlantPosDatas);
+		mPlantPositionHostDatas[i].reset(pPlantPosDatas);
 	}
+}
+
+Diligent::PCGResultData Diligent::PCGTerrainTile::GetPCGResultData()
+{
+	return PCGResultData(mPlantPositionHostDatas, mPlantTypeNumHostData);
 }

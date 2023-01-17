@@ -182,6 +182,11 @@ void GroundMesh::Update(const FirstPersonCamera *pCam)
 	mpCDLODTree->SelectLOD(*pCam);
 }
 
+const ITexture * GroundMesh::GetHeightMap()
+{
+	return m_Heightmap.GetHeightMapTexture();
+}
+
 void GroundMesh::CommitToGPUDeviceBuffer(IRenderDevice *pDevice)
 {
 	//vertex

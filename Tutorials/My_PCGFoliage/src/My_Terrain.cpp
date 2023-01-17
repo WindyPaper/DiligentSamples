@@ -33,6 +33,7 @@
 #include "imGuIZMO.h"
 #include "ImGuiUtils.hpp"
 #include "PCGSystem.h"
+#include "ProxyCube.h"
 
 #include <chrono>
 #include <iostream>
@@ -150,7 +151,7 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 
 	m_Camera.SetPos(float3(0.0f, 20.0f, -5.f));		
 	m_Camera.SetRotationSpeed(0.005f);
-	m_Camera.SetMoveSpeed(5.f);
+	m_Camera.SetMoveSpeed(50.f);
 	m_Camera.SetSpeedUpScales(5.f, 10.f);
 
 	m_Camera.SetLookAt(float3(0, 0, 0));
@@ -173,6 +174,13 @@ void My_Terrain::Initialize(const SampleInitInfo& InitInfo)
 //	myfile << "Writing this to a file.\n";
 //	myfile << elapsed.count();
 //	myfile.close();
+
+	m_pProxyCube = new ProxyCube();
+	PCGResultData pcg_result_data = m_pPCGSystem->GetPCGResultData();
+	m_pProxyCube->SetFoliagePosData(&pcg_result_data.PlantTypeNumHostData[0], pcg_result_data.PlantPositionHostDatas);
+	m_pProxyCube->InitPSO(m_pDevice, m_pSwapChain);
+	m_pProxyCube->CreateCubeBuffer(m_pDevice);
+	m_pProxyCube->CreateInstBuffer(m_pDevice, m_pImmediateContext);	
 }
 
 // Render a frame
@@ -214,7 +222,10 @@ void My_Terrain::Render()
 	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(drawAttrs);
 
-	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos());
+	//m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos());
+
+	//render proxy cube
+	m_pProxyCube->Render(m_pImmediateContext, &m_Camera);
 
 	//render debug view
 	//gDebugCanvas.Draw(m_pDevice, m_pSwapChain, m_pImmediateContext, m_pShaderSourceFactory, &m_Camera);
@@ -324,6 +335,12 @@ My_Terrain::~My_Terrain()
 	{
 		delete m_pPCGSystem;
 		m_pPCGSystem = nullptr;
+	}
+
+	if (m_pProxyCube)
+	{
+		delete m_pProxyCube;
+		m_pProxyCube = nullptr;
 	}
 }
 

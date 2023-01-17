@@ -53,6 +53,8 @@ namespace Diligent
 
 		void Update(const FirstPersonCamera *pCam);		
 
+		const ITexture *GetHeightMap();
+
 	protected:
 		void InitVertexBuffer();
 		void InitIndicesBuffer();

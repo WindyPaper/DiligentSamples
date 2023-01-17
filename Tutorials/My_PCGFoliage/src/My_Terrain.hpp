@@ -58,6 +58,7 @@ struct TerrainData
 };
 
 class PCGSystem;
+class ProxyCube;
 
 class My_Terrain final : public SampleBase
 {
@@ -97,6 +98,7 @@ private:
 	std::shared_ptr<GroundMesh> m_apClipMap;
 
 	PCGSystem *m_pPCGSystem;
+	ProxyCube *m_pProxyCube;
 };
 
 } // namespace Diligent
