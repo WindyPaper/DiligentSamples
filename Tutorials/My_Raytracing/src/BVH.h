@@ -18,6 +18,13 @@ namespace Diligent
 		float2 uv;
 	};
 
+	struct BVHMeshData
+	{
+		int vertex_num;
+		int index_num;
+		int primitive_num;
+	};
+
 	class BVH
 	{
 	public:
@@ -26,6 +33,11 @@ namespace Diligent
 
 		void InitTestMesh();
 
+		void InitBuffer();
+
+	protected:
+		void CreatePrimCenterMortonCodeData();
+
 	private:
 		IDeviceContext *m_pDeviceCtx;
 		IRenderDevice *m_pDevice;
@@ -33,6 +45,10 @@ namespace Diligent
 
 		RefCntAutoPtr<IBuffer> m_apMeshVertexData;
 		RefCntAutoPtr<IBuffer> m_apMeshIndexData;
+
+		RefCntAutoPtr<IBuffer> m_apPrimCenterMortonCodeData;
+
+		BVHMeshData m_BVHMeshData;
 	};
 }
 

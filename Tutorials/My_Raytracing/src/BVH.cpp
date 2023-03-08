@@ -12,7 +12,9 @@ Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSo
 	m_pDevice(pDevice),
 	m_pShaderFactory(pShaderFactory)
 {
+	InitTestMesh();
 
+	CreatePrimCenterMortonCodeData();
 }
 
 Diligent::BVH::~BVH()
@@ -66,5 +68,24 @@ void Diligent::BVH::InitTestMesh()
 	IBData.pData = Indices;
 	IBData.DataSize = sizeof(Indices);
 	m_pDevice->CreateBuffer(IndBuffDesc, &IBData, &m_apMeshIndexData);
+
+	m_BVHMeshData.vertex_num = 8;
+	m_BVHMeshData.index_num = 36;
+	m_BVHMeshData.primitive_num = m_BVHMeshData.index_num / 3;
+}
+
+void Diligent::BVH::InitBuffer()
+{
+	CreatePrimCenterMortonCodeData();
+}
+
+void Diligent::BVH::CreatePrimCenterMortonCodeData()
+{
+	BufferDesc MortonCodeBuffDesc;
+	MortonCodeBuffDesc.Name = "Morton Code Buffer";
+	MortonCodeBuffDesc.Usage = USAGE_DYNAMIC;	
+	MortonCodeBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	MortonCodeBuffDesc.uiSizeInBytes = sizeof(Uint32) * m_BVHMeshData.primitive_num;
+	m_pDevice->CreateBuffer(MortonCodeBuffDesc, nullptr, &m_apPrimCenterMortonCodeData);
 }
 
