@@ -27,9 +27,10 @@ RWBuffer<float4> PlantPositionBuffers;
 
 cbuffer cbPCGPointData
 {
-	float2 TerrainOrigin;
+	float3 TerrainOrigin;
+	float TerrainHeight;
 	float2 NodeOrigin;
-	float2 CellSize;
+	float2 CellSize;	
 
 	uint LayerIdx;
 	uint MortonCode;
@@ -39,10 +40,10 @@ cbuffer cbPCGPointData
 	float PlantRadius;
 	float PlantZOI;
 	float PCGPointGSize;
+	float PlantPlaceThreshold;
 
 	float2 TexSampOffsetInParent;
-
-	float PlantPlaceThreshold;
+	float2 Padding;
 };
 
 // cbuffer cbPCGPointDatas
@@ -92,9 +93,9 @@ void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
 	float2 terrain_size = CellSize * (2 << LayerIdx);
 
 	float2 output_pixel_world_cell_size = CellSize / TexSize;
-	float2 global_mask_uv = ((NodeOrigin + output_pixel_world_cell_size * float2(tex_x, tex_y)) - TerrainOrigin) / terrain_size;
+	float2 global_mask_uv = ((NodeOrigin + output_pixel_world_cell_size * float2(tex_x, tex_y)) - TerrainOrigin.xz) / terrain_size;
 
-	float4 global_terrain_mask_value = TerrainMaskMap.Load(int3(global_mask_uv * TerrainMaskTexSize, 0));
+	float4 global_terrain_mask_value = TerrainMaskMap.Load(int3(global_mask_uv * TerrainMaskTexSize, 0));	
 
 	//OutPosMapData[id.xy] = PoissonPosMapData.Load(int3(id.xy, 0)) * global_terrain_mask_value.r;
 
@@ -139,8 +140,9 @@ void CalculatePOSMap(uint3 id : SV_DispatchThreadID)
 
 		//plant position buffer index
 		uint plant_pos_buff_idx = LayerIdx * PCG_PLANT_MAX_POSITION_NUM + curr_idx;
-		float2 xz_pos = terrain_size * global_mask_uv + TerrainOrigin;
-		PlantPositionBuffers[plant_pos_buff_idx] = float4(xz_pos.r, 1.0f, xz_pos.g, 1.0f);
+		float2 xz_pos = terrain_size * global_mask_uv + TerrainOrigin.xz;
+		float height_value = TerrainOrigin.y + TerrainHeight * TerrainHeightMap.Load(int3(global_mask_uv * TerrainMaskTexSize, 0)).r;
+		PlantPositionBuffers[plant_pos_buff_idx] = float4(xz_pos.r, height_value, xz_pos.g, 1.0f);
 	}
 	else
 	{

@@ -81,7 +81,7 @@ namespace Diligent
 		void BindGenSDFMapData(IDeviceContext *pContext, const PCGNodeData &NodeData, ITexture *pOriginalTex, ITexture *pInputTex, ITexture *pOutputTex, bool reverse);
 		void GenSDFMapDispatch(IDeviceContext *pContext, uint MapSize);
 
-		void BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex);
+		void BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex, ITexture* pHeightTex);
 
 		void PosMapDispatch(IDeviceContext *pContext, uint MapSize);
 

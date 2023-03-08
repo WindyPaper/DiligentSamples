@@ -11,9 +11,10 @@ namespace Diligent
 
 	struct PCGNodeData
 	{
-		float2 TerrainOrigin;
+		float3 TerrainOrigin;
+		float TerrainHeight;
 		float2 NodeOrigin;
-		float2 CellSize;
+		float2 CellSize;		
 
 		uint LayerIdx;
 		uint MortonCode;
@@ -24,16 +25,17 @@ namespace Diligent
 		float PlantZOI;
 		float PCGPointGSize;
 		//float Padding;
-
-		float2 TexSampOffsetInParent;
-
 		float PlantPlaceThreshold;
+
+		float2 TexSampOffsetInParent;		
+		float2 Padding;
 
 		PCGNodeData()
 		{
-			TerrainOrigin = float2(0.0f);
+			TerrainOrigin = float3(0.0f, 0.0f, 0.0f);
 			NodeOrigin = float2(0.0f);
 			CellSize = float2(0.0f);
+			TerrainHeight = 0.0f;
 
 			LayerIdx = 0;
 			MortonCode = 0;

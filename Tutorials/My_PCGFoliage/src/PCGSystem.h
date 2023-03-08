@@ -46,7 +46,7 @@ namespace Diligent
 	class PCGTerrainTile
 	{
 	public:
-		PCGTerrainTile(IDeviceContext *pContext, IRenderDevice *pDevice, const float2 &min, const float2 &size);
+		PCGTerrainTile(IDeviceContext *pContext, IRenderDevice *pDevice, const float3 &min, const float3 &size);
 
 		void InitGlobalRes();
 
@@ -71,7 +71,7 @@ namespace Diligent
 		void DivideTile(const PCGLayer *pLayer, const std::vector<PCGPoint> &PointVec);
 
 	private:
-		float2 mTileMin, mTileSize;
+		float3 mTileMin, mTileSize;
 
 		//Generate texture hierarchy
 		MortonCode mMortonCode;
@@ -87,6 +87,7 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> mPlantTypeNumBuffer;
 
 		RefCntAutoPtr<ITexture> mGlobalTerrainMaskTex;
+		RefCntAutoPtr<ITexture> mGlobalTerrainHeightTex;
 
 		//CPU data
 		std::vector<std::shared_ptr<float4[]>> mPlantPositionHostDatas;

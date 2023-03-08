@@ -138,7 +138,7 @@ namespace Diligent
 
 		for (int i = 0; i < InstCount; ++i)
 		{
-			float scale = 1.0f / (LayerIdx + 1.0f);
+			float scale = 1.0f / (LayerIdx + 1.0f) * 10.0f;
 			// Random rotation
 			float4x4 rotation = float4x4::RotationX(0.0f) * float4x4::RotationY(0.0f) * float4x4::RotationZ(0.0f);
 			float3 pos = float3(m_pPlantPositions[LayerIdx][i].x, m_pPlantPositions[LayerIdx][i].y, m_pPlantPositions[LayerIdx][i].z);

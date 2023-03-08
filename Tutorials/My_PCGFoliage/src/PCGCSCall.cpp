@@ -307,10 +307,12 @@ void Diligent::PCGCSCall::GenSDFMapDispatch(IDeviceContext *pContext, uint MapSi
 	pContext->DispatchCompute(attr);
 }
 
-void Diligent::PCGCSCall::BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex)
+void Diligent::PCGCSCall::BindTerrainMaskMap(IDeviceContext *pContext, ITexture* pMaskTex, ITexture* pHeightTex)
 {
 	PCGCSGpuRes *pCalPosMapRes = &mPCGCSGPUResVec[PCG_CS_CAL_POS_MAP];	
 	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TerrainMaskMap")->Set(pMaskTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+
+	pCalPosMapRes->apBindlessSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TerrainHeightMap")->Set(pHeightTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void Diligent::PCGCSCall::PosMapDispatch(IDeviceContext *pContext, uint MapSize)

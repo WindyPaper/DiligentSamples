@@ -222,7 +222,7 @@ void My_Terrain::Render()
 	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(drawAttrs);
 
-	//m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos());
+	m_apClipMap->Render(m_pImmediateContext, m_Camera.GetPos());
 
 	//render proxy cube
 	m_pProxyCube->Render(m_pImmediateContext, &m_Camera);

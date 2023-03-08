@@ -8,6 +8,14 @@ set(SOURCE
     src/CDLODTree.cpp
     src/DebugCanvas.cpp
     src/TerrainMap.cpp
+
+    src/CDLODTree.cpp
+    src/PCGCSCall.cpp
+    src/PCGLayer.cpp
+    src/PCGNodePool.cpp
+    src/PCGPoint.cpp
+    src/PCGSystem.cpp
+    src/ProxyCube.cpp
 )
 
 set(INCLUDE
@@ -16,6 +24,15 @@ set(INCLUDE
     src/CDLODTree.h
     src/DebugCanvas.h
     src/TerrainMap.h
+
+    src/CDLODTree.h
+    src/MortonCode.h
+    src/PCGCSCall.h
+    src/PCGLayer.h
+    src/PCGNodePool.h
+    src/PCGPoint.h
+    src/PCGSystem.h
+    src/ProxyCube.h
 )
 
 set(SHADERS)
