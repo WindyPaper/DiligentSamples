@@ -31,20 +31,25 @@
 
 namespace Diligent
 {
+	class BVH;
 
-class Tutorial01_HelloTriangle final : public SampleBase
+class MyRayTracing final : public SampleBase
 {
 public:
+	virtual ~MyRayTracing();
+
     virtual void Initialize(const SampleInitInfo& InitInfo) override final;
 
     virtual void Render() override final;
     virtual void Update(double CurrTime, double ElapsedTime) override final;
 
-    virtual const Char* GetSampleName() const override final { return "Tutorial01: Hello Triangle"; }
+    virtual const Char* GetSampleName() const override final { return "My Ray tracing"; }
 
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
 	RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
+
+	BVH *m_pMeshBVH;
 };
 
 } // namespace Diligent

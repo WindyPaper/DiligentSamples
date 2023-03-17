@@ -26,16 +26,17 @@
  */
 
 #include "My_Raytracing.hpp"
+#include "BVH.h"
 
 namespace Diligent
 {
 
 SampleBase* CreateSample()
 {
-    return new Tutorial01_HelloTriangle();
+    return new MyRayTracing();
 }
 
-void Tutorial01_HelloTriangle::Initialize(const SampleInitInfo& InitInfo)
+void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 {
     SampleBase::Initialize(InitInfo);
 
@@ -97,10 +98,14 @@ void Tutorial01_HelloTriangle::Initialize(const SampleInitInfo& InitInfo)
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
     m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPSO);
+
+	//-----
+	m_pMeshBVH = new BVH(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory);
+	m_pMeshBVH->BuildBVH();
 }
 
 // Render a frame
-void Tutorial01_HelloTriangle::Render()
+void MyRayTracing::Render()
 {
     // Clear the back buffer
     const float ClearColor[] = {0.350f, 0.350f, 0.350f, 1.0f};
@@ -121,9 +126,17 @@ void Tutorial01_HelloTriangle::Render()
     m_pImmediateContext->Draw(drawAttrs);
 }
 
-void Tutorial01_HelloTriangle::Update(double CurrTime, double ElapsedTime)
+void MyRayTracing::Update(double CurrTime, double ElapsedTime)
 {
     SampleBase::Update(CurrTime, ElapsedTime);
+}
+
+MyRayTracing::~MyRayTracing()
+{
+	if (m_pMeshBVH)
+	{
+		delete m_pMeshBVH;
+	}
 }
 
 } // namespace Diligent
