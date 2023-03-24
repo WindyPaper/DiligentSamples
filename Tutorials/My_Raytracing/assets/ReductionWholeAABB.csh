@@ -5,12 +5,10 @@
 //     #define PER_GROUP_THREADS_NUM 512
 // #endif
 
-static const int MAX_INT = 2147483647;
-static const int MIN_INT = -2147483648;
-
 cbuffer ReductionUniformData
 {
     uint InReductionDataNum;
+    uint InAABBIdxOffset;
 }
 
 StructuredBuffer<BVHAABB> InWholeAABB;
@@ -35,13 +33,13 @@ BVHAABB merge(const in BVHAABB lhs, const in BVHAABB rhs)
 
 void make_aabb_empty(inout BVHAABB v)
 {
-    v.upper.x = 0.0;
-    v.upper.y = 0.0;
-    v.upper.z = 0.0;
+    v.upper.x = MIN_INT;
+    v.upper.y = MIN_INT;
+    v.upper.z = MIN_INT;
     v.upper.w = 0.0;
-    v.lower.x = 0.0;
-    v.lower.y = 0.0;
-    v.lower.z = 0.0;
+    v.lower.x = MAX_INT;
+    v.lower.y = MAX_INT;
+    v.lower.z = MAX_INT;
     v.lower.w = 0.0;
 }
 
@@ -58,16 +56,16 @@ void ReductionWholeAABBMain(uint3 gid : SV_GroupID, uint3 tid : SV_DispatchThrea
     BVHAABB empty_aabb;
     make_aabb_empty(empty_aabb);
 
-    if(tid.x >= InReductionDataNum)
+    if(disp_thread_idx >= InReductionDataNum)
     {
         GrpSharedMem[local_grp_idx] = empty_aabb;    
     }
     else
     {
-        GrpSharedMem[local_grp_idx] = InWholeAABB[disp_thread_idx]; // store in shared memory
+        GrpSharedMem[local_grp_idx] = InWholeAABB[InAABBIdxOffset + disp_thread_idx]; // store in shared memory
     }
-    
-	GroupMemoryBarrierWithGroupSync(); // wait until everything is transfered from device memory to shared memory
+
+	GroupMemoryBarrierWithGroupSync(); // wait until everything is transfered from device memory to shared memorys
 
 	for (uint s = PER_GROUP_THREADS_NUM / 2; s > 0; s >>= 1)
     {

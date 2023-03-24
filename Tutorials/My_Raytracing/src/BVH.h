@@ -48,12 +48,19 @@ namespace Diligent
 		int num_objects;
 		int num_interal_nodes;
 		int num_all_nodes;
-		int padding;
+		int upper_pow_of_2_primitive_num;
+	};
+
+	struct SortMortonUniformData
+	{
+		Uint32 pass_id;
+		Uint32 sort_num;
 	};
 
 	struct ReductionUniformData
 	{
 		Uint32 InReductionDataNum;
+		Uint32 InAABBIdxOffset;
 	};
 
 	struct BVHNode
@@ -72,6 +79,7 @@ namespace Diligent
 	};
 
 	static const Uint32 ReductionGroupThreadNum = 512;
+	static const Uint32 SortMortonCodeThreadNum = 1024;
 
 	class BVH
 	{
@@ -94,13 +102,26 @@ namespace Diligent
 		void CreatePrimCenterMortonCodeData(int num);
 		void CreatePrimAABBData(int num);
 		void CreateGlobalBVHData();
+		void CreateSortMortonCodeData(int num);
+
+		void CreateConstructBVHData(int num_node);
 		
 		void CreateGenerateAABBPSO();
 		void CreateReductionWholeAABBPSO();
 		void CreateGenerateMortonCodePSO();
+		void CreateSortMortonCodePSO();
 
 		void DispatchAABBBuild();
 		void ReductionWholeAABB();
+
+		void DispatchMortonCodeBuild();
+		void DispatchSortMortonCode();		
+
+		//bvh start
+		void CreateConstructBVHPSO();
+		void _CreateInitBVHNodePSO();
+
+		void DispatchInitBVHNode();
 
 	private:
 		IDeviceContext *m_pDeviceCtx;
@@ -118,17 +139,38 @@ namespace Diligent
 		RefCntAutoPtr<IPipelineState>         m_apGenAABBPSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apGenAABBSRB;
 		RefCntAutoPtr<IBuffer> m_apPrimAABBData;
+		RefCntAutoPtr<IBuffer> m_apPrimCentroidData;
 
 		RefCntAutoPtr<IPipelineState>         m_apWholeAABBPSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apWholeAABBSRB;
 		RefCntAutoPtr<IBuffer> m_apWholeAABBDataPing;
 		RefCntAutoPtr<IBuffer> m_apWholeAABBDataPong;
 		RefCntAutoPtr<IBuffer> m_apReductionUniformData;
+		IBuffer* m_pOutWholeAABB;
 
 		//gen morton code
 		RefCntAutoPtr<IPipelineState>         m_apGenMortonCodePSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apGenMortonCodeSRB;
 		RefCntAutoPtr<IBuffer> m_apPrimCenterMortonCodeData;
+
+		//simple sort morton code
+		RefCntAutoPtr<IPipelineState> m_apSortMortonCodePSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apSortMortonCodeSRB;
+		RefCntAutoPtr<IBuffer> m_apOutSortMortonCodeData;
+		RefCntAutoPtr<IBuffer> m_apOutSortIdxDataPing;
+		RefCntAutoPtr<IBuffer> m_apOutSortIdxDataPong;
+		IBuffer* m_pOutResultSortData;
+		IBuffer* m_pOutResultIdxData;
+		RefCntAutoPtr<IBuffer> m_apSortMortonCodeUniform;
+
+		//bvh
+		RefCntAutoPtr<IPipelineState> m_apInitBVHNodePSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apInitBVHNodeSRB;
+		RefCntAutoPtr<IBuffer> m_apBVHNodeData;
+
+		RefCntAutoPtr<IPipelineState> m_apConstructInternalNodePSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apConstructInternalNodeSRB;
+		//RefCntAutoPtr<IBuffer> m_ap
 	};
 }
 

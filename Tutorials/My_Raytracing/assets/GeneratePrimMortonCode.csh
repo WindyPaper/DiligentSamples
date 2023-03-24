@@ -6,9 +6,10 @@
 
 StructuredBuffer<BVHAABB> whole_aabb;
 
-StructuredBuffer<BVHAABB> inAABB; //size = num_all_nodes
+// StructuredBuffer<BVHAABB> inAABBs; //size = num_all_nodes
+StructuredBuffer<float3> inPrimCentroid;
 
-RWBuffer<uint> outPrimMortonCode;
+RWStructuredBuffer<uint> outPrimMortonCode;
 
 uint expand_bits(uint v)
 {
@@ -43,27 +44,37 @@ float3 get_centroid(const in BVHAABB box)
     return c;
 }
 
-int create_morton_code(const in BVHAABB aabb)
+int create_morton_code(float3 p)
 {
-    float3 p = get_centroid(aabb);
+    // float3 p = get_centroid(aabb);
 
     p.x -= whole_aabb[0].lower.x;
     p.y -= whole_aabb[0].lower.y;
     p.z -= whole_aabb[0].lower.z;
-    p.x /= (whole_aabb[0].upper.x - whole_aabb[0].lower.x);
-    p.y /= (whole_aabb[0].upper.y - whole_aabb[0].lower.y);
-    p.z /= (whole_aabb[0].upper.z - whole_aabb[0].lower.z);
+    p.x /= (whole_aabb[0].upper.x - whole_aabb[0].lower.x + 1.0f);
+    p.y /= (whole_aabb[0].upper.y - whole_aabb[0].lower.y + 1.0f);
+    p.z /= (whole_aabb[0].upper.z - whole_aabb[0].lower.z + 1.0f);
     return morton_code(p);
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(64, 1, 1)]
 void GeneratePrimMortonCodeMain(uint3 id : SV_DispatchThreadID)
 {
-    uint prim_idx = id.x * id.y;
+    uint prim_idx = id.x;
 
-    const BVHAABB aabb = inAABB[num_interal_nodes + prim_idx];
+    if(prim_idx >= num_objects)
+    {
+        if(prim_idx < upper_pow_of_2_primitive_num)
+        {
+            outPrimMortonCode[prim_idx] = MAX_INT;
+        }        
+        return;
+    }
+
+    //const BVHAABB aabb = inAABBs[num_interal_nodes + prim_idx];
+    const float3 p = inPrimCentroid[prim_idx];
     
-    uint prim_morton_code = create_morton_code(aabb);
+    uint prim_morton_code = create_morton_code(p);
 
     outPrimMortonCode[prim_idx] = prim_morton_code;
 }

@@ -7,18 +7,16 @@ struct BVHVertex
     float2 uv;
 };
 
-static const int MAX_INT = 2147483647;
-static const int MIN_INT = -2147483648;
-
 StructuredBuffer<BVHVertex> MeshVertex;
 StructuredBuffer<uint> MeshIdx;
 
 RWStructuredBuffer<BVHAABB> OutAABB; //size = num_all_nodes
+RWStructuredBuffer<float3> OutPrimCentroid;
 
-[numthreads(8, 8, 1)]
+[numthreads(64, 1, 1)]
 void GenerateAABBMain(uint3 id : SV_DispatchThreadID)
 {
-    uint prim_idx = id.x * id.y;
+    uint prim_idx = id.x;
 
     if(prim_idx >= num_objects)
     {
@@ -30,6 +28,7 @@ void GenerateAABBMain(uint3 id : SV_DispatchThreadID)
     aabb.lower = float4(MAX_INT, MAX_INT, MAX_INT, 0.0f);    
 
     uint start_idx = prim_idx * 3;
+    float3 prim_centroid = float3(0.0f, 0.0f, 0.0f);
     for(int i = 0; i < 3; ++i)
     {
         uint curr_vertex_idx = MeshIdx[start_idx + i];
@@ -37,7 +36,11 @@ void GenerateAABBMain(uint3 id : SV_DispatchThreadID)
 
         aabb.upper.xyz = max(v.pos, aabb.upper.xyz);
         aabb.lower.xyz = min(v.pos, aabb.lower.xyz);
+
+        prim_centroid += v.pos;
     }
+    prim_centroid /= 3.0f;
 
     OutAABB[num_interal_nodes + prim_idx] = aabb;
+    OutPrimCentroid[prim_idx] = prim_centroid;
 }

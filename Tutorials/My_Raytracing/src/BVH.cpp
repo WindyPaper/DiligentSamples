@@ -1,6 +1,8 @@
 #include "BVH.h"
 
 #include <assert.h>
+#include <vector>
+#include <numeric>
 
 #include "Buffer.h"
 #include "Texture.h"
@@ -13,7 +15,9 @@
 Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :
 	m_pDeviceCtx(pDeviceCtx),
 	m_pDevice(pDevice),
-	m_pShaderFactory(pShaderFactory)
+	m_pShaderFactory(pShaderFactory),
+	m_pOutWholeAABB(nullptr),
+	m_pOutResultSortData(nullptr)
 {
 	InitTestMesh();
 
@@ -93,6 +97,8 @@ void Diligent::BVH::InitBuffer()
 	CreateGlobalBVHData();	
 	CreatePrimAABBData(m_BVHMeshData.primitive_num);
 	CreatePrimCenterMortonCodeData(m_BVHMeshData.upper_pow_of_2_primitive_num);
+	CreateSortMortonCodeData(m_BVHMeshData.upper_pow_of_2_primitive_num);
+	CreateConstructBVHData(m_BVHMeshData.primitive_num * 2 - 1);
 }
 
 void Diligent::BVH::InitPSO()
@@ -100,11 +106,17 @@ void Diligent::BVH::InitPSO()
 	CreateGenerateAABBPSO();
 	CreateReductionWholeAABBPSO();
 	CreateGenerateMortonCodePSO();
+	CreateSortMortonCodePSO();
+	CreateConstructBVHPSO();
 }
 
 void Diligent::BVH::BuildBVH()
 {
 	DispatchAABBBuild();
+	DispatchMortonCodeBuild();
+	DispatchSortMortonCode();
+
+	DispatchInitBVHNode();
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVH::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type, ShaderMacroHelper *pMacro)
@@ -179,6 +191,15 @@ void Diligent::BVH::CreatePrimAABBData(int num)
 	AABBBuffDesc.uiSizeInBytes = sizeof(BVHAABB) * (num * 2 - 1);
 	m_pDevice->CreateBuffer(AABBBuffDesc, nullptr, &m_apPrimAABBData);
 
+	BufferDesc PrimCentroidBuffDesc;
+	PrimCentroidBuffDesc.Name = "Prim Centroid Buffer";
+	PrimCentroidBuffDesc.Usage = USAGE_DEFAULT;
+	PrimCentroidBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	PrimCentroidBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	PrimCentroidBuffDesc.ElementByteStride = sizeof(float3);
+	PrimCentroidBuffDesc.uiSizeInBytes = sizeof(float3) * num;
+	m_pDevice->CreateBuffer(PrimCentroidBuffDesc, nullptr, &m_apPrimCentroidData);	
+
 	BufferDesc WholeAABBBuffDesc;
 	WholeAABBBuffDesc.Name = "Whole AABB Buffer Ping";
 	WholeAABBBuffDesc.Usage = USAGE_DEFAULT;
@@ -217,6 +238,58 @@ void Diligent::BVH::CreateGlobalBVHData()
 	m_pDevice->CreateBuffer(GlobalBVHBuffDesc, nullptr, &m_apGlobalBVHData);
 }
 
+void Diligent::BVH::CreateSortMortonCodeData(int num)
+{
+	BufferDesc SortMortonUniformBuffDesc;
+	SortMortonUniformBuffDesc.Name = "SortMortonUniform Buff";
+	SortMortonUniformBuffDesc.Usage = USAGE_DYNAMIC;
+	SortMortonUniformBuffDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	SortMortonUniformBuffDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	SortMortonUniformBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	SortMortonUniformBuffDesc.ElementByteStride = sizeof(SortMortonUniformData);
+	SortMortonUniformBuffDesc.uiSizeInBytes = sizeof(SortMortonUniformData);
+	m_pDevice->CreateBuffer(SortMortonUniformBuffDesc, nullptr, &m_apSortMortonCodeUniform);
+
+	BufferDesc MortonCodeBuffDesc;
+	MortonCodeBuffDesc.Name = "Sort Morton Code Buffer";
+	MortonCodeBuffDesc.Usage = USAGE_DEFAULT;
+	MortonCodeBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	MortonCodeBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	MortonCodeBuffDesc.ElementByteStride = sizeof(Uint32);
+	MortonCodeBuffDesc.uiSizeInBytes = sizeof(Uint32) * num;
+	m_pDevice->CreateBuffer(MortonCodeBuffDesc, nullptr, &m_apOutSortMortonCodeData);
+
+	BufferDesc IdxBuffDesc;
+	IdxBuffDesc.Name = "Sort Idx Buffer Ping";
+	IdxBuffDesc.Usage = USAGE_DEFAULT;
+	IdxBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	IdxBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	IdxBuffDesc.ElementByteStride = sizeof(Uint32);
+	IdxBuffDesc.uiSizeInBytes = sizeof(Uint32) * num;
+
+	std::vector<Uint32> idx_data(num);
+	std::iota(idx_data.begin(), idx_data.end(), 0);
+	BufferData init_buff_data;
+	init_buff_data.DataSize = IdxBuffDesc.uiSizeInBytes;
+	init_buff_data.pData = &idx_data[0];
+
+	m_pDevice->CreateBuffer(IdxBuffDesc, &init_buff_data, &m_apOutSortIdxDataPing);
+	IdxBuffDesc.Name = "Sort Idx Buffer Pong";
+	m_pDevice->CreateBuffer(IdxBuffDesc, nullptr, &m_apOutSortIdxDataPong);
+}
+
+void Diligent::BVH::CreateConstructBVHData(int num_node)
+{
+	BufferDesc BVHNodeDesc;
+	BVHNodeDesc.Name = "BVH Node Buffer";
+	BVHNodeDesc.Usage = USAGE_DEFAULT;
+	BVHNodeDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	BVHNodeDesc.Mode = BUFFER_MODE_STRUCTURED;
+	BVHNodeDesc.ElementByteStride = sizeof(BVHNode);
+	BVHNodeDesc.uiSizeInBytes = sizeof(BVHNode) * num_node;
+	m_pDevice->CreateBuffer(BVHNodeDesc, nullptr, &m_apBVHNodeData);
+}
+
 void Diligent::BVH::CreateGenerateAABBPSO()
 {
 	RefCntAutoPtr<IShader> pGenerateAABBCS = CreateShader("GenerateAABBMain", "GenerateAABB.csh", "Generate AABB CS");
@@ -231,7 +304,8 @@ void Diligent::BVH::CreateGenerateAABBPSO()
 		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "OutAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
+		{SHADER_TYPE_COMPUTE, "OutAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutPrimCentroid", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "bvh generate AABB compute shader");	
@@ -281,7 +355,9 @@ void Diligent::BVH::CreateGenerateMortonCodePSO()
 	ShaderResourceVariableDesc Vars[] =
 	{
 		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "inAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "whole_aabb", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "inAABBs", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "inPrimCentroid", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "outPrimMortonCode", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 	};
 	// clang-format on
@@ -292,6 +368,35 @@ void Diligent::BVH::CreateGenerateMortonCodePSO()
 
 	//SRB
 	m_apGenMortonCodePSO->CreateShaderResourceBinding(&m_apGenMortonCodeSRB, true);
+}
+
+void Diligent::BVH::CreateSortMortonCodePSO()
+{
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("SORT_GROUP_THREADS_NUM", SortMortonCodeThreadNum);
+	RefCntAutoPtr<IShader> pSortMortonCode = CreateShader("SortMortonCodeMain", "SortMortonCode.csh", "sort morton code cs", SHADER_TYPE_COMPUTE, &Macros);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "SortMortonUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "InMortonCodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutSortMortonCodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
+		{SHADER_TYPE_COMPUTE, "OutIdxData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "sort morton code pso");
+
+	PSOCreateInfo.pCS = pSortMortonCode;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apSortMortonCodePSO);
+
+	//SRB
+	m_apSortMortonCodePSO->CreateShaderResourceBinding(&m_apSortMortonCodeSRB, true);
 }
 
 void Diligent::BVH::DispatchAABBBuild()
@@ -305,20 +410,22 @@ void Diligent::BVH::DispatchAABBBuild()
 		CBGlobalData->num_objects = m_BVHMeshData.primitive_num;
 		CBGlobalData->num_interal_nodes = CBGlobalData->num_objects - 1;
 		CBGlobalData->num_all_nodes = 2 * CBGlobalData->num_objects - 1;
+		CBGlobalData->upper_pow_of_2_primitive_num = m_BVHMeshData.upper_pow_of_2_primitive_num;
 	}
 
 	m_apGenAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
 	m_apGenAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_apMeshVertexData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 	m_apGenAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx")->Set(m_apMeshIndexData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 	m_apGenAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAABB")->Set(m_apPrimAABBData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+	m_apGenAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPrimCentroid")->Set(m_apPrimCentroidData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));	
 
 	//commit res data
 	m_pDeviceCtx->CommitShaderResources(m_apGenAABBSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 	//dispatch prim AABB
-	const float sqrt_prim_num = std::sqrtf(m_BVHMeshData.primitive_num);
+	//const float sqrt_prim_num = std::sqrtf(m_BVHMeshData.primitive_num);
 	//assert((prim_num & (prim_num - 1)) == 0);
-	DispatchComputeAttribs attr(std::ceilf(sqrt_prim_num / 8.0f), std::ceilf(sqrt_prim_num / 8.0f));
+	DispatchComputeAttribs attr(std::ceilf(m_BVHMeshData.primitive_num / 64.0f), 1);
 	m_pDeviceCtx->DispatchCompute(attr);
 
 	//Reduction AABB
@@ -338,20 +445,38 @@ void Diligent::BVH::ReductionWholeAABB()
 		{
 			MapHelper<ReductionUniformData> CBReductionData(m_pDeviceCtx, m_apReductionUniformData, MAP_WRITE, MAP_FLAG_DISCARD);
 			CBReductionData->InReductionDataNum = deal_aabb_num;
+
+			if (whole_pass == 0)
+			{
+				CBReductionData->InAABBIdxOffset = m_BVHMeshData.primitive_num - 1;
+			}
+			else
+			{
+				CBReductionData->InAABBIdxOffset = 0;
+			}			
 		}
 		m_apWholeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "ReductionUniformData")->Set(m_apReductionUniformData);
 
 		IBuffer *pInAABBBuf;
 		IBuffer *pOutAABBBuf;
-		if ((whole_pass & 1) == 0)
+
+		if (whole_pass == 0)
 		{
-			pInAABBBuf = m_apWholeAABBDataPing;
-			pOutAABBBuf = m_apWholeAABBDataPong;
+			pInAABBBuf = m_apPrimAABBData;
+			pOutAABBBuf = m_apWholeAABBDataPing;
 		}
 		else
 		{
-			pInAABBBuf = m_apWholeAABBDataPong;
-			pOutAABBBuf = m_apWholeAABBDataPing;
+			if ((whole_pass & 1))
+			{
+				pInAABBBuf = m_apWholeAABBDataPing;
+				pOutAABBBuf = m_apWholeAABBDataPong;
+			}
+			else
+			{
+				pInAABBBuf = m_apWholeAABBDataPong;
+				pOutAABBBuf = m_apWholeAABBDataPing;
+			}
 		}
 		m_apWholeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InWholeAABB")->Set(pInAABBBuf->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 		m_apWholeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutWholeAABB")->Set(pOutAABBBuf->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
@@ -363,11 +488,136 @@ void Diligent::BVH::ReductionWholeAABB()
 		DispatchComputeAttribs attr(curr_grp_num, 1);
 		m_pDeviceCtx->DispatchCompute(attr);
 
+		m_pOutWholeAABB = pOutAABBBuf;
 		deal_aabb_num = curr_grp_num;
+		++whole_pass;
 
 	} while (curr_grp_num > 1);
 
 	//Uint32 curr_grp_threads_num = ceilf(float(m_BVHMeshData.primitive_num) / ReductionGroupThreadNum);
 	
+}
+
+void Diligent::BVH::DispatchMortonCodeBuild()
+{
+	m_pDeviceCtx->SetPipelineState(m_apGenMortonCodePSO);
+
+	m_apGenMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
+	m_apGenMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "whole_aabb")->Set(m_pOutWholeAABB->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	//m_apGenMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "inAABBs")->Set(m_apPrimAABBData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apGenMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "inPrimCentroid")->Set(m_apPrimCentroidData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));	
+	m_apGenMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "outPrimMortonCode")->Set(m_apPrimCenterMortonCodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apGenMortonCodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(std::ceilf(m_BVHMeshData.primitive_num / 64.0f), 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+}
+
+void Diligent::BVH::DispatchSortMortonCode()
+{
+	m_pDeviceCtx->SetPipelineState(m_apSortMortonCodePSO);
+
+	Uint32 divide_group_num = ceilf((float)m_BVHMeshData.upper_pow_of_2_primitive_num / SortMortonCodeThreadNum);
+	Uint32 pass_num = 30; //max morton code bit num
+
+	for (Uint32 i = 0; i < pass_num; ++i)
+	{
+		{
+			MapHelper<SortMortonUniformData> CBSortMortonCodeData(m_pDeviceCtx, m_apSortMortonCodeUniform, MAP_WRITE, MAP_FLAG_DISCARD);
+			CBSortMortonCodeData->pass_id = i;
+			//if (grp_idx == divide_group_num - 1)
+			//{
+			CBSortMortonCodeData->sort_num = std::fminf(m_BVHMeshData.upper_pow_of_2_primitive_num, SortMortonCodeThreadNum);
+			//}
+			/*else
+			{
+				CBSortMortonCodeData->sort_num = SortMortonCodeThreadNum;
+			}*/
+		}
+
+		m_apSortMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "SortMortonUniformData")->Set(m_apSortMortonCodeUniform);
+		
+		IBuffer *pInSortMortonCodeData;
+		IBuffer *pOutSortMortonCodeData;
+		IBuffer *pInSortIdxData;
+		IBuffer *pOutSortIdxData;
+		if ((i & 1) == 0)
+		{
+			pInSortMortonCodeData = m_apPrimCenterMortonCodeData;
+			pOutSortMortonCodeData = m_apOutSortMortonCodeData;
+
+			pInSortIdxData = m_apOutSortIdxDataPing;
+			pOutSortIdxData = m_apOutSortIdxDataPong;
+		}
+		else
+		{
+			pInSortMortonCodeData = m_apOutSortMortonCodeData;
+			pOutSortMortonCodeData = m_apPrimCenterMortonCodeData;
+
+			pInSortIdxData = m_apOutSortIdxDataPong;
+			pOutSortIdxData = m_apOutSortIdxDataPing;
+		}
+
+		m_apSortMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InMortonCodeData")->Set(pInSortMortonCodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+		m_apSortMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutSortMortonCodeData")->Set(pOutSortMortonCodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+		m_apSortMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InIdxData")->Set(pInSortIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+		m_apSortMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutIdxData")->Set(pOutSortIdxData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+		m_pDeviceCtx->CommitShaderResources(m_apSortMortonCodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		DispatchComputeAttribs attr(std::ceilf((float)m_BVHMeshData.primitive_num / SortMortonCodeThreadNum), 1);
+		m_pDeviceCtx->DispatchCompute(attr);
+
+		m_pOutResultSortData = pOutSortMortonCodeData;
+		m_pOutResultIdxData = pOutSortIdxData;
+	}	
+}
+
+void Diligent::BVH::CreateConstructBVHPSO()
+{
+	_CreateInitBVHNodePSO();
+}
+
+void Diligent::BVH::_CreateInitBVHNodePSO()
+{
+	/*ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("SORT_GROUP_THREADS_NUM", SortMortonCodeThreadNum);*/
+	RefCntAutoPtr<IShader> pInitBVHNode = CreateShader("InitBVHNodeMain", "InitBVHNode.csh", "init bvh node cs");
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "InIdxData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutBVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "init bvh node pso");
+
+	PSOCreateInfo.pCS = pInitBVHNode;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apInitBVHNodePSO);
+
+	//SRB
+	m_apInitBVHNodePSO->CreateShaderResourceBinding(&m_apInitBVHNodeSRB, true);
+}
+
+void Diligent::BVH::DispatchInitBVHNode()
+{
+	m_pDeviceCtx->SetPipelineState(m_apInitBVHNodePSO);
+
+	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
+	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InIdxData")->Set(m_pOutResultIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutBVHNodeData")->Set(m_apBVHNodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apInitBVHNodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(std::ceilf((m_BVHMeshData.primitive_num * 2.0f - 1.0f) / 64), 1);
+	m_pDeviceCtx->DispatchCompute(attr);
 }
 
