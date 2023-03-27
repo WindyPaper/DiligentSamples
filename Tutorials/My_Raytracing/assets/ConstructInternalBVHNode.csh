@@ -10,10 +10,12 @@
 StructuredBuffer<uint> InSortMortonCode;
 RWStructuredBuffer<BVHNode> OutBVHNodeData;
 
-int common_upper_bits(int a, int b)
+int common_upper_bits(uint a, uint b)
 {
-    //return min(firstbithigh(a), firstbithigh(b));
-    return firstbithigh(a ^ b);
+    // uint loca = firstbithigh(a);
+    // uint locb = firstbithigh(b);
+    // return min(loca, locb);
+    return 32 - firstbithigh(a ^ b);
 }
 
 uint2 determine_range(const uint num_leaves, uint idx)
@@ -118,5 +120,19 @@ void ConstructInternalBVHNodeMain(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    
+    const uint2 ij  = determine_range(num_objects, node_idx);
+    const int gamma = find_split(num_objects, ij.x, ij.y);
+
+    OutBVHNodeData[node_idx].left_idx  = gamma;
+    OutBVHNodeData[node_idx].right_idx = gamma + 1;
+    if(min(ij.x, ij.y) == gamma)
+    {
+        OutBVHNodeData[node_idx].left_idx += num_objects - 1;
+    }
+    if(max(ij.x, ij.y) == gamma + 1)
+    {
+        OutBVHNodeData[node_idx].right_idx += num_objects - 1;
+    }
+    OutBVHNodeData[OutBVHNodeData[node_idx].left_idx].parent_idx  = node_idx;
+    OutBVHNodeData[OutBVHNodeData[node_idx].right_idx].parent_idx = node_idx;
 }

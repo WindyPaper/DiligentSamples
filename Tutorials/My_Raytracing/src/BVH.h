@@ -105,6 +105,7 @@ namespace Diligent
 		void CreateSortMortonCodeData(int num);
 
 		void CreateConstructBVHData(int num_node);
+		void CreateGenerateInternalAABBData(int num_internal_node);
 		
 		void CreateGenerateAABBPSO();
 		void CreateReductionWholeAABBPSO();
@@ -122,6 +123,12 @@ namespace Diligent
 		void _CreateInitBVHNodePSO();
 
 		void DispatchInitBVHNode();
+		
+		void _CreateContructInternalNodePSO();
+		void DispatchConstructBVHInternalNode();
+
+		void _CreateGenerateInternalNodeAABBPSO();
+		void DispatchGenerateInternalNodeAABB();
 
 	private:
 		IDeviceContext *m_pDeviceCtx;
@@ -170,6 +177,10 @@ namespace Diligent
 
 		RefCntAutoPtr<IPipelineState> m_apConstructInternalNodePSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apConstructInternalNodeSRB;
+
+		RefCntAutoPtr<IPipelineState> m_apGenerateInternalNodeAABBPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apGenerateInternalNodeAABBSRB;
+		RefCntAutoPtr<IBuffer> m_apGenerateInternalNodeFlagData;
 		//RefCntAutoPtr<IBuffer> m_ap
 	};
 }

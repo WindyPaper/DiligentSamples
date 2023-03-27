@@ -35,7 +35,7 @@ void Diligent::BVH::InitTestMesh()
 {
 	BVHVertex CubeVerts[8] =
 	{
-		{float3(-1,-1,-1), float2(1,0)},
+		{float3(-11,-1,-1), float2(1,0)},
 		{float3(-1,+1,-1), float2(0,1)},
 		{float3(+1,+1,-1), float2(0,0)},
 		{float3(+1,-1,-1), float2(1,1)},
@@ -43,7 +43,7 @@ void Diligent::BVH::InitTestMesh()
 		{float3(-1,-1,+1), float2(1,1)},
 		{float3(-1,+1,+1), float2(0,1)},
 		{float3(+1,+1,+1), float2(1,0)},
-		{float3(+1,-1,+1), float2(1,1)},
+		{float3(+12,-1,+1), float2(1,1)},
 	};
 
 	//anti-clockwise
@@ -99,6 +99,7 @@ void Diligent::BVH::InitBuffer()
 	CreatePrimCenterMortonCodeData(m_BVHMeshData.upper_pow_of_2_primitive_num);
 	CreateSortMortonCodeData(m_BVHMeshData.upper_pow_of_2_primitive_num);
 	CreateConstructBVHData(m_BVHMeshData.primitive_num * 2 - 1);
+	CreateGenerateInternalAABBData(m_BVHMeshData.primitive_num - 1);
 }
 
 void Diligent::BVH::InitPSO()
@@ -117,6 +118,8 @@ void Diligent::BVH::BuildBVH()
 	DispatchSortMortonCode();
 
 	DispatchInitBVHNode();
+	DispatchConstructBVHInternalNode();
+	DispatchGenerateInternalNodeAABB();
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVH::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type, ShaderMacroHelper *pMacro)
@@ -288,6 +291,25 @@ void Diligent::BVH::CreateConstructBVHData(int num_node)
 	BVHNodeDesc.ElementByteStride = sizeof(BVHNode);
 	BVHNodeDesc.uiSizeInBytes = sizeof(BVHNode) * num_node;
 	m_pDevice->CreateBuffer(BVHNodeDesc, nullptr, &m_apBVHNodeData);
+}
+
+void Diligent::BVH::CreateGenerateInternalAABBData(int num_internal_node)
+{
+	BufferDesc InternalNodeAABBFlagBuffDesc;
+	InternalNodeAABBFlagBuffDesc.Name = "generate internal aabb flag data";
+	InternalNodeAABBFlagBuffDesc.Usage = USAGE_DEFAULT;
+	InternalNodeAABBFlagBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	InternalNodeAABBFlagBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	InternalNodeAABBFlagBuffDesc.ElementByteStride = sizeof(Uint32);
+	InternalNodeAABBFlagBuffDesc.uiSizeInBytes = sizeof(Uint32) * num_internal_node;
+
+	std::vector<Uint32> flag_data(num_internal_node, 0);
+	//std::iota(flag_data.begin(), flag_data.end(), 0);
+	BufferData init_buff_data;
+	init_buff_data.DataSize = InternalNodeAABBFlagBuffDesc.uiSizeInBytes;
+	init_buff_data.pData = &flag_data[0];
+
+	m_pDevice->CreateBuffer(InternalNodeAABBFlagBuffDesc, &init_buff_data, &m_apGenerateInternalNodeFlagData);
 }
 
 void Diligent::BVH::CreateGenerateAABBPSO()
@@ -578,6 +600,8 @@ void Diligent::BVH::DispatchSortMortonCode()
 void Diligent::BVH::CreateConstructBVHPSO()
 {
 	_CreateInitBVHNodePSO();
+	_CreateContructInternalNodePSO();
+	_CreateGenerateInternalNodeAABBPSO();
 }
 
 void Diligent::BVH::_CreateInitBVHNodePSO()
@@ -618,6 +642,86 @@ void Diligent::BVH::DispatchInitBVHNode()
 	m_pDeviceCtx->CommitShaderResources(m_apInitBVHNodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
 	DispatchComputeAttribs attr(std::ceilf((m_BVHMeshData.primitive_num * 2.0f - 1.0f) / 64), 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+}
+
+void Diligent::BVH::_CreateContructInternalNodePSO()
+{	
+	RefCntAutoPtr<IShader> pConstructInternalNode = CreateShader("ConstructInternalBVHNodeMain", "ConstructInternalBVHNode.csh", "construct internal node cs");
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "InSortMortonCode", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutBVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "construct bvh internal node pso");
+
+	PSOCreateInfo.pCS = pConstructInternalNode;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apConstructInternalNodePSO);
+
+	//SRB
+	m_apConstructInternalNodePSO->CreateShaderResourceBinding(&m_apConstructInternalNodeSRB, true);
+}
+
+void Diligent::BVH::DispatchConstructBVHInternalNode()
+{
+	m_pDeviceCtx->SetPipelineState(m_apConstructInternalNodePSO);
+
+	m_apConstructInternalNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
+	m_apConstructInternalNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InSortMortonCode")->Set(m_pOutResultSortData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apConstructInternalNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutBVHNodeData")->Set(m_apBVHNodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apConstructInternalNodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(std::ceilf((m_BVHMeshData.primitive_num - 1.0f) / 64), 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+}
+
+void Diligent::BVH::_CreateGenerateInternalNodeAABBPSO()
+{
+	RefCntAutoPtr<IShader> pGenerateInternalNodeAABB = CreateShader("GenerateInternalNodeAABBMain", "GenerateInternalNodeAABB.csh", "generate internal node aabb cs");
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "InBVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "InOutFlag", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "generate internal node aabb pso");
+
+	PSOCreateInfo.pCS = pGenerateInternalNodeAABB;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apGenerateInternalNodeAABBPSO);
+
+	//SRB
+	m_apGenerateInternalNodeAABBPSO->CreateShaderResourceBinding(&m_apGenerateInternalNodeAABBSRB, true);
+}
+
+void Diligent::BVH::DispatchGenerateInternalNodeAABB()
+{
+	m_pDeviceCtx->SetPipelineState(m_apGenerateInternalNodeAABBPSO);
+
+	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
+	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InBVHNodeData")->Set(m_apBVHNodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InOutFlag")->Set(m_apGenerateInternalNodeFlagData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAABB")->Set(m_apPrimAABBData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apGenerateInternalNodeAABBSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(std::ceilf((m_BVHMeshData.primitive_num - 1.0f) / 64), 1);
 	m_pDeviceCtx->DispatchCompute(attr);
 }
 

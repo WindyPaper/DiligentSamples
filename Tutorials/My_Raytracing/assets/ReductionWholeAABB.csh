@@ -16,21 +16,6 @@ RWStructuredBuffer<BVHAABB> OutWholeAABB;
 
 groupshared BVHAABB GrpSharedMem[PER_GROUP_THREADS_NUM];
 
-BVHAABB merge(const in BVHAABB lhs, const in BVHAABB rhs)
-{
-    BVHAABB merged;
-    merged.upper.x = max(lhs.upper.x, rhs.upper.x);
-    merged.upper.y = max(lhs.upper.y, rhs.upper.y);
-    merged.upper.z = max(lhs.upper.z, rhs.upper.z);
-    merged.upper.w = 1.0f;
-    merged.lower.x = min(lhs.lower.x, rhs.lower.x);
-    merged.lower.y = min(lhs.lower.y, rhs.lower.y);
-    merged.lower.z = min(lhs.lower.z, rhs.lower.z);
-    merged.lower.w = 1.0f;
-
-    return merged;
-}
-
 void make_aabb_empty(inout BVHAABB v)
 {
     v.upper.x = MIN_INT;

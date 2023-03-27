@@ -1,5 +1,3 @@
-#define uint16_t min16uint
-
 #include "Common.csh"
 
 cbuffer SortMortonUniformData
