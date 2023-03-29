@@ -5,11 +5,13 @@ project(My_Raytracing CXX)
 set(SOURCE
     src/My_Raytracing.cpp
     src/BVH.cpp
+    src/BVHTrace.cpp
 )
 
 set(INCLUDE
     src/My_Raytracing.hpp
     src/BVH.h
+    src/BVHTrace.h
 )
 
 set(SHADERS)

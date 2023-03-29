@@ -27,6 +27,8 @@
 
 #include "My_Raytracing.hpp"
 #include "BVH.h"
+#include "BVHTrace.h"
+#include "CommonlyUsedStates.h"
 
 namespace Diligent
 {
@@ -59,7 +61,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
     // Use the depth buffer format from the swap chain
     PSOCreateInfo.GraphicsPipeline.DSVFormat                    = m_pSwapChain->GetDesc().DepthBufferFormat;
     // Primitive topology defines what kind of primitives will be rendered by this pipeline state
-    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
     // No back face culling for this tutorial
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
     // Disable depth testing
@@ -94,19 +96,63 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
         m_pDevice->CreateShader(ShaderCI, &pPS);
     }
 
+	// Define variable type that will be used by default
+	PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{ SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE }
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc.ResourceLayout.Variables = Vars;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumVariables = _countof(Vars);
+
+	// clang-format off
+	// Define immutable sampler for g_Texture. Immutable samplers should be used whenever possible
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{ SHADER_TYPE_PIXEL, "g_Texture", Sam_LinearClamp }
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+
     // Finally, create the pipeline state
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
     m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPSO);
+	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);	
 
 	//-----
 	m_pMeshBVH = new BVH(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory);
 	m_pMeshBVH->BuildBVH();
+
+	float NearPlane = 0.1f;
+	float FarPlane = 100000.f;
+	float AspectRatio = static_cast<float>(m_pSwapChain->GetDesc().Width) / static_cast<float>(m_pSwapChain->GetDesc().Height);
+	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
+		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
+	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
+	m_Camera.SetPos(float3(0.0f, 0.0f, 50.0f));
+	m_Camera.InvalidUpdate();
+
+	m_pTrace = new BVHTrace(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain, m_pMeshBVH, m_Camera);	
+
+	IShaderResourceVariable *p_gtexture = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
+	if (p_gtexture)
+	{
+		p_gtexture->Set(m_pTrace->GetOutputPixelTex()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	}
 }
 
 // Render a frame
 void MyRayTracing::Render()
 {
+	m_pTrace->DispatchBVHTrace();
+
     // Clear the back buffer
     const float ClearColor[] = {0.350f, 0.350f, 0.350f, 1.0f};
     // Let the engine perform required state transitions
@@ -118,17 +164,23 @@ void MyRayTracing::Render()
     // Set the pipeline state in the immediate context
     m_pImmediateContext->SetPipelineState(m_pPSO);
 
-    // Typically we should now call CommitShaderResources(), however shaders in this example don't
-    // use any resources.
+	//m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_texture")->Set(m_pTrace->GetOutputPixelTex()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	
+	m_pImmediateContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
     DrawAttribs drawAttrs;
-    drawAttrs.NumVertices = 3; // We will render 3 vertices
+	drawAttrs.NumVertices = 4;
+	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL; // Verify the state of vertex and index buffers
     m_pImmediateContext->Draw(drawAttrs);
 }
 
 void MyRayTracing::Update(double CurrTime, double ElapsedTime)
 {
     SampleBase::Update(CurrTime, ElapsedTime);
+
+	m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));
+
+	m_pTrace->Update(m_Camera);
 }
 
 MyRayTracing::~MyRayTracing()
@@ -137,6 +189,21 @@ MyRayTracing::~MyRayTracing()
 	{
 		delete m_pMeshBVH;
 	}
+
+	if (m_pTrace)
+	{
+		delete m_pTrace;
+	}
+}
+
+void MyRayTracing::WindowResize(Uint32 Width, Uint32 Height)
+{
+	float NearPlane = 0.1f;
+	float FarPlane = 100000.f;
+	float AspectRatio = static_cast<float>(Width) / static_cast<float>(Height);
+	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
+		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
+	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
 }
 
 } // namespace Diligent

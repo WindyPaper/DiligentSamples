@@ -28,10 +28,12 @@
 #pragma once
 
 #include "SampleBase.hpp"
+#include "FirstPersonCamera.hpp"
 
 namespace Diligent
 {
 	class BVH;
+	class BVHTrace;
 
 class MyRayTracing final : public SampleBase
 {
@@ -45,11 +47,17 @@ public:
 
     virtual const Char* GetSampleName() const override final { return "My Ray tracing"; }
 
+	virtual void WindowResize(Uint32 Width, Uint32 Height);
+
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
+	RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 	RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
 
+	FirstPersonCamera m_Camera;
+
 	BVH *m_pMeshBVH;
+	BVHTrace *m_pTrace;
 };
 
 } // namespace Diligent

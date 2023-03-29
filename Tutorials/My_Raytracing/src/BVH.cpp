@@ -122,6 +122,26 @@ void Diligent::BVH::BuildBVH()
 	DispatchGenerateInternalNodeAABB();
 }
 
+Diligent::IBufferView* Diligent::BVH::GetMeshVertexBufferView()
+{
+	return m_apMeshVertexData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+}
+
+Diligent::IBufferView* Diligent::BVH::GetMeshIdxBufferView()
+{
+	return m_apMeshIndexData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+}
+
+Diligent::IBufferView* Diligent::BVH::GetBVHNodeBufferView()
+{
+	return m_apBVHNodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+}
+
+Diligent::IBufferView* Diligent::BVH::GetBVHNodeAABBBufferView()
+{	
+	return m_apPrimAABBData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+}
+
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVH::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type, ShaderMacroHelper *pMacro)
 {
 	ShaderCreateInfo ShaderCI;

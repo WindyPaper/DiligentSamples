@@ -95,6 +95,12 @@ namespace Diligent
 
 		void BuildBVH();
 
+		IBufferView* GetMeshVertexBufferView();
+		IBufferView* GetMeshIdxBufferView();
+		IBufferView* GetBVHNodeBufferView();
+		IBufferView* GetBVHNodeAABBBufferView();
+		
+
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
 		PipelineStateDesc CreatePSODescAndParam(ShaderResourceVariableDesc *params, const int varNum, const std::string &psoName, const PIPELINE_TYPE type = PIPELINE_TYPE_COMPUTE);
