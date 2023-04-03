@@ -33,57 +33,173 @@ Diligent::BVH::~BVH()
 
 void Diligent::BVH::InitTestMesh()
 {
-	BVHVertex CubeVerts[8] =
-	{
-		{float3(-11,-1,-1), float2(1,0)},
-		{float3(-1,+1,-1), float2(0,1)},
-		{float3(+1,+1,-1), float2(0,0)},
-		{float3(+1,-1,-1), float2(1,1)},
+	//BVHVertex CubeVerts[8] =
+	//{
+	//	{float3(-11,-1,-1), float2(1,0)},
+	//	{float3(-1,+1,-1), float2(0,1)},
+	//	{float3(+1,+1,-1), float2(0,0)},
+	//	{float3(+1,-1,-1), float2(1,1)},
 
-		{float3(-1,-1,+1), float2(1,1)},
-		{float3(-1,+1,+1), float2(0,1)},
-		{float3(+1,+1,+1), float2(1,0)},
-		{float3(+12,-1,+1), float2(1,1)},
-	};
+	//	{float3(-1,-1,+1), float2(1,1)},
+	//	{float3(-1,+1,+1), float2(0,1)},
+	//	{float3(+1,+1,+1), float2(1,0)},
+	//	{float3(+12,-1,+1), float2(1,1)},
+	//};
 
-	//anti-clockwise
-	Uint32 Indices[] =
+	////anti-clockwise
+	//Uint32 Indices[] =
+	//{
+	//	2,0,1, 2,3,0,
+	//	4,6,5, 4,7,6,
+	//	0,7,4, 0,3,7,
+	//	1,0,4, 1,4,5,
+	//	1,5,2, 5,6,2,
+	//	3,6,7, 3,2,6
+	//};
+
+	//// Create a vertex buffer that stores cube vertices
+	//BufferDesc VertBuffDesc;
+	//VertBuffDesc.Name = "Cube vertex buffer";
+	//VertBuffDesc.Usage = USAGE_IMMUTABLE;
+	//VertBuffDesc.BindFlags = BIND_SHADER_RESOURCE;
+	//VertBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	//VertBuffDesc.ElementByteStride = sizeof(BVHVertex);
+	//VertBuffDesc.uiSizeInBytes = sizeof(CubeVerts);
+	//BufferData VBData;
+	//VBData.pData = CubeVerts;
+	//VBData.DataSize = sizeof(CubeVerts);
+	//m_pDevice->CreateBuffer(VertBuffDesc, &VBData, &m_apMeshVertexData);
+
+	//BufferDesc IndBuffDesc;
+	//IndBuffDesc.Name = "Cube index buffer";
+	//IndBuffDesc.Usage = USAGE_IMMUTABLE;
+	//IndBuffDesc.BindFlags = BIND_SHADER_RESOURCE;
+	//IndBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	//IndBuffDesc.ElementByteStride = sizeof(Uint32);
+	//IndBuffDesc.uiSizeInBytes = sizeof(Indices);
+	//BufferData IBData;
+	//IBData.pData = Indices;
+	//IBData.DataSize = sizeof(Indices);
+	//m_pDevice->CreateBuffer(IndBuffDesc, &IBData, &m_apMeshIndexData);
+
+	//m_BVHMeshData.vertex_num = 8;
+	//m_BVHMeshData.index_num = 36;
+	//m_BVHMeshData.primitive_num = m_BVHMeshData.index_num / 3;
+
+	//Uint32 power_v = 1;
+	//while (power_v < m_BVHMeshData.primitive_num)
+	//	power_v = power_v << 1;
+	//m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
+
+	LoadFBXFile("test_mid_sphere.fbx");
+}
+
+void Diligent::BVH::LoadFBXFile(const std::string &name)
+{
+	FILE* fp = fopen(name.c_str(), "rb");
+
+	//if (!fp) return false;
+	assert(fp);
+
+	fseek(fp, 0, SEEK_END);
+	long file_size = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+	auto* content = new ofbx::u8[file_size];
+	fread(content, 1, file_size, fp);	
+
+	// Ignoring certain nodes will only stop them from being processed not tokenised (i.e. they will still be in the tree)
+	ofbx::LoadFlags flags =
+		ofbx::LoadFlags::TRIANGULATE |
+		//		ofbx::LoadFlags::IGNORE_MODELS |
+		ofbx::LoadFlags::IGNORE_BLEND_SHAPES |
+		ofbx::LoadFlags::IGNORE_CAMERAS |
+		ofbx::LoadFlags::IGNORE_LIGHTS |
+		//		ofbx::LoadFlags::IGNORE_TEXTURES |
+		ofbx::LoadFlags::IGNORE_SKIN |
+		ofbx::LoadFlags::IGNORE_BONES |
+		ofbx::LoadFlags::IGNORE_PIVOTS |
+		ofbx::LoadFlags::IGNORE_MATERIALS |
+		ofbx::LoadFlags::IGNORE_POSES |
+		ofbx::LoadFlags::IGNORE_VIDEOS |
+		ofbx::LoadFlags::IGNORE_LIMBS |
+		//		ofbx::LoadFlags::IGNORE_MESHES |
+		ofbx::LoadFlags::IGNORE_ANIMATIONS;
+
+	ofbx::IScene* pScene = ofbx::load((ofbx::u8*)content, file_size, (ofbx::u16)flags);
+
+	int indices_offset = 0;
+
+	std::vector<BVHVertex> mesh_vertex_data;
+	std::vector<Uint32> mesh_index_data;
+
+	int mesh_count = pScene->getMeshCount();
+	for (int i = 0; i < mesh_count; ++i)
 	{
-		2,0,1, 2,3,0,
-		4,6,5, 4,7,6,
-		0,7,4, 0,3,7,
-		1,0,4, 1,4,5,
-		1,5,2, 5,6,2,
-		3,6,7, 3,2,6
-	};
+		const ofbx::Mesh& mesh = *(pScene->getMesh(i));
+		const ofbx::Geometry& geom = *mesh.getGeometry();
+		int vertex_count = geom.getVertexCount();
+		const ofbx::Vec3* vertices = geom.getVertices();
+		for (int i = 0; i < vertex_count; ++i)
+		{
+			BVHVertex bvh_vertex;
+			ofbx::Vec3 v = vertices[i];
+			bvh_vertex.pos = float3(v.x, v.y, v.z);
+			//fprintf(fp, "v %f %f %f\n", v.x, v.y, v.z);
+			
+			const ofbx::Vec2* uvs = geom.getUVs();
+			if (uvs)
+			{								
+				ofbx::Vec2 uv = uvs[i];
+				bvh_vertex.uv = float2(uv.x, uv.y);
+			}
+
+			mesh_vertex_data.emplace_back(bvh_vertex);
+		}				
+
+		const int* faceIndices = geom.getFaceIndices();
+		int index_count = geom.getIndexCount();
+		for (int i = 0; i < index_count; ++i)
+		{			
+			int idx = (faceIndices[i] < 0) ? (-faceIndices[i] - 1) : faceIndices[i];
+			int vertex_idx = indices_offset + idx;
+			
+			mesh_index_data.push_back(vertex_idx);
+			
+		}
+
+		indices_offset += vertex_count;
+		//++obj_idx;
+	}
+
+	//Uint32 *p = &mesh_index_data[0];
 
 	// Create a vertex buffer that stores cube vertices
 	BufferDesc VertBuffDesc;
-	VertBuffDesc.Name = "Cube vertex buffer";
+	VertBuffDesc.Name = "mesh vertex buffer";
 	VertBuffDesc.Usage = USAGE_IMMUTABLE;
 	VertBuffDesc.BindFlags = BIND_SHADER_RESOURCE;
 	VertBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
 	VertBuffDesc.ElementByteStride = sizeof(BVHVertex);
-	VertBuffDesc.uiSizeInBytes = sizeof(CubeVerts);
+	VertBuffDesc.uiSizeInBytes = sizeof(BVHVertex) * mesh_vertex_data.size();
 	BufferData VBData;
-	VBData.pData = CubeVerts;
-	VBData.DataSize = sizeof(CubeVerts);
+	VBData.pData = &mesh_vertex_data[0];
+	VBData.DataSize = VertBuffDesc.uiSizeInBytes;
 	m_pDevice->CreateBuffer(VertBuffDesc, &VBData, &m_apMeshVertexData);
 
 	BufferDesc IndBuffDesc;
-	IndBuffDesc.Name = "Cube index buffer";
+	IndBuffDesc.Name = "mesh index buffer";
 	IndBuffDesc.Usage = USAGE_IMMUTABLE;
 	IndBuffDesc.BindFlags = BIND_SHADER_RESOURCE;
 	IndBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
 	IndBuffDesc.ElementByteStride = sizeof(Uint32);
-	IndBuffDesc.uiSizeInBytes = sizeof(Indices);
+	IndBuffDesc.uiSizeInBytes = sizeof(Uint32) * mesh_index_data.size();
 	BufferData IBData;
-	IBData.pData = Indices;
-	IBData.DataSize = sizeof(Indices);
+	IBData.pData = &mesh_index_data[0];
+	IBData.DataSize = IndBuffDesc.uiSizeInBytes;
 	m_pDevice->CreateBuffer(IndBuffDesc, &IBData, &m_apMeshIndexData);
 
-	m_BVHMeshData.vertex_num = 8;
-	m_BVHMeshData.index_num = 36;
+	m_BVHMeshData.vertex_num = mesh_vertex_data.size();
+	m_BVHMeshData.index_num = mesh_index_data.size();
 	m_BVHMeshData.primitive_num = m_BVHMeshData.index_num / 3;
 
 	Uint32 power_v = 1;
@@ -100,6 +216,7 @@ void Diligent::BVH::InitBuffer()
 	CreateSortMortonCodeData(m_BVHMeshData.upper_pow_of_2_primitive_num);
 	CreateConstructBVHData(m_BVHMeshData.primitive_num * 2 - 1);
 	CreateGenerateInternalAABBData(m_BVHMeshData.primitive_num - 1);
+	CreateMergeBitonicSortData();
 }
 
 void Diligent::BVH::InitPSO()
@@ -109,6 +226,7 @@ void Diligent::BVH::InitPSO()
 	CreateGenerateMortonCodePSO();
 	CreateSortMortonCodePSO();
 	CreateConstructBVHPSO();
+	CreateMergeBitonicSortMortonCodePSO();
 }
 
 void Diligent::BVH::BuildBVH()
@@ -116,6 +234,7 @@ void Diligent::BVH::BuildBVH()
 	DispatchAABBBuild();
 	DispatchMortonCodeBuild();
 	DispatchSortMortonCode();
+	DispatchMergeBitonicSortMortonCode();
 
 	DispatchInitBVHNode();
 	DispatchConstructBVHInternalNode();
@@ -332,6 +451,19 @@ void Diligent::BVH::CreateGenerateInternalAABBData(int num_internal_node)
 	m_pDevice->CreateBuffer(InternalNodeAABBFlagBuffDesc, &init_buff_data, &m_apGenerateInternalNodeFlagData);
 }
 
+void Diligent::BVH::CreateMergeBitonicSortData()
+{
+	BufferDesc MergeBitonicSortMortonUniformBuffDesc;
+	MergeBitonicSortMortonUniformBuffDesc.Name = "Merge Bitonic SortMortonUniform Buff";
+	MergeBitonicSortMortonUniformBuffDesc.Usage = USAGE_DYNAMIC;
+	MergeBitonicSortMortonUniformBuffDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	MergeBitonicSortMortonUniformBuffDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	MergeBitonicSortMortonUniformBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	MergeBitonicSortMortonUniformBuffDesc.ElementByteStride = sizeof(MergeBitonicSortMortonUniformData);
+	MergeBitonicSortMortonUniformBuffDesc.uiSizeInBytes = sizeof(MergeBitonicSortMortonUniformData);
+	m_pDevice->CreateBuffer(MergeBitonicSortMortonUniformBuffDesc, nullptr, &m_apMergeBitonicSortUniformData);
+}
+
 void Diligent::BVH::CreateGenerateAABBPSO()
 {
 	RefCntAutoPtr<IShader> pGenerateAABBCS = CreateShader("GenerateAABBMain", "GenerateAABB.csh", "Generate AABB CS");
@@ -439,6 +571,36 @@ void Diligent::BVH::CreateSortMortonCodePSO()
 
 	//SRB
 	m_apSortMortonCodePSO->CreateShaderResourceBinding(&m_apSortMortonCodeSRB, true);
+}
+
+void Diligent::BVH::CreateMergeBitonicSortMortonCodePSO()
+{	
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("SORT_GROUP_THREADS_NUM", SortMortonCodeThreadNum);
+	RefCntAutoPtr<IShader> pMergeBitonicSortMortonCode = CreateShader("MergeBitonicSortMortonCodeMain", "MergeBitonicSortMortonCode.csh", "merge bitonic sort morton code cs", SHADER_TYPE_COMPUTE, &Macros);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		//{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MergeBitonicSortMortonUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "InMortonCodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		//{SHADER_TYPE_COMPUTE, "InIdxData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutSortMortonCodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutIdxData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "merge bitonic sort morton code pso");
+
+	PSOCreateInfo.pCS = pMergeBitonicSortMortonCode;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apMergeBitonicSortPSO);
+
+	//SRB
+	m_apMergeBitonicSortPSO->CreateShaderResourceBinding(&m_apMergeBitonicSortSRB, true);
 }
 
 void Diligent::BVH::DispatchAABBBuild()
@@ -552,7 +714,7 @@ void Diligent::BVH::DispatchMortonCodeBuild()
 
 	m_pDeviceCtx->CommitShaderResources(m_apGenMortonCodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	DispatchComputeAttribs attr(std::ceilf(m_BVHMeshData.primitive_num / 64.0f), 1);
+	DispatchComputeAttribs attr(std::ceilf(m_BVHMeshData.upper_pow_of_2_primitive_num / 64.0f), 1);
 	m_pDeviceCtx->DispatchCompute(attr);
 }
 
@@ -578,6 +740,7 @@ void Diligent::BVH::DispatchSortMortonCode()
 			}*/
 		}
 
+		m_apSortMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
 		m_apSortMortonCodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "SortMortonUniformData")->Set(m_apSortMortonCodeUniform);
 		
 		IBuffer *pInSortMortonCodeData;
@@ -614,7 +777,52 @@ void Diligent::BVH::DispatchSortMortonCode()
 
 		m_pOutResultSortData = pOutSortMortonCodeData;
 		m_pOutResultIdxData = pOutSortIdxData;
+
+		m_pSecResultSortData = pInSortMortonCodeData;
+		//m_pSecResultIdxData = pInSortIdxData;
 	}	
+}
+
+void Diligent::BVH::DispatchMergeBitonicSortMortonCode()
+{
+	m_pDeviceCtx->SetPipelineState(m_apMergeBitonicSortPSO);
+
+	Uint32 loop_idx = 0;
+	for(Uint32 per_sort_num = SortMortonCodeThreadNum; per_sort_num < m_BVHMeshData.upper_pow_of_2_primitive_num; per_sort_num <<= 1)
+	{
+		{
+			MapHelper<MergeBitonicSortMortonUniformData> CBMergeBitonicSortMortonCodeData(m_pDeviceCtx, m_apMergeBitonicSortUniformData, MAP_WRITE, MAP_FLAG_DISCARD);
+			CBMergeBitonicSortMortonCodeData->per_merge_code_num = per_sort_num;
+		}
+
+		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MergeBitonicSortMortonUniformData")->Set(m_apMergeBitonicSortUniformData);
+
+		IBuffer *pInMortonCodeData;
+		//IBuffer *pInIdxData;
+		IBuffer *pOutSortMortonCodeData;
+		IBuffer *pOutIdxData = m_pOutResultIdxData;
+		if ((loop_idx++ & 1) == 0)
+		{
+			pInMortonCodeData = m_pOutResultSortData;
+			pOutSortMortonCodeData = m_pSecResultSortData;
+		}
+		else
+		{
+			pInMortonCodeData = m_pSecResultSortData;
+			pOutSortMortonCodeData = m_pOutResultSortData;
+		}
+
+		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InMortonCodeData")->Set(pInMortonCodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutSortMortonCodeData")->Set(pOutSortMortonCodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutIdxData")->Set(pOutIdxData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+		m_pDeviceCtx->CommitShaderResources(m_apMergeBitonicSortSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		DispatchComputeAttribs attr(std::ceilf((float)m_BVHMeshData.upper_pow_of_2_primitive_num/ 2.0f / SortMortonCodeThreadNum), 1);
+		m_pDeviceCtx->DispatchCompute(attr);
+
+		m_pOutMergeResultSortData = pOutSortMortonCodeData;
+	}
 }
 
 void Diligent::BVH::CreateConstructBVHPSO()

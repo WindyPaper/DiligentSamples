@@ -6,12 +6,16 @@ set(SOURCE
     src/My_Raytracing.cpp
     src/BVH.cpp
     src/BVHTrace.cpp
+    src/OpenFBX/ofbx.h
+    src/OpenFBX/miniz.h
 )
 
 set(INCLUDE
     src/My_Raytracing.hpp
     src/BVH.h
     src/BVHTrace.h
+    src/OpenFBX/ofbx.cpp
+    src/OpenFBX/miniz.c
 )
 
 set(SHADERS)

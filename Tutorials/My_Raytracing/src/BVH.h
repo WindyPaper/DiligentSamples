@@ -4,6 +4,8 @@
 #define _BVH_H_
 
 #include <limits>
+#include <string>
+#include <unordered_map>
 
 #include "BasicMath.hpp"
 #include "RefCntAutoPtr.hpp"
@@ -12,6 +14,7 @@
 #include "PipelineState.h"
 #include "ShaderResourceBinding.h"
 #include "ShaderMacroHelper.hpp"
+#include "OpenFBX/ofbx.h"
 
 namespace Diligent
 {
@@ -57,6 +60,11 @@ namespace Diligent
 		Uint32 sort_num;
 	};
 
+	struct MergeBitonicSortMortonUniformData
+	{
+		Uint32 per_merge_code_num;
+	};
+
 	struct ReductionUniformData
 	{
 		Uint32 InReductionDataNum;
@@ -79,7 +87,7 @@ namespace Diligent
 	};
 
 	static const Uint32 ReductionGroupThreadNum = 512;
-	static const Uint32 SortMortonCodeThreadNum = 1024;
+	static const Uint32 SortMortonCodeThreadNum = 16;
 
 	class BVH
 	{
@@ -88,6 +96,7 @@ namespace Diligent
 		~BVH();
 
 		void InitTestMesh();
+		void LoadFBXFile(const std::string &name);
 
 		void InitBuffer();
 
@@ -112,17 +121,20 @@ namespace Diligent
 
 		void CreateConstructBVHData(int num_node);
 		void CreateGenerateInternalAABBData(int num_internal_node);
+		void CreateMergeBitonicSortData();
 		
 		void CreateGenerateAABBPSO();
 		void CreateReductionWholeAABBPSO();
 		void CreateGenerateMortonCodePSO();
 		void CreateSortMortonCodePSO();
+		void CreateMergeBitonicSortMortonCodePSO();
 
 		void DispatchAABBBuild();
 		void ReductionWholeAABB();
 
 		void DispatchMortonCodeBuild();
-		void DispatchSortMortonCode();		
+		void DispatchSortMortonCode();	
+		void DispatchMergeBitonicSortMortonCode();
 
 		//bvh start
 		void CreateConstructBVHPSO();
@@ -174,7 +186,14 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_apOutSortIdxDataPong;
 		IBuffer* m_pOutResultSortData;
 		IBuffer* m_pOutResultIdxData;
+		IBuffer* m_pSecResultSortData;
+		//IBuffer* m_pSecResultIdxData;
 		RefCntAutoPtr<IBuffer> m_apSortMortonCodeUniform;
+		//merge using bitonic sort
+		RefCntAutoPtr<IPipelineState> m_apMergeBitonicSortPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apMergeBitonicSortSRB;
+		RefCntAutoPtr<IBuffer> m_apMergeBitonicSortUniformData;
+		IBuffer* m_pOutMergeResultSortData;
 
 		//bvh
 		RefCntAutoPtr<IPipelineState> m_apInitBVHNodePSO;

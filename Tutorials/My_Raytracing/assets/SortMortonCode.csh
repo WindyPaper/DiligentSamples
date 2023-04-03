@@ -29,7 +29,7 @@ void SortMortonCodeMain(uint3 id : SV_DispatchThreadID, uint local_grp_idx : SV_
     // LocalGroupSortData[local_grp_idx] = InMortonCodeData[local_prim_idx];
     // GroupMemoryBarrierWithGroupSync();
 
-    uint clamp_global_prim_idx = min(sort_num - 1, global_prim_idx);
+    uint clamp_global_prim_idx = min(upper_pow_of_2_primitive_num - 1, global_prim_idx);
     uint16_t bit = (InMortonCodeData[clamp_global_prim_idx] >> pass_id) & 1;
     uint16_t invert_e_bit = ~bit & 1;
 
@@ -83,7 +83,7 @@ void SortMortonCodeMain(uint3 id : SV_DispatchThreadID, uint local_grp_idx : SV_
     uint t_value = local_prim_idx - LocalGroupPositiveBitState[local_prim_idx] + total_falses;
     uint sort_index = bit_value ? t_value : LocalGroupPositiveBitState[local_prim_idx];
 
-    if(global_prim_idx < sort_num)
+    if(global_prim_idx < upper_pow_of_2_primitive_num)
     {
         uint offset_idx = grp_id.x * SORT_GROUP_THREADS_NUM;
         OutSortMortonCodeData[offset_idx + sort_index] = InMortonCodeData[global_prim_idx];
