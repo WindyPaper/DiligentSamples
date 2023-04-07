@@ -63,6 +63,7 @@ namespace Diligent
 	struct MergeBitonicSortMortonUniformData
 	{
 		Uint32 per_merge_code_num;
+		Uint32 pass_idx;
 	};
 
 	struct ReductionUniformData
@@ -86,8 +87,13 @@ namespace Diligent
 		{}
 	};
 
+	struct DebugBVHData
+	{
+		int unorder_num_idx;
+	};
+
 	static const Uint32 ReductionGroupThreadNum = 512;
-	static const Uint32 SortMortonCodeThreadNum = 16;
+	static const Uint32 SortMortonCodeThreadNum = 256;
 
 	class BVH
 	{
@@ -148,6 +154,13 @@ namespace Diligent
 		void _CreateGenerateInternalNodeAABBPSO();
 		void DispatchGenerateInternalNodeAABB();
 
+		//debug
+#if DILIGENT_DEBUG
+		void CreateDebugData();
+		void CreateDebugPSO();
+		void DispatchDebugBVH();
+#endif
+
 	private:
 		IDeviceContext *m_pDeviceCtx;
 		IRenderDevice *m_pDevice;
@@ -206,6 +219,13 @@ namespace Diligent
 		RefCntAutoPtr<IPipelineState> m_apGenerateInternalNodeAABBPSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apGenerateInternalNodeAABBSRB;
 		RefCntAutoPtr<IBuffer> m_apGenerateInternalNodeFlagData;
+
+#if DILIGENT_DEBUG
+		RefCntAutoPtr<IPipelineState> m_apDebugBVHPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apDebugBVHSRB;
+		RefCntAutoPtr<IBuffer> m_apDebugBVHData;
+		RefCntAutoPtr<IBuffer> m_apDebugBVHStageData;
+#endif
 		//RefCntAutoPtr<IBuffer> m_ap
 	};
 }

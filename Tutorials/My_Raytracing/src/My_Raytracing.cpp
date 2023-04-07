@@ -151,7 +151,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 // Render a frame
 void MyRayTracing::Render()
 {
-	//m_pTrace->DispatchBVHTrace();
+	m_pTrace->DispatchBVHTrace();
 
     // Clear the back buffer
     const float ClearColor[] = {0.350f, 0.350f, 0.350f, 1.0f};
@@ -188,11 +188,13 @@ MyRayTracing::~MyRayTracing()
 	if (m_pMeshBVH)
 	{
 		delete m_pMeshBVH;
+		m_pMeshBVH = nullptr;
 	}
 
 	if (m_pTrace)
 	{
 		delete m_pTrace;
+		m_pTrace = nullptr;
 	}
 }
 

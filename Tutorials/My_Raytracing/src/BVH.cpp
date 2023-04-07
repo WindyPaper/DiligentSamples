@@ -91,7 +91,7 @@ void Diligent::BVH::InitTestMesh()
 	//	power_v = power_v << 1;
 	//m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
 
-	LoadFBXFile("test_mid_sphere.fbx");
+	LoadFBXFile("test_sphere.fbx");
 }
 
 void Diligent::BVH::LoadFBXFile(const std::string &name)
@@ -206,6 +206,10 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	while (power_v < m_BVHMeshData.primitive_num)
 		power_v = power_v << 1;
 	m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
+
+	pScene->destroy();
+	delete content;
+	fclose(fp);
 }
 
 void Diligent::BVH::InitBuffer()
@@ -217,6 +221,10 @@ void Diligent::BVH::InitBuffer()
 	CreateConstructBVHData(m_BVHMeshData.primitive_num * 2 - 1);
 	CreateGenerateInternalAABBData(m_BVHMeshData.primitive_num - 1);
 	CreateMergeBitonicSortData();
+
+#if DILIGENT_DEBUG
+	CreateDebugData();
+#endif
 }
 
 void Diligent::BVH::InitPSO()
@@ -227,6 +235,10 @@ void Diligent::BVH::InitPSO()
 	CreateSortMortonCodePSO();
 	CreateConstructBVHPSO();
 	CreateMergeBitonicSortMortonCodePSO();
+
+#if DILIGENT_DEBUG
+	CreateDebugPSO();
+#endif
 }
 
 void Diligent::BVH::BuildBVH()
@@ -235,6 +247,10 @@ void Diligent::BVH::BuildBVH()
 	DispatchMortonCodeBuild();
 	DispatchSortMortonCode();
 	DispatchMergeBitonicSortMortonCode();
+
+#if DILIGENT_DEBUG
+	DispatchDebugBVH();
+#endif
 
 	DispatchInitBVHNode();
 	DispatchConstructBVHInternalNode();
@@ -790,38 +806,43 @@ void Diligent::BVH::DispatchMergeBitonicSortMortonCode()
 	Uint32 loop_idx = 0;
 	for(Uint32 per_sort_num = SortMortonCodeThreadNum; per_sort_num < m_BVHMeshData.upper_pow_of_2_primitive_num; per_sort_num <<= 1)
 	{
+		Uint32 pass_idx = 0;
+		for (Uint32 pass_sub_num = per_sort_num; pass_sub_num > 0; pass_sub_num >>= 1)
 		{
-			MapHelper<MergeBitonicSortMortonUniformData> CBMergeBitonicSortMortonCodeData(m_pDeviceCtx, m_apMergeBitonicSortUniformData, MAP_WRITE, MAP_FLAG_DISCARD);
-			CBMergeBitonicSortMortonCodeData->per_merge_code_num = per_sort_num;
+			{
+				MapHelper<MergeBitonicSortMortonUniformData> CBMergeBitonicSortMortonCodeData(m_pDeviceCtx, m_apMergeBitonicSortUniformData, MAP_WRITE, MAP_FLAG_DISCARD);
+				CBMergeBitonicSortMortonCodeData->per_merge_code_num = per_sort_num;
+				CBMergeBitonicSortMortonCodeData->pass_idx = pass_idx++;
+			}
+
+			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MergeBitonicSortMortonUniformData")->Set(m_apMergeBitonicSortUniformData);
+
+			IBuffer *pInMortonCodeData;
+			//IBuffer *pInIdxData;
+			IBuffer *pOutSortMortonCodeData;
+			IBuffer *pOutIdxData = m_pOutResultIdxData;
+			if ((loop_idx++ & 1) == 0)
+			{
+				pInMortonCodeData = m_pOutResultSortData;
+				pOutSortMortonCodeData = m_pSecResultSortData;
+			}
+			else
+			{
+				pInMortonCodeData = m_pSecResultSortData;
+				pOutSortMortonCodeData = m_pOutResultSortData;
+			}
+
+			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InMortonCodeData")->Set(pInMortonCodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutSortMortonCodeData")->Set(pOutSortMortonCodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutIdxData")->Set(pOutIdxData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+			m_pDeviceCtx->CommitShaderResources(m_apMergeBitonicSortSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+			DispatchComputeAttribs attr(std::ceilf((float)m_BVHMeshData.upper_pow_of_2_primitive_num / 2.0f / SortMortonCodeThreadNum), 1);
+			m_pDeviceCtx->DispatchCompute(attr);
+
+			m_pOutMergeResultSortData = pOutSortMortonCodeData;
 		}
-
-		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MergeBitonicSortMortonUniformData")->Set(m_apMergeBitonicSortUniformData);
-
-		IBuffer *pInMortonCodeData;
-		//IBuffer *pInIdxData;
-		IBuffer *pOutSortMortonCodeData;
-		IBuffer *pOutIdxData = m_pOutResultIdxData;
-		if ((loop_idx++ & 1) == 0)
-		{
-			pInMortonCodeData = m_pOutResultSortData;
-			pOutSortMortonCodeData = m_pSecResultSortData;
-		}
-		else
-		{
-			pInMortonCodeData = m_pSecResultSortData;
-			pOutSortMortonCodeData = m_pOutResultSortData;
-		}
-
-		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InMortonCodeData")->Set(pInMortonCodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
-		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutSortMortonCodeData")->Set(pOutSortMortonCodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
-		m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutIdxData")->Set(pOutIdxData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
-
-		m_pDeviceCtx->CommitShaderResources(m_apMergeBitonicSortSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-
-		DispatchComputeAttribs attr(std::ceilf((float)m_BVHMeshData.upper_pow_of_2_primitive_num/ 2.0f / SortMortonCodeThreadNum), 1);
-		m_pDeviceCtx->DispatchCompute(attr);
-
-		m_pOutMergeResultSortData = pOutSortMortonCodeData;
 	}
 }
 
@@ -903,7 +924,7 @@ void Diligent::BVH::DispatchConstructBVHInternalNode()
 	m_pDeviceCtx->SetPipelineState(m_apConstructInternalNodePSO);
 
 	m_apConstructInternalNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
-	m_apConstructInternalNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InSortMortonCode")->Set(m_pOutResultSortData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apConstructInternalNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InSortMortonCode")->Set(m_pOutMergeResultSortData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 	m_apConstructInternalNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutBVHNodeData")->Set(m_apBVHNodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 
 	m_pDeviceCtx->CommitShaderResources(m_apConstructInternalNodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -953,3 +974,88 @@ void Diligent::BVH::DispatchGenerateInternalNodeAABB()
 	m_pDeviceCtx->DispatchCompute(attr);
 }
 
+#if DILIGENT_DEBUG
+
+void Diligent::BVH::CreateDebugData()
+{
+	BufferDesc DebugBuffer;
+	DebugBuffer.Name = "debug bvh buffer";
+	DebugBuffer.Usage = USAGE_DEFAULT;
+	DebugBuffer.ElementByteStride = sizeof(DebugBVHData);
+	DebugBuffer.Mode = BUFFER_MODE_STRUCTURED;
+	DebugBuffer.uiSizeInBytes = sizeof(DebugBVHData);
+	DebugBuffer.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+
+	DebugBVHData debug_bvh_data;
+	debug_bvh_data.unorder_num_idx = -1;
+	BufferData InitData;
+	InitData.pData = &debug_bvh_data;
+	InitData.DataSize = sizeof(DebugBVHData);
+	m_pDevice->CreateBuffer(DebugBuffer, &InitData, &m_apDebugBVHData);
+
+	//init stage buffer
+	BufferDesc DebugStageBuffer;
+	DebugStageBuffer.Name = "debug bvh staging buffer";
+	DebugStageBuffer.Usage = USAGE_STAGING;
+	DebugStageBuffer.BindFlags = BIND_NONE;
+	DebugStageBuffer.Mode = BUFFER_MODE_UNDEFINED;
+	DebugStageBuffer.CPUAccessFlags = CPU_ACCESS_READ;
+	DebugStageBuffer.uiSizeInBytes = sizeof(DebugBVHData);
+	DebugStageBuffer.ElementByteStride = sizeof(DebugBVHData);
+	m_pDevice->CreateBuffer(DebugStageBuffer, nullptr, &m_apDebugBVHStageData);
+}
+
+void Diligent::BVH::CreateDebugPSO()
+{
+	RefCntAutoPtr<IShader> pDebugBVHDataShader = CreateShader("DebugBVHDataMain", "DebugBVHData.csh", "debug bvh data cs");
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "SortMortonCodeNums", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutDebugData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "debug bvh pso");
+
+	PSOCreateInfo.pCS = pDebugBVHDataShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apDebugBVHPSO);
+
+	//SRB
+	m_apDebugBVHPSO->CreateShaderResourceBinding(&m_apDebugBVHSRB, true);
+}
+
+void Diligent::BVH::DispatchDebugBVH()
+{
+	m_pDeviceCtx->SetPipelineState(m_apDebugBVHPSO);
+
+	m_apDebugBVHSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
+	m_apDebugBVHSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "SortMortonCodeNums")->Set(m_pOutMergeResultSortData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apDebugBVHSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutDebugData")->Set(m_apDebugBVHData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apDebugBVHSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(std::ceilf((m_BVHMeshData.primitive_num - 1.0f) / 64), 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+
+	//read back gpu result
+	m_pDeviceCtx->CopyBuffer(m_apDebugBVHData, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+		m_apDebugBVHStageData, 0, sizeof(DebugBVHData),
+		RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	//sync gpu finish copy operation.
+	m_pDeviceCtx->WaitForIdle();
+
+	MapHelper<DebugBVHData> map_plant_type_num_data(m_pDeviceCtx, m_apDebugBVHStageData, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+
+	DebugBVHData result_data;
+	memcpy(&result_data, &(*map_plant_type_num_data), sizeof(DebugBVHData));
+	assert(result_data.unorder_num_idx < 0);
+}
+
+#endif

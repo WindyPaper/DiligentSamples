@@ -15,7 +15,7 @@ int common_upper_bits(uint a, uint b)
     // uint loca = firstbithigh(a);
     // uint locb = firstbithigh(b);
     // return min(loca, locb);
-    return 32 - firstbithigh(a ^ b);
+    return 31 - firstbithigh(a ^ b);
 }
 
 uint2 determine_range(const uint num_leaves, uint idx)
