@@ -14,7 +14,7 @@
 #include "PipelineState.h"
 #include "ShaderResourceBinding.h"
 #include "ShaderMacroHelper.hpp"
-#include "OpenFBX/ofbx.h"
+//#include "OpenFBX/ofbx.h"
 
 namespace Diligent
 {
@@ -25,6 +25,11 @@ namespace Diligent
 	{
 		float3 pos;
 		float2 uv;
+
+		BVHVertex(const float3 &v, const float2 &uv) :
+			pos(v),
+			uv(uv)
+		{}
 	};
 
 	struct BVHMeshData

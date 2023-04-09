@@ -25,7 +25,14 @@ void MergeBitonicSortMortonCodeMain(uint3 id : SV_DispatchThreadID)
     // uint start_base_idx = id.x + jump_scale * per_merge_code_num;
     // uint local_offset = global_prim_idx % per_merge_code_num;
 
-    uint mid_idx = per_merge_code_num >> pass_idx;
+    if(id.x >= upper_pow_of_2_primitive_num)
+    {
+        return;
+    }
+
+    uint real_merge_code_num = min(upper_pow_of_2_primitive_num>>1, per_merge_code_num);
+
+    uint mid_idx = real_merge_code_num >> pass_idx;
 
     // uint pass_idx = 0;
     // uint start_idx = start_base_idx;
@@ -38,7 +45,7 @@ void MergeBitonicSortMortonCodeMain(uint3 id : SV_DispatchThreadID)
     if(pass_idx == 0)
     {
         //reverse
-        get_pair_idx = start_idx + (per_merge_code_num - (start_idx % per_merge_code_num)) + per_merge_code_num - (start_idx % per_merge_code_num);
+        get_pair_idx = start_idx + (real_merge_code_num - (start_idx % real_merge_code_num)) + real_merge_code_num - (start_idx % real_merge_code_num);
         get_pair_idx -= 1;        
     }    
 

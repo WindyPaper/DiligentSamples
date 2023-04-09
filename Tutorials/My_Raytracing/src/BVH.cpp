@@ -12,6 +12,10 @@
 #include "Shader.h"
 #include "MapHelper.hpp"
 
+#include "assimp/Importer.hpp"
+#include "assimp/scene.h"
+#include "assimp/postprocess.h"
+
 Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :
 	m_pDeviceCtx(pDeviceCtx),
 	m_pDevice(pDevice),
@@ -91,85 +95,84 @@ void Diligent::BVH::InitTestMesh()
 	//	power_v = power_v << 1;
 	//m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
 
-	LoadFBXFile("test_sphere.fbx");
+	LoadFBXFile("test_teapot.fbx");
 }
 
 void Diligent::BVH::LoadFBXFile(const std::string &name)
 {
-	FILE* fp = fopen(name.c_str(), "rb");
-
-	//if (!fp) return false;
-	assert(fp);
-
-	fseek(fp, 0, SEEK_END);
-	long file_size = ftell(fp);
-	fseek(fp, 0, SEEK_SET);
-	auto* content = new ofbx::u8[file_size];
-	fread(content, 1, file_size, fp);	
-
-	// Ignoring certain nodes will only stop them from being processed not tokenised (i.e. they will still be in the tree)
-	ofbx::LoadFlags flags =
-		ofbx::LoadFlags::TRIANGULATE |
-		//		ofbx::LoadFlags::IGNORE_MODELS |
-		ofbx::LoadFlags::IGNORE_BLEND_SHAPES |
-		ofbx::LoadFlags::IGNORE_CAMERAS |
-		ofbx::LoadFlags::IGNORE_LIGHTS |
-		//		ofbx::LoadFlags::IGNORE_TEXTURES |
-		ofbx::LoadFlags::IGNORE_SKIN |
-		ofbx::LoadFlags::IGNORE_BONES |
-		ofbx::LoadFlags::IGNORE_PIVOTS |
-		ofbx::LoadFlags::IGNORE_MATERIALS |
-		ofbx::LoadFlags::IGNORE_POSES |
-		ofbx::LoadFlags::IGNORE_VIDEOS |
-		ofbx::LoadFlags::IGNORE_LIMBS |
-		//		ofbx::LoadFlags::IGNORE_MESHES |
-		ofbx::LoadFlags::IGNORE_ANIMATIONS;
-
-	ofbx::IScene* pScene = ofbx::load((ofbx::u8*)content, file_size, (ofbx::u16)flags);
+	
 
 	int indices_offset = 0;
 
 	std::vector<BVHVertex> mesh_vertex_data;
 	std::vector<Uint32> mesh_index_data;
 
-	int mesh_count = pScene->getMeshCount();
-	for (int i = 0; i < mesh_count; ++i)
+	using namespace Assimp;
+	Importer importer;
+	unsigned int flags = aiProcess_Triangulate |
+		aiProcess_JoinIdenticalVertices |
+		aiProcess_PreTransformVertices |
+		aiProcess_RemoveRedundantMaterials |
+		aiProcess_OptimizeMeshes |
+		aiProcess_FlipWindingOrder;
+	const aiScene* import_fbx_scene = importer.ReadFile(name, flags);
+
+	if (import_fbx_scene == NULL)
 	{
-		const ofbx::Mesh& mesh = *(pScene->getMesh(i));
-		const ofbx::Geometry& geom = *mesh.getGeometry();
-		int vertex_count = geom.getVertexCount();
-		const ofbx::Vec3* vertices = geom.getVertices();
-		for (int i = 0; i < vertex_count; ++i)
+		std::string error_code = importer.GetErrorString();
+		printf("Load FBX", "load fbx file failed! " + error_code);
+		return;
+	}
+
+	unsigned int mesh_num = import_fbx_scene->mNumMeshes;
+	//unsigned int mat_num = import_fbx_scene->mNumMaterials;
+
+
+	//Mesh* pMesh = new Mesh();
+
+	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
+	{
+		aiMesh* mesh_ptr = import_fbx_scene->mMeshes[mesh_i];
+
+		//Mesh* p_cy_mesh = fbx_add_mesh(scene, transform_identity());
+		//p_cy_mesh->reserve_mesh(vertex_num, triangle_num);		
+
+		int vertex_num = mesh_ptr->mNumVertices;
+
+		for (int i = 0; i < vertex_num; ++i)
 		{
-			BVHVertex bvh_vertex;
-			ofbx::Vec3 v = vertices[i];
-			bvh_vertex.pos = float3(v.x, v.y, v.z);
-			//fprintf(fp, "v %f %f %f\n", v.x, v.y, v.z);
-			
-			const ofbx::Vec2* uvs = geom.getUVs();
-			if (uvs)
-			{								
-				ofbx::Vec2 uv = uvs[i];
-				bvh_vertex.uv = float2(uv.x, uv.y);
-			}
+			const aiVector3D& v = mesh_ptr->mVertices[i];
+			const aiVector3D& uv = mesh_ptr->mTextureCoords[0][i];
+			//const aiVector3D& normal = mesh_ptr->mNormals[i];
 
-			mesh_vertex_data.emplace_back(bvh_vertex);
-		}				
+			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y)));
 
-		const int* faceIndices = geom.getFaceIndices();
-		int index_count = geom.getIndexCount();
-		for (int i = 0; i < index_count; ++i)
-		{			
-			int idx = (faceIndices[i] < 0) ? (-faceIndices[i] - 1) : faceIndices[i];
-			int vertex_idx = indices_offset + idx;
-			
-			mesh_index_data.push_back(vertex_idx);
-			
+
+			//pMesh->positions.emplace_back(Vector3(v.x, v.y, v.z));
+			//pMesh->texcoords.emplace_back(Vector2(uv.x, uv.y));
+			//pMesh->normals.emplace_back(Vector3(normal.x, normal.y, normal.z));
+
+			//pMesh->vertices.emplace_back(Vertex{ (uint32_t)i, (uint32_t)i, (uint32_t)i });
+
+			//source uv0
+			//const aiVector3D& uv0 = mesh_ptr->mTextureCoords[0][i];
+			//pMesh->SrctexcoordsUV0.emplace_back(Vector2(uv0.x, uv0.y));
 		}
 
-		indices_offset += vertex_count;
-		//++obj_idx;
+		int triangle_num = mesh_ptr->mNumFaces;
+		//int index_num = triangle_num * 3;
+		for (int i = 0; i < triangle_num; ++i)
+		{
+			const aiFace& face = mesh_ptr->mFaces[i];
+			//pMesh->triangles.emplace_back(Triangle{ face.mIndices[0], face.mIndices[1], face.mIndices[2] });
+			for (int tri = 0; tri < 3; ++tri)
+			{
+				mesh_index_data.emplace_back(face.mIndices[tri] + indices_offset);
+			}
+		}
+		indices_offset += triangle_num * 3;
 	}
+	importer.FreeScene();
 
 	//Uint32 *p = &mesh_index_data[0];
 
@@ -206,10 +209,6 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	while (power_v < m_BVHMeshData.primitive_num)
 		power_v = power_v << 1;
 	m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
-
-	pScene->destroy();
-	delete content;
-	fclose(fp);
 }
 
 void Diligent::BVH::InitBuffer()
@@ -804,7 +803,8 @@ void Diligent::BVH::DispatchMergeBitonicSortMortonCode()
 	m_pDeviceCtx->SetPipelineState(m_apMergeBitonicSortPSO);
 
 	Uint32 loop_idx = 0;
-	for(Uint32 per_sort_num = SortMortonCodeThreadNum; per_sort_num < m_BVHMeshData.upper_pow_of_2_primitive_num; per_sort_num <<= 1)
+	Uint32 max_all_num = std::max(SortMortonCodeThreadNum << 1, m_BVHMeshData.upper_pow_of_2_primitive_num);
+	for(Uint32 per_sort_num = SortMortonCodeThreadNum; per_sort_num < max_all_num; per_sort_num <<= 1)
 	{
 		Uint32 pass_idx = 0;
 		for (Uint32 pass_sub_num = per_sort_num; pass_sub_num > 0; pass_sub_num >>= 1)
@@ -832,6 +832,7 @@ void Diligent::BVH::DispatchMergeBitonicSortMortonCode()
 				pOutSortMortonCodeData = m_pOutResultSortData;
 			}
 
+			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
 			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InMortonCodeData")->Set(pInMortonCodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutSortMortonCodeData")->Set(pOutSortMortonCodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 			m_apMergeBitonicSortSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutIdxData")->Set(pOutIdxData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
