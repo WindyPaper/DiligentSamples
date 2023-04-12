@@ -49,6 +49,9 @@ public:
 
 	virtual void WindowResize(Uint32 Width, Uint32 Height);
 
+protected:
+	void UpdateUI();
+
 private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
 	RefCntAutoPtr<IShaderResourceBinding> m_pSRB;

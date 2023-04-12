@@ -30,6 +30,11 @@
 #include "BVHTrace.h"
 #include "CommonlyUsedStates.h"
 
+#include "imgui.h"
+#include "imGuIZMO.h"
+#include "ImGuiUtils.hpp"
+
+
 namespace Diligent
 {
 
@@ -135,8 +140,9 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	float AspectRatio = static_cast<float>(m_pSwapChain->GetDesc().Width) / static_cast<float>(m_pSwapChain->GetDesc().Height);
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
-	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
+	m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
 	m_Camera.SetPos(float3(0.0f, 0.0f, 50.0f));
+	m_Camera.SetMoveSpeed(1000.0f);
 	m_Camera.InvalidUpdate();
 
 	m_pTrace = new BVHTrace(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain, m_pMeshBVH, m_Camera);	
@@ -181,6 +187,8 @@ void MyRayTracing::Update(double CurrTime, double ElapsedTime)
 	m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));
 
 	m_pTrace->Update(m_Camera);
+
+	UpdateUI();
 }
 
 MyRayTracing::~MyRayTracing()
@@ -206,6 +214,20 @@ void MyRayTracing::WindowResize(Uint32 Width, Uint32 Height)
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 300.0f);
+}
+
+void MyRayTracing::UpdateUI()
+{
+	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("Camera Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		float3 CamPos = m_Camera.GetPos();
+		ImGui::Text("Cam pos %.2f, %.2f, %.2f", CamPos.x, CamPos.y, CamPos.z);
+		float3 CamForward = m_Camera.GetWorldAhead();
+		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
+		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
+	}
+	ImGui::End();
 }
 
 } // namespace Diligent

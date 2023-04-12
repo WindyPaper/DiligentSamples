@@ -22,19 +22,51 @@ StructuredBuffer<BVHAABB> BVHNodeAABB;
 
 RWTexture2D<float4> OutPixel;
 
-// compute the near and far intersections of the cube (stored in the x and y components) using the slab method
-// no intersection means vec.x > vec.y (really tNear > tFar)
-uint IntersectAABB(float3 rayOrigin, float3 rayDir, const in BVHAABB aabb) 
+bool RayIntersectsBox(float3 origin, float3 rayDirInv, BVHAABB aabb)
 {
-    float3 tMin = (aabb.lower.xyz - rayOrigin) / rayDir;
-    float3 tMax = (aabb.upper.xyz - rayOrigin) / rayDir;
-    float3 t1 = min(tMin, tMax);
-    float3 t2 = max(tMin, tMax);
-    float tNear = max(max(t1.x, t1.y), t1.z);
-    float tFar = min(min(t2.x, t2.y), t2.z);
-    //near_far = float2(tNear, tFar);
-    return tFar >= tNear;
-};
+	const float3 t0 = (aabb.lower.xyz - origin) * rayDirInv;
+	const float3 t1 = (aabb.upper.xyz - origin) * rayDirInv;
+
+	const float3 tmax = max(t0, t1);
+	const float3 tmin = min(t0, t1);
+
+	const float a1 = min(tmax.x, min(tmax.y, tmax.z));
+	const float a0 = max( max(tmin.x,tmin.y), max(tmin.z, 0.0f) );
+
+	return a1 >= a0;
+}
+
+//Adapted from https://github.com/kayru/RayTracedShadows/blob/master/Source/Shaders/RayTracedShadows.comp
+bool RayTriangleIntersect(
+	const float3 orig,
+	const float3 dir,
+	float3 v0,
+	float3 e0,
+	float3 e1,
+	inout(float) t,
+	inout(float2) bCoord)
+{
+	const float3 s1 = cross(dir.xyz, e1);
+	const float  invd = 1.0 / (dot(s1, e0));
+	const float3 d = orig.xyz - v0;
+	bCoord.x = dot(d, s1) * invd;
+	const float3 s2 = cross(d, e0);
+	bCoord.y = dot(dir.xyz, s2) * invd;
+	t = dot(e1, s2) * invd;
+
+	if (
+//#if BACKFACE_CULLING
+		dot(s1, e0) < -kEpsilon ||
+//#endif
+		bCoord.x < 0.0 || bCoord.x > 1.0 || bCoord.y < 0.0 || (bCoord.x + bCoord.y) > 1.0 || t < 0.0 || t > 1e9)
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
 
 [numthreads(8, 8, 1)]
 void TraceMain(uint3 id : SV_DispatchThreadID)
@@ -52,6 +84,10 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
     float min_near = MAX_INT;
     uint hit_idx_prim = -1;
 
+    // bool collision = false;
+    float3 RayDirInv = rcp(RayDir);
+    // collision = RayIntersectsBox(RayOri, ray_dir_inv, BVHNodeAABB[0].lower.xyz, BVHNodeAABB[0].upper.xyz);
+
     //trace bvh
     uint stack[64];
     int curr_idx = 0;
@@ -64,7 +100,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         const uint L_idx = BVHNodeData[node_idx].left_idx;
         const uint R_idx = BVHNodeData[node_idx].right_idx;
 
-        if(IntersectAABB(RayOri, RayDir, BVHNodeAABB[L_idx]))
+        if(RayIntersectsBox(RayOri, RayDirInv, BVHNodeAABB[L_idx]))
         {
             if(BVHNodeData[L_idx].object_idx != 0xFFFFFFFFu) // leaf
             {
@@ -80,7 +116,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
             }
         }
 
-        if(IntersectAABB(RayOri, RayDir, BVHNodeAABB[R_idx]))
+        if(RayIntersectsBox(RayOri, RayDirInv, BVHNodeAABB[R_idx]))
         {
             if(BVHNodeData[R_idx].object_idx != 0xFFFFFFFFu) // leaf
             {

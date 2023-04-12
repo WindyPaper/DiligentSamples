@@ -95,7 +95,7 @@ void Diligent::BVH::InitTestMesh()
 	//	power_v = power_v << 1;
 	//m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
 
-	LoadFBXFile("test_teapot.fbx");
+	LoadFBXFile("test_sphere.FBX");
 }
 
 void Diligent::BVH::LoadFBXFile(const std::string &name)
@@ -114,7 +114,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 		aiProcess_PreTransformVertices |
 		aiProcess_RemoveRedundantMaterials |
 		aiProcess_OptimizeMeshes |
-		aiProcess_FlipWindingOrder;
+		aiProcess_ConvertToLeftHanded;
 	const aiScene* import_fbx_scene = importer.ReadFile(name, flags);
 
 	if (import_fbx_scene == NULL)
@@ -145,18 +145,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			const aiVector3D& uv = mesh_ptr->mTextureCoords[0][i];
 			//const aiVector3D& normal = mesh_ptr->mNormals[i];
 
-			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y)));
-
-
-			//pMesh->positions.emplace_back(Vector3(v.x, v.y, v.z));
-			//pMesh->texcoords.emplace_back(Vector2(uv.x, uv.y));
-			//pMesh->normals.emplace_back(Vector3(normal.x, normal.y, normal.z));
-
-			//pMesh->vertices.emplace_back(Vertex{ (uint32_t)i, (uint32_t)i, (uint32_t)i });
-
-			//source uv0
-			//const aiVector3D& uv0 = mesh_ptr->mTextureCoords[0][i];
-			//pMesh->SrctexcoordsUV0.emplace_back(Vector2(uv0.x, uv0.y));
+			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y)));			
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;
