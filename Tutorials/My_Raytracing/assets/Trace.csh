@@ -22,6 +22,9 @@ StructuredBuffer<BVHAABB> BVHNodeAABB;
 
 RWTexture2D<float4> OutPixel;
 
+#define kEpsilon 0.00001
+#define RAY_OFFSET 0.05
+
 bool RayIntersectsBox(float3 origin, float3 rayDirInv, BVHAABB aabb)
 {
 	const float3 t0 = (aabb.lower.xyz - origin) * rayDirInv;
@@ -43,8 +46,8 @@ bool RayTriangleIntersect(
 	float3 v0,
 	float3 e0,
 	float3 e1,
-	inout(float) t,
-	inout(float2) bCoord)
+	inout float t,
+	inout float2 bCoord)
 {
 	const float3 s1 = cross(dir.xyz, e1);
 	const float  invd = 1.0 / (dot(s1, e0));
