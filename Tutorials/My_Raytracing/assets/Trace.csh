@@ -81,6 +81,24 @@ bool RayTriangleIntersect(
 	}
 }
 
+void FixedRcpInf(inout float3 RayDirInv)
+{
+    if(isinf(RayDirInv.x))
+    {
+        RayDirInv.x = MAX_INT;
+    }
+
+    if(isinf(RayDirInv.y))
+    {
+        RayDirInv.y = MAX_INT;
+    }
+
+    if(isinf(RayDirInv.z))
+    {
+        RayDirInv.z = MAX_INT;
+    }
+}
+
 [numthreads(8, 8, 1)]
 void TraceMain(uint3 id : SV_DispatchThreadID)
 {
@@ -103,6 +121,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
 
     // bool collision = false;
     float3 RayDirInv = rcp(RayDir);
+    FixedRcpInf(RayDirInv);
     // collision = RayIntersectsBox(RayOri, ray_dir_inv, BVHNodeAABB[0].lower.xyz, BVHNodeAABB[0].upper.xyz);
 
     float hit_min = MAX_INT;
