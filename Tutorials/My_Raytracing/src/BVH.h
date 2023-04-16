@@ -196,7 +196,7 @@ namespace Diligent
 		RefCntAutoPtr<IShaderResourceBinding> m_apGenMortonCodeSRB;
 		RefCntAutoPtr<IBuffer> m_apPrimCenterMortonCodeData;
 
-		//simple sort morton code
+		//segment sort morton code
 		RefCntAutoPtr<IPipelineState> m_apSortMortonCodePSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apSortMortonCodeSRB;
 		RefCntAutoPtr<IBuffer> m_apOutSortMortonCodeData;
@@ -217,6 +217,7 @@ namespace Diligent
 		RefCntAutoPtr<IPipelineState> m_apInitBVHNodePSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apInitBVHNodeSRB;
 		RefCntAutoPtr<IBuffer> m_apBVHNodeData;
+		RefCntAutoPtr<IBuffer> m_apReorderAABBData;
 
 		RefCntAutoPtr<IPipelineState> m_apConstructInternalNodePSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apConstructInternalNodeSRB;

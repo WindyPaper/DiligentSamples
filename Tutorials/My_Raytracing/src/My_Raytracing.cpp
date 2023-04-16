@@ -141,7 +141,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
-	m_Camera.SetPos(float3(0.0f, 0.0f, 50.0f));
+	m_Camera.SetPos(float3(0.0f, 0.0f, -50.0f));
 	m_Camera.SetMoveSpeed(1000.0f);
 	m_Camera.InvalidUpdate();
 

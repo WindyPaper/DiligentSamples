@@ -95,13 +95,11 @@ void Diligent::BVH::InitTestMesh()
 	//	power_v = power_v << 1;
 	//m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
 
-	LoadFBXFile("test_sphere.FBX");
+	LoadFBXFile("test_teapot.FBX");
 }
 
 void Diligent::BVH::LoadFBXFile(const std::string &name)
 {
-	
-
 	int indices_offset = 0;
 
 	std::vector<BVHVertex> mesh_vertex_data;
@@ -262,7 +260,7 @@ Diligent::IBufferView* Diligent::BVH::GetBVHNodeBufferView()
 
 Diligent::IBufferView* Diligent::BVH::GetBVHNodeAABBBufferView()
 {	
-	return m_apPrimAABBData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+	return m_apReorderAABBData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVH::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type, ShaderMacroHelper *pMacro)
@@ -434,6 +432,15 @@ void Diligent::BVH::CreateConstructBVHData(int num_node)
 	BVHNodeDesc.ElementByteStride = sizeof(BVHNode);
 	BVHNodeDesc.uiSizeInBytes = sizeof(BVHNode) * num_node;
 	m_pDevice->CreateBuffer(BVHNodeDesc, nullptr, &m_apBVHNodeData);
+
+	BufferDesc AABBBuffDesc;
+	AABBBuffDesc.Name = "Reorder Prim AABB Buffer";
+	AABBBuffDesc.Usage = USAGE_DEFAULT;
+	AABBBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	AABBBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	AABBBuffDesc.ElementByteStride = sizeof(BVHAABB);
+	AABBBuffDesc.uiSizeInBytes = sizeof(BVHAABB) * num_node;
+	m_pDevice->CreateBuffer(AABBBuffDesc, nullptr, &m_apReorderAABBData);
 }
 
 void Diligent::BVH::CreateGenerateInternalAABBData(int num_internal_node)
@@ -858,7 +865,9 @@ void Diligent::BVH::_CreateInitBVHNodePSO()
 	{
 		{SHADER_TYPE_COMPUTE, "BVHGlobalData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "InIdxData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "OutBVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
+		{SHADER_TYPE_COMPUTE, "InAABBData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutBVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutReorderAABBData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "init bvh node pso");
@@ -876,7 +885,9 @@ void Diligent::BVH::DispatchInitBVHNode()
 
 	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
 	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InIdxData")->Set(m_pOutResultIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InAABBData")->Set(m_apPrimAABBData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutBVHNodeData")->Set(m_apBVHNodeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+	m_apInitBVHNodeSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutReorderAABBData")->Set(m_apReorderAABBData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 
 	m_pDeviceCtx->CommitShaderResources(m_apInitBVHNodeSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
@@ -956,7 +967,7 @@ void Diligent::BVH::DispatchGenerateInternalNodeAABB()
 	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHGlobalData")->Set(m_apGlobalBVHData);
 	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InBVHNodeData")->Set(m_apBVHNodeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InOutFlag")->Set(m_apGenerateInternalNodeFlagData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
-	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAABB")->Set(m_apPrimAABBData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+	m_apGenerateInternalNodeAABBSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAABB")->Set(m_apReorderAABBData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 
 	m_pDeviceCtx->CommitShaderResources(m_apGenerateInternalNodeAABBSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 

@@ -47,8 +47,12 @@ void Diligent::BVHTrace::DispatchBVHTrace()
 	}
 
 	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TraceUniformData")->Set(m_apTraceUniformData);
-	/*m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
-	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx")->Set(m_pBVH->GetMeshIdxBufferView());*/
+	IShaderResourceVariable* pMeshVertex = m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex");
+	if(pMeshVertex)
+		pMeshVertex->Set(m_pBVH->GetMeshVertexBufferView());
+	IShaderResourceVariable* pMeshIdx = m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx");
+	if(pMeshIdx)
+		pMeshIdx->Set(m_pBVH->GetMeshIdxBufferView());
 	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
 	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());
 	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPixel")->Set(m_apOutRTPixelTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));

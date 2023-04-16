@@ -41,17 +41,27 @@ bool RayIntersectsBox(float3 origin, float3 rayDirInv, BVHAABB aabb)
 
 //Adapted from https://github.com/kayru/RayTracedShadows/blob/master/Source/Shaders/RayTracedShadows.comp
 bool RayTriangleIntersect(
+    uint hit_idx_prim,
 	const float3 orig,
 	const float3 dir,
-	float3 v0,
-	float3 e0,
-	float3 e1,
 	inout float t,
 	inout float2 bCoord)
 {
+    uint v_idx0 = MeshIdx[hit_idx_prim * 3]; 
+    uint v_idx1 = MeshIdx[hit_idx_prim * 3 + 1]; 
+    uint v_idx2 = MeshIdx[hit_idx_prim * 3 + 2]; 
+
+    BVHVertex v0 = MeshVertex[v_idx0];
+    BVHVertex v1 = MeshVertex[v_idx1];
+    BVHVertex v2 = MeshVertex[v_idx2];
+
+    float3 e0 = (v1.pos - v0.pos);
+    float3 e1 = (v2.pos - v0.pos);
+    float3 v0_pos = v0.pos;
+
 	const float3 s1 = cross(dir.xyz, e1);
 	const float  invd = 1.0 / (dot(s1, e0));
-	const float3 d = orig.xyz - v0;
+	const float3 d = orig.xyz - v0_pos;
 	bCoord.x = dot(d, s1) * invd;
 	const float3 s2 = cross(d, e0);
 	bCoord.y = dot(dir.xyz, s2) * invd;
@@ -59,7 +69,7 @@ bool RayTriangleIntersect(
 
 	if (
 //#if BACKFACE_CULLING
-		dot(s1, e0) < -kEpsilon ||
+		//dot(s1, e0) < -kEpsilon ||
 //#endif
 		bCoord.x < 0.0 || bCoord.x > 1.0 || bCoord.y < 0.0 || (bCoord.x + bCoord.y) > 1.0 || t < 0.0 || t > 1e9)
 	{
@@ -76,8 +86,12 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
 {
     uint2 pixel_pos = id.xy;
 
-    float3 NDC = float3(pixel_pos/ScreenSize, 0.5f);
+    float3 NDC = float3(pixel_pos/ScreenSize, 0.0f);
     NDC.xy = NDC.xy * 2.0f - float2(1.0f, 1.0f);
+
+    //dx tex coordinate left top is (0, 0), so we convert to (0, 1)
+    NDC.y = NDC.y * -1.0f;
+
     float4 PixelWPos = mul(InvViewProjMatrix, float4(NDC.xyz, 1.0f));
     PixelWPos.xyz /= PixelWPos.w;
 
@@ -90,6 +104,10 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
     // bool collision = false;
     float3 RayDirInv = rcp(RayDir);
     // collision = RayIntersectsBox(RayOri, ray_dir_inv, BVHNodeAABB[0].lower.xyz, BVHNodeAABB[0].upper.xyz);
+
+    float hit_min = MAX_INT;
+    uint hit_triangle_idx = -1;
+    float2 hit_coordinate = 0;
 
     //trace bvh
     uint stack[64];
@@ -107,10 +125,32 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         {
             if(BVHNodeData[L_idx].object_idx != 0xFFFFFFFFu) // leaf
             {
-                //triangle intersection
-                //...
+                //triangle intersection                
+                uint t_hit_prim = BVHNodeData[L_idx].object_idx;
+                // uint t_hit_prim = MeshIdx[obj_i];                
 
-                hit_idx_prim = BVHNodeData[L_idx].object_idx;//test
+                // BVHVertex v0 = MeshVertex[hit_idx_prim * 3];
+                // BVHVertex v1 = MeshVertex[hit_idx_prim * 3 + 1];
+                // BVHVertex v2 = MeshVertex[hit_idx_prim * 3 + 2];
+
+                // float3 v_dir0 = normalize(v1.pos - v0.pos);
+                // float3 v_dir1 = normalize(v2.pos - v0.pos);
+
+                //hit_idx_prim = t_hit_prim;//test
+
+                float t_min;
+                float2 t_coord;
+                if(RayTriangleIntersect(t_hit_prim, RayOri, RayDir, t_min, t_coord))
+                {
+                    // hit_idx_prim = t_hit_prim;//test
+
+                    if(t_min < hit_min)
+                    {
+                        hit_min = t_min;
+                        hit_coordinate = t_coord;
+                        hit_idx_prim = t_hit_prim;
+                    }
+                }
             }
             else // internal node
             {
@@ -124,9 +164,31 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
             if(BVHNodeData[R_idx].object_idx != 0xFFFFFFFFu) // leaf
             {
                 //triangle intersection
-                //...
+                uint t_hit_prim = BVHNodeData[R_idx].object_idx;
+                // uint t_hit_prim = MeshIdx[obj_i * 3];                
 
-                hit_idx_prim = BVHNodeData[R_idx].object_idx;//test
+                // BVHVertex v0 = MeshVertex[hit_idx_prim * 3];
+                // BVHVertex v1 = MeshVertex[hit_idx_prim * 3 + 1];
+                // BVHVertex v2 = MeshVertex[hit_idx_prim * 3 + 2];
+
+                // float3 v_dir0 = normalize(v1.pos - v0.pos);
+                // float3 v_dir1 = normalize(v2.pos - v0.pos);
+
+                //hit_idx_prim = t_hit_prim;//test
+
+                float t_min;
+                float2 t_coord;
+                if(RayTriangleIntersect(t_hit_prim, RayOri, RayDir, t_min, t_coord))
+                {
+                    // hit_idx_prim = t_hit_prim;//test
+
+                    if(t_min < hit_min)
+                    {
+                        hit_min = t_min;
+                        hit_coordinate = t_coord;
+                        hit_idx_prim = t_hit_prim;
+                    }
+                }
             }
             else // internal node
             {
@@ -138,7 +200,22 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
 
     if(hit_idx_prim != -1)
     {
-        OutPixel[pixel_pos] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+        uint v_idx0 = MeshIdx[hit_idx_prim * 3]; 
+        uint v_idx1 = MeshIdx[hit_idx_prim * 3 + 1]; 
+        uint v_idx2 = MeshIdx[hit_idx_prim * 3 + 2]; 
+
+        BVHVertex v0 = MeshVertex[v_idx0];
+        BVHVertex v1 = MeshVertex[v_idx1];
+        BVHVertex v2 = MeshVertex[v_idx2];
+
+        float u = 1.0f - hit_coordinate.x - hit_coordinate.y;
+        float v = hit_coordinate.x;
+        float w = hit_coordinate.y;
+        //float2 out_uv = v1.uv * hit_coordinate.x + v2.uv * hit_coordinate.y + (1.0f - hit_coordinate.x - hit_coordinate.y) * v0.uv;
+        float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
+
+        OutPixel[pixel_pos] = float4(out_uv, 0.0f, 1.0f);
+        // OutPixel[pixel_pos] = float4(1.0f, 0.0f, 0.0f, 1.0f);
     }
     else
     {
