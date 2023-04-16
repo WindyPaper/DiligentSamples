@@ -10,12 +10,20 @@
 StructuredBuffer<uint> InSortMortonCode;
 RWStructuredBuffer<BVHNode> OutBVHNodeData;
 
-int common_upper_bits(uint a, uint b)
+int common_upper_bits(uint a, uint additional_a, uint b, uint additional_b)
 {
     // uint loca = firstbithigh(a);
     // uint locb = firstbithigh(b);
     // return min(loca, locb);
-    return 31 - firstbithigh(a ^ b);
+    uint high_0_num = 31 - firstbithigh(a ^ b);
+
+    uint low_0_num = 0;
+    if(high_0_num == 32)
+    {
+        low_0_num = 31 - firstbithigh(additional_a ^ additional_b);
+    }
+
+    return high_0_num + low_0_num;
 }
 
 uint2 determine_range(const uint num_leaves, uint idx)
@@ -26,9 +34,10 @@ uint2 determine_range(const uint num_leaves, uint idx)
     }
 
     // determine direction of the range
-    const uint self_code = InSortMortonCode[idx];
-    const int L_delta = common_upper_bits(self_code, InSortMortonCode[idx-1]);
-    const int R_delta = common_upper_bits(self_code, InSortMortonCode[idx+1]);
+    const uint self_idx = idx;
+    const uint self_code = InSortMortonCode[idx];    
+    const int L_delta = common_upper_bits(self_code, self_idx, InSortMortonCode[idx-1], idx - 1);
+    const int R_delta = common_upper_bits(self_code, self_idx, InSortMortonCode[idx+1], idx + 1);
     const int d = (R_delta > L_delta) ? 1 : -1;
 
     // Compute upper bound for the length of the range
@@ -39,7 +48,7 @@ uint2 determine_range(const uint num_leaves, uint idx)
     int i_tmp = idx + d * l_max;
     if(0 <= i_tmp && i_tmp < num_leaves)
     {
-        delta = common_upper_bits(self_code, InSortMortonCode[i_tmp]);
+        delta = common_upper_bits(self_code, self_idx, InSortMortonCode[i_tmp], i_tmp);
     }
     while(delta > delta_min)
     {
@@ -48,7 +57,7 @@ uint2 determine_range(const uint num_leaves, uint idx)
         delta = -1;
         if(0 <= i_tmp && i_tmp < num_leaves)
         {
-            delta = common_upper_bits(self_code, InSortMortonCode[i_tmp]);
+            delta = common_upper_bits(self_code, self_idx, InSortMortonCode[i_tmp], i_tmp);
         }
     }
 
@@ -61,7 +70,7 @@ uint2 determine_range(const uint num_leaves, uint idx)
         delta = -1;
         if(0 <= i_tmp && i_tmp < num_leaves)
         {
-            delta = common_upper_bits(self_code, InSortMortonCode[i_tmp]);
+            delta = common_upper_bits(self_code, self_idx, InSortMortonCode[i_tmp], i_tmp);
         }
         if(delta > delta_min)
         {
@@ -73,9 +82,9 @@ uint2 determine_range(const uint num_leaves, uint idx)
     if(d < 0)
     {
         //swap(idx, jdx); // make it sure that idx < jdx
-        uint t = idx;
+        uint tt = idx;
         idx = jdx;
-        jdx = t;
+        jdx = tt;
     }
     return uint2(idx, jdx);
 }
@@ -84,11 +93,11 @@ uint find_split(const uint num_leaves, const uint first, const uint last)
 {
     const uint first_code = InSortMortonCode[first];
     const uint last_code  = InSortMortonCode[last];
-    if (first_code == last_code)
-    {
-        return (first + last) >> 1;
-    }
-    const int delta_node = common_upper_bits(first_code, last_code);
+    // if (first_code == last_code)
+    // {
+    //     return (first + last) >> 1;
+    // }
+    const int delta_node = common_upper_bits(first_code, first, last_code, last);
 
     // binary search...
     int split  = first;
@@ -99,7 +108,7 @@ uint find_split(const uint num_leaves, const uint first, const uint last)
         const int middle = split + stride;
         if (middle < last)
         {
-            const int delta = common_upper_bits(first_code, InSortMortonCode[middle]);
+            const int delta = common_upper_bits(first_code, first, InSortMortonCode[middle], middle);
             if (delta > delta_node)
             {
                 split = middle;
