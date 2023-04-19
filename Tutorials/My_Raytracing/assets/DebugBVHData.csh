@@ -20,7 +20,7 @@ void DebugBVHDataMain(uint3 id : SV_DispatchThreadID)
         return;
     }
 
-    if(SortMortonCodeNums[prim_idx] >= SortMortonCodeNums[prim_idx + 1])
+    if(SortMortonCodeNums[prim_idx] > SortMortonCodeNums[prim_idx + 1])
     {
         OutDebugData[0].unorder_num_idx = prim_idx;
     }

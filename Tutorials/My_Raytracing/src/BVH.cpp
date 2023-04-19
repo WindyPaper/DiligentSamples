@@ -95,7 +95,7 @@ void Diligent::BVH::InitTestMesh()
 	//	power_v = power_v << 1;
 	//m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
 
-	LoadFBXFile("test_teapot.FBX");
+	LoadFBXFile("Sponza_Lightmap.fbx");
 }
 
 void Diligent::BVH::LoadFBXFile(const std::string &name)
@@ -157,7 +157,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 				mesh_index_data.emplace_back(face.mIndices[tri] + indices_offset);
 			}
 		}
-		indices_offset += triangle_num * 3;
+		indices_offset += vertex_num;
 	}
 	importer.FreeScene();
 
