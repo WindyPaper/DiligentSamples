@@ -46,6 +46,7 @@ namespace Diligent
 
 		void CreateTracePSO();
 		void CreateBuffer();
+		void BindDiffTexs();
 
 	private:
 		BVH *m_pBVH;

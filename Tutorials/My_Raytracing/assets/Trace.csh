@@ -1,12 +1,6 @@
 
 #include "Common.csh"
 
-struct BVHVertex
-{
-    float3 pos;
-    float2 uv;
-};
-
 cbuffer TraceUniformData
 {
     float4x4 InvViewProjMatrix;
@@ -20,10 +14,24 @@ StructuredBuffer<uint> MeshIdx;
 StructuredBuffer<BVHNode> BVHNodeData;
 StructuredBuffer<BVHAABB> BVHNodeAABB;
 
+#ifndef DIFFUSE_TEX_NUM
+#   define DIFFUSE_TEX_NUM 1
+#endif
+
+Texture2D DiffTextures[DIFFUSE_TEX_NUM];
+SamplerState DiffTextures_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
 RWTexture2D<float4> OutPixel;
 
 #define kEpsilon 0.00001
 #define RAY_OFFSET 0.05
+
+static const uint PROFILE_MAX_SEARCH_NUM = 30;
+
+float random (float num)
+{
+    return frac(sin((num + 12.9898)) * 43758.5453123);
+}
 
 bool RayIntersectsBox(float3 origin, float3 rayDirInv, BVHAABB aabb)
 {
@@ -99,7 +107,7 @@ void FixedRcpInf(inout float3 RayDirInv)
     }
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(16, 16, 1)]
 void TraceMain(uint3 id : SV_DispatchThreadID)
 {
     uint2 pixel_pos = id.xy;
@@ -127,13 +135,15 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
     float hit_min = MAX_INT;
     uint hit_triangle_idx = -1;
     float2 hit_coordinate = 0;
+    uint search_num = 0;
 
     //trace bvh
-    uint stack[64];
+    uint stack[128];
     int curr_idx = 0;
     stack[curr_idx] = 0;
     while(curr_idx >= 0)
-    {
+    {        
+
         uint node_idx = stack[curr_idx];
         --curr_idx;
 
@@ -155,12 +165,13 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
                 // float3 v_dir0 = normalize(v1.pos - v0.pos);
                 // float3 v_dir1 = normalize(v2.pos - v0.pos);
 
-                //hit_idx_prim = t_hit_prim;//test
+                // hit_idx_prim = t_hit_prim;//test
 
                 float t_min;
                 float2 t_coord;
                 if(RayTriangleIntersect(t_hit_prim, RayOri, RayDir, t_min, t_coord))
                 {
+                    ++search_num;
                     // hit_idx_prim = t_hit_prim;//test
 
                     if(t_min < hit_min)
@@ -193,12 +204,13 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
                 // float3 v_dir0 = normalize(v1.pos - v0.pos);
                 // float3 v_dir1 = normalize(v2.pos - v0.pos);
 
-                //hit_idx_prim = t_hit_prim;//test
+                // hit_idx_prim = t_hit_prim;//test
 
                 float t_min;
                 float2 t_coord;
                 if(RayTriangleIntersect(t_hit_prim, RayOri, RayDir, t_min, t_coord))
                 {
+                    ++search_num;
                     // hit_idx_prim = t_hit_prim;//test
 
                     if(t_min < hit_min)
@@ -233,8 +245,17 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         //float2 out_uv = v1.uv * hit_coordinate.x + v2.uv * hit_coordinate.y + (1.0f - hit_coordinate.x - hit_coordinate.y) * v0.uv;
         float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
 
-        OutPixel[pixel_pos] = float4(out_uv, 0.0f, 1.0f);
-        // OutPixel[pixel_pos] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+        //get mat texture
+        float4 diff_tex_data = DiffTextures[v0.tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);
+
+        float profile_color_intensity = float(search_num) / PROFILE_MAX_SEARCH_NUM;
+        float3 red_color = float3(1.0f, 0.0f, 0.0f);
+        float3 green_color = float3(0.0f, 1.0f, 0.0f);
+        float3 profile_color = lerp(green_color, red_color, (saturate(profile_color_intensity)));
+
+        OutPixel[pixel_pos] = diff_tex_data;//float4(profile_color, 1.0f);
+        // float3 random_color = float3(random(hit_idx_prim), random(hit_idx_prim >> 2), random(hit_idx_prim << 2));
+        // OutPixel[pixel_pos] = float4(random_color, 1.0f);
     }
     else
     {

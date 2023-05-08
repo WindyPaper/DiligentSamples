@@ -11,6 +11,7 @@
 #include "RefCntAutoPtr.hpp"
 #include "Shader.h"
 #include "Buffer.h"
+#include "Texture.h"
 #include "PipelineState.h"
 #include "ShaderResourceBinding.h"
 #include "ShaderMacroHelper.hpp"
@@ -25,10 +26,12 @@ namespace Diligent
 	{
 		float3 pos;
 		float2 uv;
+		int tex_idx;
 
-		BVHVertex(const float3 &v, const float2 &uv) :
+		BVHVertex(const float3 &v, const float2 &uv, const int t_id) :
 			pos(v),
-			uv(uv)
+			uv(uv),
+			tex_idx(t_id)
 		{}
 	};
 
@@ -119,7 +122,9 @@ namespace Diligent
 		IBufferView* GetMeshIdxBufferView();
 		IBufferView* GetBVHNodeBufferView();
 		IBufferView* GetBVHNodeAABBBufferView();
-		
+
+
+		std::vector<RefCntAutoPtr<ITexture>> *GetTextures();
 
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
@@ -225,6 +230,9 @@ namespace Diligent
 		RefCntAutoPtr<IPipelineState> m_apGenerateInternalNodeAABBPSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apGenerateInternalNodeAABBSRB;
 		RefCntAutoPtr<IBuffer> m_apGenerateInternalNodeFlagData;
+
+		//textures
+		std::vector<RefCntAutoPtr<ITexture>> m_apDiffTexArray;
 
 #if DILIGENT_DEBUG
 		RefCntAutoPtr<IPipelineState> m_apDebugBVHPSO;

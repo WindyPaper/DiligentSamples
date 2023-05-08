@@ -1,5 +1,12 @@
 #define uint16_t min16uint
 
+struct BVHVertex
+{
+    float3 pos;
+    float2 uv;
+    int tex_idx;
+};
+
 struct BVHAABB
 {
     float4 upper;

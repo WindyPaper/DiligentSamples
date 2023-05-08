@@ -11,6 +11,7 @@
 #include "DeviceContext.h"
 #include "Shader.h"
 #include "MapHelper.hpp"
+#include "TextureUtilities.h"
 
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
@@ -128,12 +129,32 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 
 	//Mesh* pMesh = new Mesh();
 
+	std::unordered_map<std::string, Uint32> TexHashMap;
 	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
 	{
 		aiMesh* mesh_ptr = import_fbx_scene->mMeshes[mesh_i];
+		aiMaterial *mats = import_fbx_scene->mMaterials[mesh_ptr->mMaterialIndex];
 
 		//Mesh* p_cy_mesh = fbx_add_mesh(scene, transform_identity());
-		//p_cy_mesh->reserve_mesh(vertex_num, triangle_num);		
+		//p_cy_mesh->reserve_mesh(vertex_num, triangle_num);	
+
+		Uint32 diff_tex_num = mats->GetTextureCount(aiTextureType_DIFFUSE);
+		std::string diffuse_tex_path;
+		int tex_idx = -1;
+		if (diff_tex_num > 0)
+		{
+			aiString path;
+			if (mats->GetTexture(aiTextureType_DIFFUSE, 0, &path) == AI_SUCCESS)
+			{
+				diffuse_tex_path = path.data;
+
+				if (TexHashMap.find(diffuse_tex_path) == TexHashMap.end())
+				{
+					tex_idx = TexHashMap.size();
+					TexHashMap.insert(std::make_pair(diffuse_tex_path, tex_idx));
+				}
+			}
+		}
 
 		int vertex_num = mesh_ptr->mNumVertices;
 
@@ -143,7 +164,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			const aiVector3D& uv = mesh_ptr->mTextureCoords[0][i];
 			//const aiVector3D& normal = mesh_ptr->mNormals[i];
 
-			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y)));			
+			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y), tex_idx));			
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;
@@ -196,6 +217,29 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	while (power_v < m_BVHMeshData.primitive_num)
 		power_v = power_v << 1;
 	m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
+
+	//load textures to gpu
+	Uint32 diffuse_tex_size = TexHashMap.size();
+	m_apDiffTexArray.resize(diffuse_tex_size);
+	for (auto tex_hashmap_iter = TexHashMap.begin(); tex_hashmap_iter != TexHashMap.end(); ++tex_hashmap_iter)
+	{
+		/*TextureDesc DiffuseTexDesc;
+		DiffuseTexDesc.Type = RESOURCE_DIM_TEX_2D;
+		DiffuseTexDesc.Width = 1;
+		DiffuseTexDesc.Height = 1;
+		DiffuseTexDesc.MipLevels = 1;
+		DiffuseTexDesc.Format = TEX_FORMAT_RGBA8_UNORM;
+		DiffuseTexDesc.Usage = USAGE_DYNAMIC;
+		DiffuseTexDesc.BindFlags = BIND_SHADER_RESOURCE;
+		m_pDevice->CreateTexture(DiffuseTexDesc, nullptr, &m_apDiffTexArray[tex_hashmap_iter->second]);*/
+
+		TextureLoadInfo loadInfo;
+		loadInfo.IsSRGB = false;
+		loadInfo.MipLevels = 0;
+		//loadInfo.Format = TEX_FORMAT_RGBA8_UNORM;
+		std::string test_diff_tex_path = "./Sponza/";
+		CreateTextureFromFile((test_diff_tex_path + tex_hashmap_iter->first).c_str(), loadInfo, m_pDevice, &m_apDiffTexArray[tex_hashmap_iter->second]);
+	}
 }
 
 void Diligent::BVH::InitBuffer()
@@ -261,6 +305,11 @@ Diligent::IBufferView* Diligent::BVH::GetBVHNodeBufferView()
 Diligent::IBufferView* Diligent::BVH::GetBVHNodeAABBBufferView()
 {	
 	return m_apReorderAABBData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+}
+
+std::vector<Diligent::RefCntAutoPtr<Diligent::ITexture>> * Diligent::BVH::GetTextures()
+{
+	return &m_apDiffTexArray;
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVH::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type, ShaderMacroHelper *pMacro)

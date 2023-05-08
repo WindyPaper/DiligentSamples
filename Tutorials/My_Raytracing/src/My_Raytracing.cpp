@@ -142,7 +142,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
 	m_Camera.SetPos(float3(0.0f, 0.0f, -50.0f));
-	m_Camera.SetMoveSpeed(1000.0f);
+	m_Camera.SetMoveSpeed(10.0f);
 	m_Camera.InvalidUpdate();
 
 	m_pTrace = new BVHTrace(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain, m_pMeshBVH, m_Camera);	

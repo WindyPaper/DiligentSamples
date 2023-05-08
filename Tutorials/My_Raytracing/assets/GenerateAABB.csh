@@ -1,11 +1,11 @@
 
 #include "Common.csh"
 
-struct BVHVertex
-{
-    float3 pos;
-    float2 uv;
-};
+// struct BVHVertex
+// {
+//     float3 pos;
+//     float2 uv;
+// };
 
 StructuredBuffer<BVHVertex> MeshVertex;
 StructuredBuffer<uint> MeshIdx;

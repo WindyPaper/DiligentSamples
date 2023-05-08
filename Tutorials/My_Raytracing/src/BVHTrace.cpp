@@ -20,6 +20,8 @@ Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice,
 {
 	CreateBuffer();
 	CreateTracePSO();
+
+	BindDiffTexs();
 }
 
 Diligent::BVHTrace::~BVHTrace()
@@ -59,7 +61,7 @@ void Diligent::BVHTrace::DispatchBVHTrace()
 
 	m_pDeviceCtx->CommitShaderResources(m_apTraceSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	DispatchComputeAttribs attr(std::ceilf(PixelSize.x / 8.0f), std::ceilf(PixelSize.y / 8.0f));
+	DispatchComputeAttribs attr(std::ceilf(PixelSize.x / 16.0f), std::ceilf(PixelSize.y / 16.0f));
 	m_pDeviceCtx->DispatchCompute(attr);
 }
 
@@ -119,7 +121,9 @@ Diligent::PipelineStateDesc Diligent::BVHTrace::CreatePSODescAndParam(ShaderReso
 
 void Diligent::BVHTrace::CreateTracePSO()
 {
-	RefCntAutoPtr<IShader> pTraceShader = CreateShader("TraceMain", "Trace.csh", "trace cs");
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("DIFFUSE_TEX_NUM", m_pBVH->GetTextures()->size());
+	RefCntAutoPtr<IShader> pTraceShader = CreateShader("TraceMain", "Trace.csh", "trace cs", SHADER_TYPE_COMPUTE, &Macros);
 
 	ComputePipelineStateCreateInfo PSOCreateInfo;
 
@@ -133,10 +137,24 @@ void Diligent::BVHTrace::CreateTracePSO()
 		{SHADER_TYPE_COMPUTE, "BVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "BVHNodeAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "TraceUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "DiffTextures", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
 		{SHADER_TYPE_COMPUTE, "OutPixel", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "trace pso");
+
+	SamplerDesc SamLinearClampDesc
+	{
+		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+		TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
+	};
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{SHADER_TYPE_COMPUTE, "DiffTextures", SamLinearClampDesc}
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
 
 	PSOCreateInfo.pCS = pTraceShader;
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apTracePSO);
@@ -168,4 +186,15 @@ void Diligent::BVHTrace::CreateBuffer()
 	TraceOutputTexDesc.Usage = USAGE_DYNAMIC;
 	TraceOutputTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(TraceOutputTexDesc, nullptr, &m_apOutRTPixelTex);
+}
+
+void Diligent::BVHTrace::BindDiffTexs()
+{
+	std::vector<RefCntAutoPtr<ITexture>> *pDiffTexArray = m_pBVH->GetTextures();
+	std::vector<IDeviceObject*> pTexSRVs(pDiffTexArray->size());
+	for (int i = 0; i < pDiffTexArray->size(); ++i)
+	{
+		pTexSRVs[i] = (*pDiffTexArray)[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+	}
+	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DiffTextures")->SetArray(&pTexSRVs[0], 0, pTexSRVs.size());	
 }
