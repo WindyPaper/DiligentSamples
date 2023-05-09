@@ -141,7 +141,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 
 		Uint32 diff_tex_num = mats->GetTextureCount(aiTextureType_DIFFUSE);
 		std::string diffuse_tex_path;
-		int tex_idx = -1;
+		int tex_idx = 0;
 		if (diff_tex_num > 0)
 		{
 			aiString path;
@@ -254,6 +254,15 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 		//loadInfo.Format = TEX_FORMAT_RGBA8_UNORM;
 		std::string test_diff_tex_path = "./Sponza/";
 		CreateTextureFromFile((test_diff_tex_path + tex_hashmap_iter->first).c_str(), loadInfo, m_pDevice, &m_apDiffTexArray[tex_hashmap_iter->second]);
+	}
+
+	if (m_apDiffTexArray.size() == 0)
+	{
+		m_apDiffTexArray.resize(1);
+		TextureLoadInfo loadInfo;
+		loadInfo.IsSRGB = false;
+		loadInfo.MipLevels = 0;
+		CreateTextureFromFile("./gray.png", loadInfo, m_pDevice, &m_apDiffTexArray[0]);
 	}
 }
 

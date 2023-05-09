@@ -238,6 +238,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         float w = hit_coordinate.y;
         //float2 out_uv = v1.uv * hit_coordinate.x + v2.uv * hit_coordinate.y + (1.0f - hit_coordinate.x - hit_coordinate.y) * v0.uv;
         float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
+        float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;
 
         //get mat texture
         float4 diff_tex_data = DiffTextures[MeshPrimData[hit_idx_prim].tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);
@@ -247,7 +248,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         // float3 green_color = float3(0.0f, 1.0f, 0.0f);
         // float3 profile_color = lerp(green_color, red_color, (saturate(profile_color_intensity)));
 
-        OutPixel[pixel_pos] = diff_tex_data;//float4(profile_color, 1.0f);
+        OutPixel[pixel_pos] = float4(out_normal, 1.0f) * diff_tex_data;//float4(profile_color, 1.0f);
         // float3 random_color = float3(random(hit_idx_prim), random(hit_idx_prim >> 2), random(hit_idx_prim << 2));
         // OutPixel[pixel_pos] = float4(random_color, 1.0f);
     }
