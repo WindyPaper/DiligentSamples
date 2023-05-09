@@ -108,35 +108,23 @@ void FixedRcpInf(inout float3 RayDirInv)
     }
 }
 
-[numthreads(16, 16, 1)]
-void TraceMain(uint3 id : SV_DispatchThreadID)
+
+struct RayData
 {
-    uint2 pixel_pos = id.xy;
+    float3 o;
+    float3 dir;
+};
 
-    float3 NDC = float3(pixel_pos/ScreenSize, 0.0f);
-    NDC.xy = NDC.xy * 2.0f - float2(1.0f, 1.0f);
-
-    //dx tex coordinate left top is (0, 0), so we convert to (0, 1)
-    NDC.y = NDC.y * -1.0f;
-
-    float4 PixelWPos = mul(InvViewProjMatrix, float4(NDC.xyz, 1.0f));
-    PixelWPos.xyz /= PixelWPos.w;
-
-    float3 RayDir = normalize(PixelWPos.xyz - CameraWPos.xyz);
-    float3 RayOri = CameraWPos.xyz;
-    float2 hit_near_far;
-    float min_near = MAX_INT;
-    uint hit_idx_prim = -1;
-
-    // bool collision = false;
-    float3 RayDirInv = rcp(RayDir);
+void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout float2 hit_coordinate)
+{
+    float3 RayDirInv = rcp(ray.dir);
     FixedRcpInf(RayDirInv);
     // collision = RayIntersectsBox(RayOri, ray_dir_inv, BVHNodeAABB[0].lower.xyz, BVHNodeAABB[0].upper.xyz);
 
-    float hit_min = MAX_INT;
-    uint hit_triangle_idx = -1;
-    float2 hit_coordinate = 0;
-    uint search_num = 0;
+    // float hit_min = MAX_INT;
+    // uint hit_triangle_idx = -1;
+    // float2 hit_coordinate = 0;
+    // uint search_num = 0;
 
     //trace bvh
     uint stack[128];
@@ -151,7 +139,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         const uint L_idx = BVHNodeData[node_idx].left_idx;
         const uint R_idx = BVHNodeData[node_idx].right_idx;
 
-        if(RayIntersectsBox(RayOri, RayDirInv, BVHNodeAABB[L_idx]))
+        if(RayIntersectsBox(ray.o, RayDirInv, BVHNodeAABB[L_idx]))
         {
             if(BVHNodeData[L_idx].object_idx != 0xFFFFFFFFu) // leaf
             {
@@ -160,9 +148,9 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
 
                 float t_min;
                 float2 t_coord;
-                if(RayTriangleIntersect(t_hit_prim, RayOri, RayDir, t_min, t_coord))
+                if(RayTriangleIntersect(t_hit_prim, ray.o, ray.dir, t_min, t_coord))
                 {
-                    ++search_num;
+                    // ++search_num;
                     // hit_idx_prim = t_hit_prim;//test
 
                     if(t_min < hit_min)
@@ -180,7 +168,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
             }
         }
 
-        if(RayIntersectsBox(RayOri, RayDirInv, BVHNodeAABB[R_idx]))
+        if(RayIntersectsBox(ray.o, RayDirInv, BVHNodeAABB[R_idx]))
         {
             if(BVHNodeData[R_idx].object_idx != 0xFFFFFFFFu) // leaf
             {
@@ -189,9 +177,9 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
 
                 float t_min;
                 float2 t_coord;
-                if(RayTriangleIntersect(t_hit_prim, RayOri, RayDir, t_min, t_coord))
+                if(RayTriangleIntersect(t_hit_prim, ray.o, ray.dir, t_min, t_coord))
                 {
-                    ++search_num;
+                    // ++search_num;
                     // hit_idx_prim = t_hit_prim;//test
 
                     if(t_min < hit_min)
@@ -209,6 +197,31 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
             }
         }
     }
+}
+
+[numthreads(16, 16, 1)]
+void TraceMain(uint3 id : SV_DispatchThreadID)
+{
+    uint2 pixel_pos = id.xy;
+
+    float3 NDC = float3(pixel_pos/ScreenSize, 0.0f);
+    NDC.xy = NDC.xy * 2.0f - float2(1.0f, 1.0f);
+
+    //dx tex coordinate left top is (0, 0), so we convert to (0, 1)
+    NDC.y = NDC.y * -1.0f;
+
+    float4 PixelWPos = mul(InvViewProjMatrix, float4(NDC.xyz, 1.0f));
+    PixelWPos.xyz /= PixelWPos.w;
+
+    RayData ray;
+    ray.dir = normalize(PixelWPos.xyz - CameraWPos.xyz);
+    ray.o = CameraWPos.xyz;
+    // float2 hit_near_far;
+    float min_near = MAX_INT;
+    uint hit_idx_prim = -1;
+    float2 hit_coordinate = 0;
+
+    RayTrace(ray, min_near, hit_idx_prim, hit_coordinate);
 
     if(hit_idx_prim != -1)
     {
@@ -229,10 +242,10 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         //get mat texture
         float4 diff_tex_data = DiffTextures[MeshPrimData[hit_idx_prim].tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);
 
-        float profile_color_intensity = float(search_num) / PROFILE_MAX_SEARCH_NUM;
-        float3 red_color = float3(1.0f, 0.0f, 0.0f);
-        float3 green_color = float3(0.0f, 1.0f, 0.0f);
-        float3 profile_color = lerp(green_color, red_color, (saturate(profile_color_intensity)));
+        // float profile_color_intensity = float(search_num) / PROFILE_MAX_SEARCH_NUM;
+        // float3 red_color = float3(1.0f, 0.0f, 0.0f);
+        // float3 green_color = float3(0.0f, 1.0f, 0.0f);
+        // float3 profile_color = lerp(green_color, red_color, (saturate(profile_color_intensity)));
 
         OutPixel[pixel_pos] = diff_tex_data;//float4(profile_color, 1.0f);
         // float3 random_color = float3(random(hit_idx_prim), random(hit_idx_prim >> 2), random(hit_idx_prim << 2));
