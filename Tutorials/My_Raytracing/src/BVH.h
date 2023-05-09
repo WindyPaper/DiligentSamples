@@ -26,13 +26,20 @@ namespace Diligent
 	{
 		float3 pos;
 		float2 uv;
-		int tex_idx;
 
-		BVHVertex(const float3 &v, const float2 &uv, const int t_id) :
+		BVHVertex(const float3 &v, const float2 &uv) :
 			pos(v),
-			uv(uv),
+			uv(uv)
+		{}
+	};
+
+	struct BVHMeshPrimData
+	{
+		BVHMeshPrimData(const int t_id) :
 			tex_idx(t_id)
 		{}
+
+		int tex_idx;
 	};
 
 	struct BVHMeshData
@@ -120,9 +127,9 @@ namespace Diligent
 
 		IBufferView* GetMeshVertexBufferView();
 		IBufferView* GetMeshIdxBufferView();
-		IBufferView* GetBVHNodeBufferView();
+		IBufferView* GetMeshPrimBufferView();
 		IBufferView* GetBVHNodeAABBBufferView();
-
+		IBufferView* GetBVHNodeBufferView();
 
 		std::vector<RefCntAutoPtr<ITexture>> *GetTextures();
 
@@ -177,7 +184,8 @@ namespace Diligent
 		IShaderSourceInputStreamFactory *m_pShaderFactory;
 
 		RefCntAutoPtr<IBuffer> m_apMeshVertexData;
-		RefCntAutoPtr<IBuffer> m_apMeshIndexData;		
+		RefCntAutoPtr<IBuffer> m_apMeshIndexData;
+		RefCntAutoPtr<IBuffer> m_apMeshPrimData;
 
 		BVHMeshData m_BVHMeshData;
 

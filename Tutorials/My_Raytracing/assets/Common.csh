@@ -4,6 +4,10 @@ struct BVHVertex
 {
     float3 pos;
     float2 uv;
+};
+
+struct BVHMeshPrimData
+{
     int tex_idx;
 };
 

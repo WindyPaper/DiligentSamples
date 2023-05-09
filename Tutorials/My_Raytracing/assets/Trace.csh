@@ -11,6 +11,7 @@ cbuffer TraceUniformData
 
 StructuredBuffer<BVHVertex> MeshVertex;
 StructuredBuffer<uint> MeshIdx;
+StructuredBuffer<BVHMeshPrimData> MeshPrimData;
 StructuredBuffer<BVHNode> BVHNodeData;
 StructuredBuffer<BVHAABB> BVHNodeAABB;
 
@@ -246,7 +247,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
 
         //get mat texture
-        float4 diff_tex_data = DiffTextures[v0.tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);
+        float4 diff_tex_data = DiffTextures[MeshPrimData[hit_idx_prim].tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);
 
         float profile_color_intensity = float(search_num) / PROFILE_MAX_SEARCH_NUM;
         float3 red_color = float3(1.0f, 0.0f, 0.0f);

@@ -55,6 +55,9 @@ void Diligent::BVHTrace::DispatchBVHTrace()
 	IShaderResourceVariable* pMeshIdx = m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx");
 	if(pMeshIdx)
 		pMeshIdx->Set(m_pBVH->GetMeshIdxBufferView());
+	IShaderResourceVariable* pMeshPrimData = m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshPrimData");
+	if (pMeshPrimData)
+		pMeshPrimData->Set(m_pBVH->GetMeshPrimBufferView());
 	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
 	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());
 	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutPixel")->Set(m_apOutRTPixelTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
@@ -134,6 +137,7 @@ void Diligent::BVHTrace::CreateTracePSO()
 	{
 		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshPrimData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "BVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "BVHNodeAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "TraceUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},

@@ -105,6 +105,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 
 	std::vector<BVHVertex> mesh_vertex_data;
 	std::vector<Uint32> mesh_index_data;
+	std::vector<BVHMeshPrimData> mesh_prim_data;
 
 	using namespace Assimp;
 	Importer importer;
@@ -164,7 +165,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			const aiVector3D& uv = mesh_ptr->mTextureCoords[0][i];
 			//const aiVector3D& normal = mesh_ptr->mNormals[i];
 
-			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y), tex_idx));			
+			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y)));
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;
@@ -177,6 +178,8 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			{
 				mesh_index_data.emplace_back(face.mIndices[tri] + indices_offset);
 			}
+
+			mesh_prim_data.emplace_back(tex_idx);
 		}
 		indices_offset += vertex_num;
 	}
@@ -208,6 +211,18 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	IBData.pData = &mesh_index_data[0];
 	IBData.DataSize = IndBuffDesc.uiSizeInBytes;
 	m_pDevice->CreateBuffer(IndBuffDesc, &IBData, &m_apMeshIndexData);
+
+	BufferDesc MeshPrimBuffDesc;
+	MeshPrimBuffDesc.Name = "mesh prim buffer";
+	MeshPrimBuffDesc.Usage = USAGE_IMMUTABLE;
+	MeshPrimBuffDesc.BindFlags = BIND_SHADER_RESOURCE;
+	MeshPrimBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	MeshPrimBuffDesc.ElementByteStride = sizeof(BVHMeshPrimData);
+	MeshPrimBuffDesc.uiSizeInBytes = sizeof(BVHMeshPrimData) * mesh_prim_data.size();
+	BufferData PrimData;
+	PrimData.pData = &mesh_prim_data[0];
+	PrimData.DataSize = MeshPrimBuffDesc.uiSizeInBytes;
+	m_pDevice->CreateBuffer(MeshPrimBuffDesc, &PrimData, &m_apMeshPrimData);
 
 	m_BVHMeshData.vertex_num = mesh_vertex_data.size();
 	m_BVHMeshData.index_num = mesh_index_data.size();
@@ -295,6 +310,11 @@ Diligent::IBufferView* Diligent::BVH::GetMeshVertexBufferView()
 Diligent::IBufferView* Diligent::BVH::GetMeshIdxBufferView()
 {
 	return m_apMeshIndexData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
+}
+
+Diligent::IBufferView* Diligent::BVH::GetMeshPrimBufferView()
+{
+	return m_apMeshPrimData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE);
 }
 
 Diligent::IBufferView* Diligent::BVH::GetBVHNodeBufferView()
