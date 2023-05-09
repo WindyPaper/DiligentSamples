@@ -163,9 +163,9 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 		{
 			const aiVector3D& v = mesh_ptr->mVertices[i];
 			const aiVector3D& uv = mesh_ptr->mTextureCoords[0][i];
-			//const aiVector3D& normal = mesh_ptr->mNormals[i];
+			const aiVector3D& normal = mesh_ptr->mNormals[i];
 
-			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float2(uv.x, uv.y)));
+			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y)));
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;

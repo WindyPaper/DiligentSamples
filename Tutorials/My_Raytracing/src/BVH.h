@@ -25,10 +25,12 @@ namespace Diligent
 	struct BVHVertex
 	{
 		float3 pos;
+		float3 normal;
 		float2 uv;
 
-		BVHVertex(const float3 &v, const float2 &uv) :
+		BVHVertex(const float3 &v, const float3 &n, const float2 &uv) :
 			pos(v),
+			normal(n),
 			uv(uv)
 		{}
 	};

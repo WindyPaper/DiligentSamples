@@ -156,17 +156,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
             if(BVHNodeData[L_idx].object_idx != 0xFFFFFFFFu) // leaf
             {
                 //triangle intersection                
-                uint t_hit_prim = BVHNodeData[L_idx].object_idx;
-                // uint t_hit_prim = MeshIdx[obj_i];                
-
-                // BVHVertex v0 = MeshVertex[hit_idx_prim * 3];
-                // BVHVertex v1 = MeshVertex[hit_idx_prim * 3 + 1];
-                // BVHVertex v2 = MeshVertex[hit_idx_prim * 3 + 2];
-
-                // float3 v_dir0 = normalize(v1.pos - v0.pos);
-                // float3 v_dir1 = normalize(v2.pos - v0.pos);
-
-                // hit_idx_prim = t_hit_prim;//test
+                uint t_hit_prim = BVHNodeData[L_idx].object_idx;                
 
                 float t_min;
                 float2 t_coord;
@@ -195,17 +185,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
             if(BVHNodeData[R_idx].object_idx != 0xFFFFFFFFu) // leaf
             {
                 //triangle intersection
-                uint t_hit_prim = BVHNodeData[R_idx].object_idx;
-                // uint t_hit_prim = MeshIdx[obj_i * 3];                
-
-                // BVHVertex v0 = MeshVertex[hit_idx_prim * 3];
-                // BVHVertex v1 = MeshVertex[hit_idx_prim * 3 + 1];
-                // BVHVertex v2 = MeshVertex[hit_idx_prim * 3 + 2];
-
-                // float3 v_dir0 = normalize(v1.pos - v0.pos);
-                // float3 v_dir1 = normalize(v2.pos - v0.pos);
-
-                // hit_idx_prim = t_hit_prim;//test
+                uint t_hit_prim = BVHNodeData[R_idx].object_idx;                
 
                 float t_min;
                 float2 t_coord;
