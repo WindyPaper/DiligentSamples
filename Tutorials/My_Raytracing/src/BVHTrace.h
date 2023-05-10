@@ -44,6 +44,9 @@ namespace Diligent
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
 		PipelineStateDesc CreatePSODescAndParam(ShaderResourceVariableDesc *params, const int varNum, const std::string &psoName, const PIPELINE_TYPE type = PIPELINE_TYPE_COMPUTE);
 
+		void CreateGenVertexAORaysPSO();
+		void GenVertexAORays();
+
 		void CreateTracePSO();
 		void CreateBuffer();
 		void BindDiffTexs();
@@ -60,6 +63,11 @@ namespace Diligent
 		RefCntAutoPtr<IShaderResourceBinding> m_apTraceSRB;
 		RefCntAutoPtr<IBuffer> m_apTraceUniformData;
 		RefCntAutoPtr<ITexture> m_apOutRTPixelTex;
+
+		//vertex ao
+		RefCntAutoPtr<IPipelineState> m_apGenVertexAORaysPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apGenVertexAORaysSRB;
+		RefCntAutoPtr<IBuffer> m_apVertexAORaysBuffer;
 		
 		FirstPersonCamera m_Camera;
 	};

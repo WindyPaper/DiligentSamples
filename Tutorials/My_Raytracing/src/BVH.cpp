@@ -96,7 +96,7 @@ void Diligent::BVH::InitTestMesh()
 	//	power_v = power_v << 1;
 	//m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
 
-	LoadFBXFile("Sponza_Lightmap.fbx");
+	LoadFBXFile("chaju.fbx");
 }
 
 void Diligent::BVH::LoadFBXFile(const std::string &name)
@@ -234,35 +234,35 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	m_BVHMeshData.upper_pow_of_2_primitive_num = power_v;
 
 	//load textures to gpu
-	Uint32 diffuse_tex_size = TexHashMap.size();
-	m_apDiffTexArray.resize(diffuse_tex_size);
+	Uint32 diffuse_tex_size = TexHashMap.size();	
 	for (auto tex_hashmap_iter = TexHashMap.begin(); tex_hashmap_iter != TexHashMap.end(); ++tex_hashmap_iter)
 	{
-		/*TextureDesc DiffuseTexDesc;
-		DiffuseTexDesc.Type = RESOURCE_DIM_TEX_2D;
-		DiffuseTexDesc.Width = 1;
-		DiffuseTexDesc.Height = 1;
-		DiffuseTexDesc.MipLevels = 1;
-		DiffuseTexDesc.Format = TEX_FORMAT_RGBA8_UNORM;
-		DiffuseTexDesc.Usage = USAGE_DYNAMIC;
-		DiffuseTexDesc.BindFlags = BIND_SHADER_RESOURCE;
-		m_pDevice->CreateTexture(DiffuseTexDesc, nullptr, &m_apDiffTexArray[tex_hashmap_iter->second]);*/
-
 		TextureLoadInfo loadInfo;
 		loadInfo.IsSRGB = false;
 		loadInfo.MipLevels = 0;
 		//loadInfo.Format = TEX_FORMAT_RGBA8_UNORM;
 		std::string test_diff_tex_path = "./Sponza/";
-		CreateTextureFromFile((test_diff_tex_path + tex_hashmap_iter->first).c_str(), loadInfo, m_pDevice, &m_apDiffTexArray[tex_hashmap_iter->second]);
+
+		ITexture *pDiffTex = nullptr;
+		CreateTextureFromFile((test_diff_tex_path + tex_hashmap_iter->first).c_str(), loadInfo, m_pDevice, &pDiffTex);
+
+		if (pDiffTex)
+		{
+			m_apDiffTexArray.emplace_back(pDiffTex);
+		}		
 	}
 
 	if (m_apDiffTexArray.size() == 0)
 	{
-		m_apDiffTexArray.resize(1);
+		m_apDiffTexArray.resize(diffuse_tex_size);
 		TextureLoadInfo loadInfo;
 		loadInfo.IsSRGB = false;
 		loadInfo.MipLevels = 0;
-		CreateTextureFromFile("./gray.png", loadInfo, m_pDevice, &m_apDiffTexArray[0]);
+
+		for (int i = 0; i < diffuse_tex_size; ++i)
+		{
+			CreateTextureFromFile("./gray.png", loadInfo, m_pDevice, &m_apDiffTexArray[i]);
+		}
 	}
 }
 
