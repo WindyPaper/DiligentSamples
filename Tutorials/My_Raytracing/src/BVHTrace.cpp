@@ -124,7 +124,7 @@ Diligent::PipelineStateDesc Diligent::BVHTrace::CreatePSODescAndParam(ShaderReso
 
 void Diligent::BVHTrace::CreateGenVertexAORaysPSO()
 {	
-	RefCntAutoPtr<IShader> pTraceShader = CreateShader("TraceMain", "Trace.csh", "trace cs");// , SHADER_TYPE_COMPUTE, &Macros);
+	RefCntAutoPtr<IShader> pGenVertexAORaysShader = CreateShader("GenVertexAORaysMain", "Trace.csh", "gen vertex ao rays cs");
 
 	ComputePipelineStateCreateInfo PSOCreateInfo;
 
@@ -133,36 +133,17 @@ void Diligent::BVHTrace::CreateGenVertexAORaysPSO()
 	// to change on a per-instance basis
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "MeshPrimData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "BVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "BVHNodeAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "TraceUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "DiffTextures", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
-		{SHADER_TYPE_COMPUTE, "OutPixel", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "GenVertexAORaysUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
 	};
 	// clang-format on
-	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "trace pso");
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen vertex ao rays pso");	
 
-	SamplerDesc SamLinearClampDesc
-	{
-		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
-		TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
-	};
-	ImmutableSamplerDesc ImtblSamplers[] =
-	{
-		{SHADER_TYPE_COMPUTE, "DiffTextures", SamLinearClampDesc}
-	};
-	// clang-format on
-	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
-	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
-
-	PSOCreateInfo.pCS = pTraceShader;
-	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apTracePSO);
+	PSOCreateInfo.pCS = pGenVertexAORaysShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apGenVertexAORaysPSO);
 
 	//SRB
-	m_apTracePSO->CreateShaderResourceBinding(&m_apTraceSRB, true);
+	m_apGenVertexAORaysPSO->CreateShaderResourceBinding(&m_apGenVertexAORaysSRB, true);
 }
 
 void Diligent::BVHTrace::GenVertexAORays()

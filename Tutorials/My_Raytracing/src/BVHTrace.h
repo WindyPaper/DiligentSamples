@@ -28,6 +28,12 @@ namespace Diligent
 		float2 Padding;
 	};
 
+	struct GenAORayData
+	{
+		float3 o;
+		float3 dir;
+	};
+
 	class BVHTrace
 	{
 	public:
@@ -45,6 +51,7 @@ namespace Diligent
 		PipelineStateDesc CreatePSODescAndParam(ShaderResourceVariableDesc *params, const int varNum, const std::string &psoName, const PIPELINE_TYPE type = PIPELINE_TYPE_COMPUTE);
 
 		void CreateGenVertexAORaysPSO();
+		void CreateGenVertexAORaysBuffer();
 		void GenVertexAORays();
 
 		void CreateTracePSO();

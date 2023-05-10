@@ -37,7 +37,6 @@ struct BVHNode
     uint object_idx;    
 };
 
-
 BVHAABB merge(const in BVHAABB lhs, const in BVHAABB rhs)
 {
     BVHAABB merged;
