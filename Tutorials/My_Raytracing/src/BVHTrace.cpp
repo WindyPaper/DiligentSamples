@@ -22,6 +22,9 @@ Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice,
 	CreateTracePSO();
 
 	BindDiffTexs();
+
+	CreateGenVertexAORaysPSO();
+	CreateGenVertexAORaysBuffer();
 }
 
 Diligent::BVHTrace::~BVHTrace()
@@ -124,7 +127,9 @@ Diligent::PipelineStateDesc Diligent::BVHTrace::CreatePSODescAndParam(ShaderReso
 
 void Diligent::BVHTrace::CreateGenVertexAORaysPSO()
 {	
-	RefCntAutoPtr<IShader> pGenVertexAORaysShader = CreateShader("GenVertexAORaysMain", "Trace.csh", "gen vertex ao rays cs");
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("VERTEX_AO_SAMPLE_NUM", VERTEX_AO_RAY_SAMPLE_NUM);
+	RefCntAutoPtr<IShader> pGenVertexAORaysShader = CreateShader("GenVertexAORaysMain", "Trace.csh", "gen vertex ao rays cs", SHADER_TYPE_COMPUTE, &Macros);
 
 	ComputePipelineStateCreateInfo PSOCreateInfo;
 
@@ -134,7 +139,8 @@ void Diligent::BVHTrace::CreateGenVertexAORaysPSO()
 	ShaderResourceVariableDesc Vars[] =
 	{
 		{SHADER_TYPE_COMPUTE, "GenVertexAORaysUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
-		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
+		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutAORayDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen vertex ao rays pso");	
@@ -146,7 +152,52 @@ void Diligent::BVHTrace::CreateGenVertexAORaysPSO()
 	m_apGenVertexAORaysPSO->CreateShaderResourceBinding(&m_apGenVertexAORaysSRB, true);
 }
 
+void Diligent::BVHTrace::CreateGenVertexAORaysBuffer()
+{
+	BufferDesc GenVertexAOUniformDataDesc;
+	GenVertexAOUniformDataDesc.Name = "Gen Vertex AO Uniform Data Desc";
+	GenVertexAOUniformDataDesc.Usage = USAGE_DYNAMIC;
+	GenVertexAOUniformDataDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	GenVertexAOUniformDataDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	GenVertexAOUniformDataDesc.Mode = BUFFER_MODE_STRUCTURED;
+	GenVertexAOUniformDataDesc.ElementByteStride = sizeof(GenVertexAORaysUniformData);
+	GenVertexAOUniformDataDesc.uiSizeInBytes = sizeof(GenVertexAORaysUniformData);	
+	m_pDevice->CreateBuffer(GenVertexAOUniformDataDesc, nullptr, &m_apVertexAORaysUniformBuffer);
+
+	BufferDesc VertexAOOutRayBuffDesc;
+	VertexAOOutRayBuffDesc.Name = "vertex ao out ray datas";
+	VertexAOOutRayBuffDesc.Usage = USAGE_DEFAULT;
+	VertexAOOutRayBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	VertexAOOutRayBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	VertexAOOutRayBuffDesc.ElementByteStride = sizeof(GenAORayData);
+	VertexAOOutRayBuffDesc.uiSizeInBytes = sizeof(GenAORayData) * m_pBVH->GetBVHMeshData().vertex_num * VERTEX_AO_RAY_SAMPLE_NUM;
+	m_pDevice->CreateBuffer(VertexAOOutRayBuffDesc, nullptr, &m_apVertexAOOutRaysBuffer);
+}
+
 void Diligent::BVHTrace::GenVertexAORays()
+{
+	m_pDeviceCtx->SetPipelineState(m_apGenVertexAORaysPSO);
+
+	IShaderResourceVariable* pGenVertexAOUniformData = m_apGenVertexAORaysSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "GenVertexAORaysUniformData");
+	if(pGenVertexAOUniformData)
+	{
+		{
+			MapHelper<GenVertexAORaysUniformData> CBGlobalData(m_pDeviceCtx, m_apVertexAORaysUniformBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+			CBGlobalData->num_vertex = m_pBVH->GetBVHMeshData().vertex_num;
+		}
+		pGenVertexAOUniformData->Set(m_apVertexAORaysUniformBuffer);
+	}
+	
+	m_apGenVertexAORaysSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
+	m_apGenVertexAORaysSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAORayDatas")->Set(m_apVertexAOOutRaysBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apGenVertexAORaysSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(m_pBVH->GetBVHMeshData().vertex_num, 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+}
+
+void Diligent::BVHTrace::CreateVertexAOTracePSO()
 {
 
 }

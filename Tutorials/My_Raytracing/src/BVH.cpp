@@ -16,6 +16,7 @@
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
+#include "assimp/Exporter.hpp"
 
 Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :
 	m_pDeviceCtx(pDeviceCtx),
@@ -133,8 +134,8 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	std::unordered_map<std::string, Uint32> TexHashMap;
 	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
 	{
-		aiMesh* mesh_ptr = import_fbx_scene->mMeshes[mesh_i];
-		aiMaterial *mats = import_fbx_scene->mMaterials[mesh_ptr->mMaterialIndex];
+		const aiMesh* mesh_ptr = import_fbx_scene->mMeshes[mesh_i];
+		const aiMaterial *mats = import_fbx_scene->mMaterials[mesh_ptr->mMaterialIndex];
 
 		//Mesh* p_cy_mesh = fbx_add_mesh(scene, transform_identity());
 		//p_cy_mesh->reserve_mesh(vertex_num, triangle_num);	
@@ -166,6 +167,18 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			const aiVector3D& normal = mesh_ptr->mNormals[i];
 
 			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y)));
+
+			//test
+			//set vertex color
+			/*aiColor4D* t_vertex_color = mesh_ptr->mColors[0];
+			if (t_vertex_color == nullptr)
+			{
+				t_vertex_color = new aiColor4D[vertex_num];
+			}
+			t_vertex_color[i].r = 1.0f;
+			t_vertex_color[i].g = 0.0f;
+			t_vertex_color[i].b = 0.0f;
+			t_vertex_color[i].a = 0.0f;*/
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;
@@ -182,7 +195,11 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			mesh_prim_data.emplace_back(tex_idx);
 		}
 		indices_offset += vertex_num;
-	}
+	}	
+
+	/*Exporter exp;
+	exp.Export(import_fbx_scene, "fbx", "test_chaju.fbx");*/
+
 	importer.FreeScene();
 
 	//Uint32 *p = &mesh_index_data[0];
@@ -339,6 +356,11 @@ Diligent::IBufferView* Diligent::BVH::GetBVHNodeAABBBufferView()
 std::vector<Diligent::RefCntAutoPtr<Diligent::ITexture>> * Diligent::BVH::GetTextures()
 {
 	return &m_apDiffTexArray;
+}
+
+Diligent::BVHMeshData Diligent::BVH::GetBVHMeshData() const
+{
+	return m_BVHMeshData;
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVH::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type, ShaderMacroHelper *pMacro)

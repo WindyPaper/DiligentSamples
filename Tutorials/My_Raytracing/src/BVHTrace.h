@@ -30,9 +30,20 @@ namespace Diligent
 
 	struct GenAORayData
 	{
-		float3 o;
 		float3 dir;
 	};
+
+	struct GenVertexAORaysUniformData
+	{
+		int num_vertex;
+	};
+
+	struct GenAOColorData
+	{
+		float lum;
+	};
+
+	static const Uint32 VERTEX_AO_RAY_SAMPLE_NUM = 256;
 
 	class BVHTrace
 	{
@@ -46,6 +57,8 @@ namespace Diligent
 
 		ITexture *GetOutputPixelTex();
 
+		void DispatchVertexAO();
+
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
 		PipelineStateDesc CreatePSODescAndParam(ShaderResourceVariableDesc *params, const int varNum, const std::string &psoName, const PIPELINE_TYPE type = PIPELINE_TYPE_COMPUTE);
@@ -53,6 +66,9 @@ namespace Diligent
 		void CreateGenVertexAORaysPSO();
 		void CreateGenVertexAORaysBuffer();
 		void GenVertexAORays();
+
+		void CreateVertexAOTracePSO();
+		void CreateVertexAOTraceBuffer();
 
 		void CreateTracePSO();
 		void CreateBuffer();
@@ -71,10 +87,15 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_apTraceUniformData;
 		RefCntAutoPtr<ITexture> m_apOutRTPixelTex;
 
-		//vertex ao
+		//vertex ao gen rays
 		RefCntAutoPtr<IPipelineState> m_apGenVertexAORaysPSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apGenVertexAORaysSRB;
-		RefCntAutoPtr<IBuffer> m_apVertexAORaysBuffer;
+		RefCntAutoPtr<IBuffer> m_apVertexAORaysUniformBuffer;
+		RefCntAutoPtr<IBuffer> m_apVertexAOOutRaysBuffer;
+		//vertex ao trace
+		RefCntAutoPtr<IPipelineState> m_apVertexAOTracePSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apVertexAOTraceSRB;
+		RefCntAutoPtr<IBuffer> m_apVertexAOColorBuffer;
 		
 		FirstPersonCamera m_Camera;
 	};

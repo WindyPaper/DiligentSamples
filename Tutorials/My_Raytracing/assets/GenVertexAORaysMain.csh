@@ -9,11 +9,10 @@ cbuffer GenVertexAORaysUniformData
 
 struct GenAORayData
 {
-    float3 o;
     float3 dir;
 };
 
-RWStructuredBuffer<GenAORayData> out_ao_ray_datas;
+RWStructuredBuffer<GenAORayData> OutAORayDatas;
 
 uint CMJPermute(uint i, uint l, uint p)
 {
@@ -74,7 +73,7 @@ float2 SamplePoint(in uint curr_sample_idx, in uint pixelIdx, inout uint setIdx)
     return SampleCMJ2D(curr_sample_idx, sqrt_sample_num, sqrt_sample_num, permutation);
 }
 
-float2 ConcentricSampleDisk(const float2 &u)
+float2 ConcentricSampleDisk(const float2 u)
 {
 	float2 uOffset = 2.f * u - float2(1, 1);
 	if (uOffset.x == 0 && uOffset.y == 0) return float2(0, 0);
@@ -88,18 +87,41 @@ float2 ConcentricSampleDisk(const float2 &u)
 		r = uOffset.y;
 		theta = (3.1415926f / 2.0f) - (3.1415926f / 4.0f) * (uOffset.x / uOffset.y);
 	}
-	return r * float2(cosf(theta), sinf(theta));
+	return r * float2(cos(theta), sin(theta));
+}
+
+float3 LiftPoint2DToHemisphere(const float2 p)
+{
+	return float3(p.x, p.y, sqrt(1 - p.x * p.x - p.y * p.y));
 }
 
 [numthreads(VERTEX_AO_SAMPLE_NUM, 1, 1)]
 void GenVertexAORaysMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThreadID, uint local_grp_idx : SV_GroupIndex)
 {
     uint vertex_ray_id = id.x;
+    uint vertex_idx = gid.x;
 
-    if(vertex_ray_id > (num_vertex - 1))
-    {
-        return;
-    }
+    // if(vertex_ray_id > (num_vertex * VERTEX_AO_SAMPLE_NUM - 1))
+    // {
+    //     return;
+    // }
 
-    float2 sample_uv = SamplePoint(vertex_ray_id, gid.x, local_grp_idx.x);
+    float2 sample_uv = SamplePoint(vertex_ray_id, vertex_idx, local_grp_idx.x);
+    float2 concentric_map_point = ConcentricSampleDisk(sample_uv);
+	float3 ray_in_tangent_space = LiftPoint2DToHemisphere(concentric_map_point);
+
+    float3 local_normal = MeshVertex[vertex_idx].normal;
+    // float3 local_position = MeshVertex[vertex_idx].pos;
+
+    float3 tangent = cross(local_normal, float3(0, 0, 1));
+	tangent = length(tangent) < 0.1 ? cross(local_normal, float3(0, 1, 0)) : tangent;
+	tangent = normalize(tangent);
+	float3 binormal = normalize(cross(tangent, local_normal));
+
+    float3 ray_in_obj_space = normalize(tangent * ray_in_tangent_space.x + binormal * ray_in_tangent_space.y + local_normal * ray_in_tangent_space.z);
+
+    GenAORayData out_ray;
+    out_ray.dir = ray_in_obj_space;
+
+    OutAORayDatas[vertex_ray_id] = out_ray;
 }
