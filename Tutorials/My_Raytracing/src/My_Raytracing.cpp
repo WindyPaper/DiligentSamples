@@ -153,7 +153,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		p_gtexture->Set(m_pTrace->GetOutputPixelTex()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	}
 
-	m_pTrace->GenVertexAORays();
+	//m_pTrace->GenVertexAORays();
 }
 
 // Render a frame

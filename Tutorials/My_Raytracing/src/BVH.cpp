@@ -134,7 +134,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	std::unordered_map<std::string, Uint32> TexHashMap;
 	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
 	{
-		const aiMesh* mesh_ptr = import_fbx_scene->mMeshes[mesh_i];
+		aiMesh* mesh_ptr = import_fbx_scene->mMeshes[mesh_i];
 		const aiMaterial *mats = import_fbx_scene->mMaterials[mesh_ptr->mMaterialIndex];
 
 		//Mesh* p_cy_mesh = fbx_add_mesh(scene, transform_identity());
@@ -170,15 +170,15 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 
 			//test
 			//set vertex color
-			/*aiColor4D* t_vertex_color = mesh_ptr->mColors[0];
-			if (t_vertex_color == nullptr)
+			aiColor4D** t_vertex_color = &(mesh_ptr->mColors[0]);
+			if (*t_vertex_color == nullptr)
 			{
-				t_vertex_color = new aiColor4D[vertex_num];
+				*t_vertex_color = new aiColor4D[vertex_num];
 			}
-			t_vertex_color[i].r = 1.0f;
-			t_vertex_color[i].g = 0.0f;
-			t_vertex_color[i].b = 0.0f;
-			t_vertex_color[i].a = 0.0f;*/
+			mesh_ptr->mColors[0][i].r = 1.0f;
+			mesh_ptr->mColors[0][i].g = 0.0f;
+			mesh_ptr->mColors[0][i].b = 0.0f;
+			mesh_ptr->mColors[0][i].a = 0.0f;
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;
@@ -195,10 +195,10 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			mesh_prim_data.emplace_back(tex_idx);
 		}
 		indices_offset += vertex_num;
-	}	
+	}
 
-	/*Exporter exp;
-	exp.Export(import_fbx_scene, "fbx", "test_chaju.fbx");*/
+	Exporter exp;
+	exp.Export(import_fbx_scene, "fbxa", "test_chaju.fbx");
 
 	importer.FreeScene();
 
