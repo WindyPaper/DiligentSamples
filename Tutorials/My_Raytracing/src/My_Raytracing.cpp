@@ -131,9 +131,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
     m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPSO);
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);	
 
-	//-----
-	m_pMeshBVH = new BVH(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory);
-	m_pMeshBVH->BuildBVH();
+	//-----	
 
 	float NearPlane = 0.1f;
 	float FarPlane = 100000.f;
@@ -145,15 +143,36 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.SetMoveSpeed(10.0f);
 	m_Camera.InvalidUpdate();
 
-	m_pTrace = new BVHTrace(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain, m_pMeshBVH, m_Camera);	
+	std::vector<std::string> FileList;
+	FileList.emplace_back("chaju.fbx");
+	/*FileList.emplace_back("cjfj_guizi.fbx");
+	FileList.emplace_back("heihufangjian_yugang.fbx");
+	FileList.emplace_back("ws_guahua_men.fbx");
+	FileList.emplace_back("xnjj_pingfeng02.fbx");
+	FileList.emplace_back("xnjj_hua.fbx");	*/
+		
+	m_pMeshBVH = nullptr;
+	m_pTrace = nullptr;
+	for (int fidx = 0; fidx < FileList.size(); ++fidx)
+	{
+		if (m_pMeshBVH)
+			delete m_pMeshBVH;
+		if (m_pTrace)
+			delete m_pTrace;
+
+		m_pMeshBVH = new BVH(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, FileList[fidx]);
+		m_pMeshBVH->BuildBVH();
+
+		m_pTrace = new BVHTrace(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain, m_pMeshBVH, m_Camera, FileList[fidx]);
+		m_pTrace->DispatchVertexAOTrace();		
+	}
 
 	IShaderResourceVariable *p_gtexture = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
 	if (p_gtexture)
 	{
 		p_gtexture->Set(m_pTrace->GetOutputPixelTex()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	}
-
-	m_pTrace->DispatchVertexAOTrace();
+	
 }
 
 // Render a frame

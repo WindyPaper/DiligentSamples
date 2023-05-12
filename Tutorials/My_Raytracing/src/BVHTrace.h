@@ -48,7 +48,7 @@ namespace Diligent
 	class BVHTrace
 	{
 	public:
-		BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, ISwapChain* pSwapChain, BVH *pBVH, const FirstPersonCamera &cam);
+		BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, ISwapChain* pSwapChain, BVH *pBVH, const FirstPersonCamera &cam, const std::string &mesh_file_name);
 		~BVHTrace();
 
 		void Update(const FirstPersonCamera &cam);
@@ -99,6 +99,7 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_apVertexAOColorStageBuffer;		
 		
 		FirstPersonCamera m_Camera;
+		std::string m_mesh_file_name;
 	};
 }
 

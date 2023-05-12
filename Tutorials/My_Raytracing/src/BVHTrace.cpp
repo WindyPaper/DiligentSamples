@@ -12,13 +12,14 @@
 #include "assimp/Exporter.hpp"
 
 
-Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, ISwapChain* pSwapChain, BVH *pBVH, const FirstPersonCamera &cam) :
+Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, ISwapChain* pSwapChain, BVH *pBVH, const FirstPersonCamera &cam, const std::string &mesh_file_name) :
 	m_pDeviceCtx(pDeviceCtx),
 	m_pDevice(pDevice),
 	m_pShaderFactory(pShaderFactory),
 	m_pSwapChain(pSwapChain),
 	m_pBVH(pBVH),
-	m_Camera(cam)
+	m_Camera(cam),
+	m_mesh_file_name(mesh_file_name)
 {
 	CreateBuffer();
 	CreateTracePSO();
@@ -103,6 +104,7 @@ void Diligent::BVHTrace::DispatchVertexAOTrace()
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());
+	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BakeAOTexture")->Set(m_pBVH->GetAOTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "AORayDatas")->Set(m_apVertexAOOutRaysBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAOColorDatas")->Set(m_apVertexAOColorBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 
@@ -150,7 +152,8 @@ void Diligent::BVHTrace::DispatchVertexAOTrace()
 	}
 
 	Assimp::Exporter exp;
-	exp.Export(pFBXScene, "fbxa", "test_chaju.fbx");
+	std::string out_put_mesh_name = m_mesh_file_name.substr(0, m_mesh_file_name.find('.')) + "_vc" + m_mesh_file_name.substr(m_mesh_file_name.find('.'));
+	exp.Export(pFBXScene, "fbxa", out_put_mesh_name.c_str());
 
 }
 
@@ -293,10 +296,25 @@ void Diligent::BVHTrace::CreateVertexAOTracePSO()
 		{SHADER_TYPE_COMPUTE, "BVHNodeAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "AORayDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "BakeAOTexture", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
 		{SHADER_TYPE_COMPUTE, "OutAOColorDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 	};
+
 	// clang-format on
 	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen vertex ao color pso");
+
+	SamplerDesc SamLinearClampDesc
+	{
+		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+		TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
+	};
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{SHADER_TYPE_COMPUTE, "BakeAOTexture", SamLinearClampDesc}
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
 
 	PSOCreateInfo.pCS = pGenVertexAOTraceShader;
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apVertexAOTracePSO);

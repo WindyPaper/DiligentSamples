@@ -17,7 +17,7 @@
 #include "assimp/postprocess.h"
 #include "assimp/Exporter.hpp"
 
-Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory) :
+Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, const std::string &mesh_file_name) :
 	m_pDeviceCtx(pDeviceCtx),
 	m_pDevice(pDevice),
 	m_pShaderFactory(pShaderFactory),
@@ -26,7 +26,8 @@ Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSo
 	m_import_fbx_scene(nullptr),
 	m_assimp_importer(nullptr)
 {
-	InitTestMesh();
+	//InitTestMesh();
+	LoadFBXFile(mesh_file_name);
 
 	InitBuffer();
 
@@ -171,21 +172,26 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 		{
 			const aiVector3D& v = mesh_ptr->mVertices[i];
 			const aiVector3D& uv = mesh_ptr->mTextureCoords[0][i];
+			aiVector3D uv1;
+			if (mesh_ptr->mTextureCoords[1])
+			{
+				uv1 = mesh_ptr->mTextureCoords[1][i];
+			}			
 			const aiVector3D& normal = mesh_ptr->mNormals[i];
 
-			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y)));
+			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y), float2(uv1.x, uv1.y)));
 
 			//test
-			//set vertex color
-			aiColor4D** t_vertex_color = &(mesh_ptr->mColors[0]);
-			if (*t_vertex_color == nullptr)
-			{
-				*t_vertex_color = new aiColor4D[vertex_num];
-			}
-			mesh_ptr->mColors[0][i].r = 1.0f;
-			mesh_ptr->mColors[0][i].g = 0.0f;
-			mesh_ptr->mColors[0][i].b = 0.0f;
-			mesh_ptr->mColors[0][i].a = 0.0f;
+			////set vertex color
+			//aiColor4D** t_vertex_color = &(mesh_ptr->mColors[0]);
+			//if (*t_vertex_color == nullptr)
+			//{
+			//	*t_vertex_color = new aiColor4D[vertex_num];
+			//}
+			//mesh_ptr->mColors[0][i].r = 1.0f;
+			//mesh_ptr->mColors[0][i].g = 0.0f;
+			//mesh_ptr->mColors[0][i].b = 0.0f;
+			//mesh_ptr->mColors[0][i].a = 0.0f;
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;
@@ -288,6 +294,13 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			CreateTextureFromFile("./gray.png", loadInfo, m_pDevice, &m_apDiffTexArray[i]);
 		}
 	}
+
+	//load ao texture
+	TextureLoadInfo loadInfo;
+	loadInfo.IsSRGB = false;
+	loadInfo.MipLevels = 0;
+	std::string ao_file_name = name.substr(0, name.find('.')) + ".png";
+	CreateTextureFromFile(ao_file_name.c_str(), loadInfo, m_pDevice, &m_apAOTex);
 }
 
 void Diligent::BVH::InitBuffer()
@@ -363,6 +376,11 @@ Diligent::IBufferView* Diligent::BVH::GetBVHNodeAABBBufferView()
 std::vector<Diligent::RefCntAutoPtr<Diligent::ITexture>> * Diligent::BVH::GetTextures()
 {
 	return &m_apDiffTexArray;
+}
+
+Diligent::ITexture * Diligent::BVH::GetAOTexture()
+{
+	return m_apAOTex;
 }
 
 Diligent::BVHMeshData Diligent::BVH::GetBVHMeshData() const

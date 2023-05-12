@@ -5,6 +5,7 @@ struct BVHVertex
     float3 pos;
     float3 normal;
     float2 uv;
+    float2 uv1;
 };
 
 struct BVHMeshPrimData

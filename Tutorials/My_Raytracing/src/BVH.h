@@ -30,11 +30,13 @@ namespace Diligent
 		float3 pos;
 		float3 normal;
 		float2 uv;
+		float2 uv1;
 
-		BVHVertex(const float3 &v, const float3 &n, const float2 &uv) :
+		BVHVertex(const float3 &v, const float3 &n, const float2 &uv0, const float2 &uv1) :
 			pos(v),
 			normal(n),
-			uv(uv)
+			uv(uv0),
+			uv1(uv1)
 		{}
 	};
 
@@ -118,7 +120,7 @@ namespace Diligent
 	class BVH
 	{
 	public:
-		BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory);
+		BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, const std::string &mesh_file_name);
 		~BVH();
 
 		void InitTestMesh();
@@ -137,6 +139,7 @@ namespace Diligent
 		IBufferView* GetBVHNodeBufferView();
 
 		std::vector<RefCntAutoPtr<ITexture>> *GetTextures();
+		ITexture *GetAOTexture();
 
 		BVHMeshData GetBVHMeshData() const;
 
@@ -253,6 +256,8 @@ namespace Diligent
 
 		aiScene* m_import_fbx_scene;
 		Assimp::Importer* m_assimp_importer;
+
+		RefCntAutoPtr<ITexture> m_apAOTex;
 
 #if DILIGENT_DEBUG
 		RefCntAutoPtr<IPipelineState> m_apDebugBVHPSO;

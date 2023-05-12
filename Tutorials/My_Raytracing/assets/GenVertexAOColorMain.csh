@@ -16,6 +16,9 @@ StructuredBuffer<GenAORayData> AORayDatas;
 
 RWStructuredBuffer<GenAOColorData> OutAOColorDatas;
 
+Texture2D BakeAOTexture;
+SamplerState BakeAOTexture_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
 groupshared uint GroupRayHitTime;
 
 [numthreads(VERTEX_AO_SAMPLE_NUM, 1, 1)]
@@ -52,6 +55,8 @@ void GenVertexAOColorMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThreadID
 
     if(group_ray_idx == 0)
     {
-        OutAOColorDatas[vertex_idx].lum = float(GroupRayHitTime) / VERTEX_AO_SAMPLE_NUM;
+        float ao_val = 1.0f - float(GroupRayHitTime) / VERTEX_AO_SAMPLE_NUM;
+        float4 diff_tex_data = BakeAOTexture.SampleLevel(BakeAOTexture_sampler, MeshVertex[vertex_idx].uv1, 0);
+        OutAOColorDatas[vertex_idx].lum = saturate(ao_val * 0.000001f + diff_tex_data.r);
     }
 }
