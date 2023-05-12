@@ -17,6 +17,9 @@
 #include "ShaderMacroHelper.hpp"
 //#include "OpenFBX/ofbx.h"
 
+#include "assimp/scene.h"
+#include "assimp/Importer.hpp"
+
 namespace Diligent
 {
 	struct IRenderDevice;
@@ -107,7 +110,7 @@ namespace Diligent
 	struct DebugBVHData
 	{
 		int unorder_num_idx;
-	};
+	};	
 
 	static const Uint32 ReductionGroupThreadNum = 512;
 	static const Uint32 SortMortonCodeThreadNum = 256;
@@ -136,6 +139,8 @@ namespace Diligent
 		std::vector<RefCntAutoPtr<ITexture>> *GetTextures();
 
 		BVHMeshData GetBVHMeshData() const;
+
+		aiScene* GetAssimpScene();
 
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
@@ -245,6 +250,9 @@ namespace Diligent
 
 		//textures
 		std::vector<RefCntAutoPtr<ITexture>> m_apDiffTexArray;
+
+		aiScene* m_import_fbx_scene;
+		Assimp::Importer* m_assimp_importer;
 
 #if DILIGENT_DEBUG
 		RefCntAutoPtr<IPipelineState> m_apDebugBVHPSO;

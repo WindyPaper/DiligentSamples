@@ -2,16 +2,15 @@
 #   define VERTEX_AO_SAMPLE_NUM 256
 #endif
 
-cbuffer GenVertexAORaysUniformData
-{
-    int num_vertex;  
-}
+// cbuffer GenVertexAORaysUniformData
+// {
+//     int num_vertex;  
+// }
 
 struct GenAOColorData
 {
     float lum;
 };
-
 
 StructuredBuffer<GenAORayData> AORayDatas;
 
@@ -22,16 +21,21 @@ groupshared uint GroupRayHitTime;
 [numthreads(VERTEX_AO_SAMPLE_NUM, 1, 1)]
 void GenVertexAOColorMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThreadID, uint local_grp_idx : SV_GroupIndex)
 {
+    GroupRayHitTime = 0;
+    GroupMemoryBarrierWithGroupSync();
+
     uint vertex_ray_id = id.x;
     uint vertex_idx = gid.x;
-    uint group_ray_idx = local_grp_idx.x;
+    uint group_ray_idx = local_grp_idx;
 
     float3 ray_pos = MeshVertex[vertex_idx].pos;
-    float3 ray_dir = AORayDatas[VERTEX_AO_SAMPLE_NUM * vertex_idx + group_ray_idx];
+    float3 ray_dir = AORayDatas[VERTEX_AO_SAMPLE_NUM * vertex_idx + group_ray_idx].dir;
+
+    const float pos_bia = 0.001f;
 
     RayData ray;
     ray.dir = ray_dir;
-    ray.o = ray_pos;
+    ray.o = ray_pos + ray_dir * pos_bia;
     float min_near = MAX_INT;
     uint hit_idx_prim = -1;
     float2 hit_coordinate = 0;
@@ -46,5 +50,8 @@ void GenVertexAOColorMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThreadID
 
     GroupMemoryBarrierWithGroupSync();
 
-    OutAOColorDatas[vertex_idx].lum = float(GroupRayHitTime) / VERTEX_AO_SAMPLE_NUM;
+    if(group_ray_idx == 0)
+    {
+        OutAOColorDatas[vertex_idx].lum = float(GroupRayHitTime) / VERTEX_AO_SAMPLE_NUM;
+    }
 }

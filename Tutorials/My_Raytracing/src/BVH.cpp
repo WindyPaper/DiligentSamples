@@ -13,8 +13,7 @@
 #include "MapHelper.hpp"
 #include "TextureUtilities.h"
 
-#include "assimp/Importer.hpp"
-#include "assimp/scene.h"
+
 #include "assimp/postprocess.h"
 #include "assimp/Exporter.hpp"
 
@@ -23,7 +22,9 @@ Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSo
 	m_pDevice(pDevice),
 	m_pShaderFactory(pShaderFactory),
 	m_pOutWholeAABB(nullptr),
-	m_pOutResultSortData(nullptr)
+	m_pOutResultSortData(nullptr),
+	m_import_fbx_scene(nullptr),
+	m_assimp_importer(nullptr)
 {
 	InitTestMesh();
 
@@ -34,7 +35,13 @@ Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSo
 
 Diligent::BVH::~BVH()
 {
+	if (m_assimp_importer)
+	{
+		m_assimp_importer->FreeScene();
 
+		delete m_assimp_importer;
+		m_assimp_importer = nullptr;
+	}
 }
 
 void Diligent::BVH::InitTestMesh()
@@ -109,23 +116,23 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	std::vector<BVHMeshPrimData> mesh_prim_data;
 
 	using namespace Assimp;
-	Importer importer;
+	m_assimp_importer = new Importer();
 	unsigned int flags = aiProcess_Triangulate |
 		aiProcess_JoinIdenticalVertices |
 		aiProcess_PreTransformVertices |
 		aiProcess_RemoveRedundantMaterials |
 		aiProcess_OptimizeMeshes |
 		aiProcess_ConvertToLeftHanded;
-	const aiScene* import_fbx_scene = importer.ReadFile(name, flags);
+	m_import_fbx_scene = (aiScene*)(m_assimp_importer->ReadFile(name, flags));
 
-	if (import_fbx_scene == NULL)
+	if (m_import_fbx_scene == NULL)
 	{
-		std::string error_code = importer.GetErrorString();
+		std::string error_code = m_assimp_importer->GetErrorString();
 		printf("Load FBX", "load fbx file failed! " + error_code);
 		return;
 	}
 
-	unsigned int mesh_num = import_fbx_scene->mNumMeshes;
+	unsigned int mesh_num = m_import_fbx_scene->mNumMeshes;
 	//unsigned int mat_num = import_fbx_scene->mNumMaterials;
 
 
@@ -134,8 +141,8 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 	std::unordered_map<std::string, Uint32> TexHashMap;
 	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
 	{
-		aiMesh* mesh_ptr = import_fbx_scene->mMeshes[mesh_i];
-		const aiMaterial *mats = import_fbx_scene->mMaterials[mesh_ptr->mMaterialIndex];
+		aiMesh* mesh_ptr = m_import_fbx_scene->mMeshes[mesh_i];
+		const aiMaterial *mats = m_import_fbx_scene->mMaterials[mesh_ptr->mMaterialIndex];
 
 		//Mesh* p_cy_mesh = fbx_add_mesh(scene, transform_identity());
 		//p_cy_mesh->reserve_mesh(vertex_num, triangle_num);	
@@ -197,10 +204,10 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 		indices_offset += vertex_num;
 	}
 
-	Exporter exp;
-	exp.Export(import_fbx_scene, "fbxa", "test_chaju.fbx");
+	/*Exporter exp;
+	exp.Export(m_import_fbx_scene, "fbxa", "test_chaju.fbx");*/
 
-	importer.FreeScene();
+	//importer.FreeScene();
 
 	//Uint32 *p = &mesh_index_data[0];
 
@@ -361,6 +368,11 @@ std::vector<Diligent::RefCntAutoPtr<Diligent::ITexture>> * Diligent::BVH::GetTex
 Diligent::BVHMeshData Diligent::BVH::GetBVHMeshData() const
 {
 	return m_BVHMeshData;
+}
+
+aiScene* Diligent::BVH::GetAssimpScene()
+{
+	return m_import_fbx_scene;
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVH::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type, ShaderMacroHelper *pMacro)

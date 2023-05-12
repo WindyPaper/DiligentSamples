@@ -9,6 +9,8 @@
 #include "MapHelper.hpp"
 #include "BVH.h"
 
+#include "assimp/Exporter.hpp"
+
 
 Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, ISwapChain* pSwapChain, BVH *pBVH, const FirstPersonCamera &cam) :
 	m_pDeviceCtx(pDeviceCtx),
@@ -25,6 +27,9 @@ Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice,
 
 	CreateGenVertexAORaysPSO();
 	CreateGenVertexAORaysBuffer();
+
+	CreateVertexAOTracePSO();
+	CreateVertexAOTraceBuffer();
 }
 
 Diligent::BVHTrace::~BVHTrace()
@@ -74,6 +79,79 @@ void Diligent::BVHTrace::DispatchBVHTrace()
 Diligent::ITexture * Diligent::BVHTrace::GetOutputPixelTex()
 {
 	return m_apOutRTPixelTex;
+}
+
+void Diligent::BVHTrace::DispatchVertexAOTrace()
+{
+	GenVertexAORays();
+
+	m_pDeviceCtx->SetPipelineState(m_apVertexAOTracePSO);
+
+	/*IShaderResourceVariable* pGenVertexAOUniformData = m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "GenVertexAORaysUniformData");
+	if (pGenVertexAOUniformData)
+	{
+		{
+			MapHelper<GenVertexAORaysUniformData> CBGlobalData(m_pDeviceCtx, m_apVertexAORaysUniformBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+			CBGlobalData->num_vertex = m_pBVH->GetBVHMeshData().vertex_num;
+		}
+		pGenVertexAOUniformData->Set(m_apVertexAORaysUniformBuffer);
+	}*/
+
+	IShaderResourceVariable* pMeshIdx = m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx");
+	if (pMeshIdx)
+		pMeshIdx->Set(m_pBVH->GetMeshIdxBufferView());
+	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
+	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
+	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());
+	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "AORayDatas")->Set(m_apVertexAOOutRaysBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAOColorDatas")->Set(m_apVertexAOColorBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apVertexAOTraceSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(m_pBVH->GetBVHMeshData().vertex_num, 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+
+	//read back color buffer to CPU
+	m_pDeviceCtx->CopyBuffer(m_apVertexAOColorBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+		m_apVertexAOColorStageBuffer, 0, sizeof(GenAOColorData) * m_pBVH->GetBVHMeshData().vertex_num,
+		RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	//sync gpu finish copy operation.
+	m_pDeviceCtx->WaitForIdle();
+
+	MapHelper<GenAOColorData> map_ao_color_datas(m_pDeviceCtx, m_apVertexAOColorStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+
+	std::vector<GenAOColorData> out_color_cpu;
+	out_color_cpu.resize(m_pBVH->GetBVHMeshData().vertex_num);
+	memcpy(&out_color_cpu[0], &(*map_ao_color_datas), sizeof(GenAOColorData) * out_color_cpu.size());
+
+	aiScene *pFBXScene = m_pBVH->GetAssimpScene();
+	unsigned int mesh_num = pFBXScene->mNumMeshes;
+	Uint32 vertex_idx = 0;
+	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
+	{
+		aiMesh* mesh_ptr = pFBXScene->mMeshes[mesh_i];
+
+		int vertex_num = mesh_ptr->mNumVertices;
+
+		for (int i = 0; i < vertex_num; ++i)
+		{			
+			//set vertex color
+			aiColor4D** t_vertex_color = &(mesh_ptr->mColors[0]);
+			if (*t_vertex_color == nullptr)
+			{
+				*t_vertex_color = new aiColor4D[vertex_num];
+			}
+			mesh_ptr->mColors[0][i].r = out_color_cpu[vertex_idx++].lum;
+			mesh_ptr->mColors[0][i].g = 0.0f;
+			mesh_ptr->mColors[0][i].b = 0.0f;
+			mesh_ptr->mColors[0][i].a = 0.0f;
+		}
+	}
+
+	Assimp::Exporter exp;
+	exp.Export(pFBXScene, "fbxa", "test_chaju.fbx");
+
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVHTrace::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type /*= SHADER_TYPE_COMPUTE*/, ShaderMacroHelper *pMacro /*= nullptr*/)
@@ -199,7 +277,54 @@ void Diligent::BVHTrace::GenVertexAORays()
 
 void Diligent::BVHTrace::CreateVertexAOTracePSO()
 {
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("VERTEX_AO_SAMPLE_NUM", VERTEX_AO_RAY_SAMPLE_NUM);
+	RefCntAutoPtr<IShader> pGenVertexAOTraceShader = CreateShader("GenVertexAOColorMain", "Trace.csh", "gen vertex ao color cs", SHADER_TYPE_COMPUTE, &Macros);
 
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{		
+		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "BVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "BVHNodeAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "AORayDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutAOColorDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen vertex ao color pso");
+
+	PSOCreateInfo.pCS = pGenVertexAOTraceShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apVertexAOTracePSO);
+
+	//SRB
+	m_apVertexAOTracePSO->CreateShaderResourceBinding(&m_apVertexAOTraceSRB, true);
+}
+
+void Diligent::BVHTrace::CreateVertexAOTraceBuffer()
+{
+	BufferDesc VertexAOOutColorBuffDesc;
+	VertexAOOutColorBuffDesc.Name = "vertex ao out color datas";
+	VertexAOOutColorBuffDesc.Usage = USAGE_DEFAULT;
+	VertexAOOutColorBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	VertexAOOutColorBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	VertexAOOutColorBuffDesc.ElementByteStride = sizeof(GenAOColorData);
+	VertexAOOutColorBuffDesc.uiSizeInBytes = sizeof(GenAOColorData) * m_pBVH->GetBVHMeshData().vertex_num;
+	m_pDevice->CreateBuffer(VertexAOOutColorBuffDesc, nullptr, &m_apVertexAOColorBuffer);
+
+	BufferDesc VertexAOOutColorStageBuffer;
+	VertexAOOutColorStageBuffer.Name = "gen vertex ao color staging buffer";
+	VertexAOOutColorStageBuffer.Usage = USAGE_STAGING;
+	VertexAOOutColorStageBuffer.BindFlags = BIND_NONE;
+	VertexAOOutColorStageBuffer.Mode = BUFFER_MODE_UNDEFINED;
+	VertexAOOutColorStageBuffer.CPUAccessFlags = CPU_ACCESS_READ;
+	VertexAOOutColorStageBuffer.uiSizeInBytes = VertexAOOutColorBuffDesc.uiSizeInBytes;
+	VertexAOOutColorStageBuffer.ElementByteStride = VertexAOOutColorBuffDesc.ElementByteStride;
+	m_pDevice->CreateBuffer(VertexAOOutColorStageBuffer, nullptr, &m_apVertexAOColorStageBuffer);
 }
 
 void Diligent::BVHTrace::CreateTracePSO()

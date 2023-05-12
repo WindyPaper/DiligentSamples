@@ -57,7 +57,7 @@ namespace Diligent
 
 		ITexture *GetOutputPixelTex();
 
-		void DispatchVertexAO();
+		void DispatchVertexAOTrace();
 
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
@@ -96,6 +96,7 @@ namespace Diligent
 		RefCntAutoPtr<IPipelineState> m_apVertexAOTracePSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apVertexAOTraceSRB;
 		RefCntAutoPtr<IBuffer> m_apVertexAOColorBuffer;
+		RefCntAutoPtr<IBuffer> m_apVertexAOColorStageBuffer;		
 		
 		FirstPersonCamera m_Camera;
 	};
