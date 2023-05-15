@@ -104,7 +104,7 @@ void Diligent::BVHTrace::DispatchVertexAOTrace()
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());
-	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BakeAOTexture")->Set(m_pBVH->GetAOTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	//m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BakeAOTexture")->Set(m_pBVH->GetAOTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "AORayDatas")->Set(m_apVertexAOOutRaysBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 	m_apVertexAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAOColorDatas")->Set(m_apVertexAOColorBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 
@@ -417,11 +417,16 @@ void Diligent::BVHTrace::CreateBuffer()
 
 void Diligent::BVHTrace::BindDiffTexs()
 {
-	std::vector<RefCntAutoPtr<ITexture>> *pDiffTexArray = m_pBVH->GetTextures();
-	std::vector<IDeviceObject*> pTexSRVs(pDiffTexArray->size());
-	for (int i = 0; i < pDiffTexArray->size(); ++i)
+	IShaderResourceVariable *pTexs = m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DiffTextures");
+	if (pTexs)
 	{
-		pTexSRVs[i] = (*pDiffTexArray)[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+		std::vector<RefCntAutoPtr<ITexture>> *pDiffTexArray = m_pBVH->GetTextures();
+		std::vector<IDeviceObject*> pTexSRVs(pDiffTexArray->size());
+		for (int i = 0; i < pDiffTexArray->size(); ++i)
+		{
+			pTexSRVs[i] = (*pDiffTexArray)[i]->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE);
+		}
+
+		pTexs->SetArray(&pTexSRVs[0], 0, pTexSRVs.size());
 	}
-	m_apTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DiffTextures")->SetArray(&pTexSRVs[0], 0, pTexSRVs.size());	
 }

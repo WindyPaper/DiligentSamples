@@ -19,8 +19,9 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
     float min_near = MAX_INT;
     uint hit_idx_prim = -1;
     float2 hit_coordinate = 0;
+    bool back_face = false;
 
-    RayTrace(ray, min_near, hit_idx_prim, hit_coordinate);
+    RayTrace(ray, min_near, hit_idx_prim, hit_coordinate, back_face);
 
     if(hit_idx_prim != -1)
     {
@@ -47,7 +48,17 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         // float3 green_color = float3(0.0f, 1.0f, 0.0f);
         // float3 profile_color = lerp(green_color, red_color, (saturate(profile_color_intensity)));
 
-        OutPixel[pixel_pos] = float4(out_normal, 1.0f) * diff_tex_data;//float4(profile_color, 1.0f);
+        //OutPixel[pixel_pos] = float4(out_normal, 1.0f) * diff_tex_data;//float4(profile_color, 1.0f);
+
+        if(back_face)
+        {
+            OutPixel[pixel_pos] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+        }
+        else
+        {
+            OutPixel[pixel_pos] = float4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+
         // float3 random_color = float3(random(hit_idx_prim), random(hit_idx_prim >> 2), random(hit_idx_prim << 2));
         // OutPixel[pixel_pos] = float4(random_color, 1.0f);
     }

@@ -54,7 +54,8 @@ bool RayTriangleIntersect(
 	const float3 orig,
 	const float3 dir,
 	inout float t,
-	inout float2 bCoord)
+	inout float2 bCoord,
+    inout bool back_face)
 {
     uint v_idx0 = MeshIdx[hit_idx_prim * 3]; 
     uint v_idx1 = MeshIdx[hit_idx_prim * 3 + 1]; 
@@ -77,15 +78,24 @@ bool RayTriangleIntersect(
 	t = dot(e1, s2) * invd;
 
 	if (
-//#if BACKFACE_CULLING
-		//dot(s1, e0) < -kEpsilon ||
-//#endif
+#if BACKFACE_CULLING
+		dot(s1, e0) < -kEpsilon ||
+#endif
 		bCoord.x < 0.0 || bCoord.x > 1.0 || bCoord.y < 0.0 || (bCoord.x + bCoord.y) > 1.0 || t < 0.0 || t > 1e9)
 	{
 		return false;
 	}
 	else
 	{
+        if(dot(s1, e0) < -kEpsilon)
+        {
+            back_face = true;
+        }
+        else
+        {
+            back_face = false;
+        }
+        
 		return true;
 	}
 }
@@ -115,7 +125,7 @@ struct RayData
     float3 dir;
 };
 
-void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout float2 hit_coordinate)
+void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout float2 hit_coordinate, inout bool back_face)
 {
     float3 RayDirInv = rcp(ray.dir);
     FixedRcpInf(RayDirInv);
@@ -148,7 +158,8 @@ void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout f
 
                 float t_min;
                 float2 t_coord;
-                if(RayTriangleIntersect(t_hit_prim, ray.o, ray.dir, t_min, t_coord))
+                bool t_back_face = false;
+                if(RayTriangleIntersect(t_hit_prim, ray.o, ray.dir, t_min, t_coord, t_back_face))
                 {
                     // ++search_num;
                     // hit_idx_prim = t_hit_prim;//test
@@ -158,6 +169,7 @@ void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout f
                         hit_min = t_min;
                         hit_coordinate = t_coord;
                         hit_idx_prim = t_hit_prim;
+                        back_face = t_back_face;
                     }
                 }
             }
@@ -177,7 +189,8 @@ void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout f
 
                 float t_min;
                 float2 t_coord;
-                if(RayTriangleIntersect(t_hit_prim, ray.o, ray.dir, t_min, t_coord))
+                bool t_back_face = false;
+                if(RayTriangleIntersect(t_hit_prim, ray.o, ray.dir, t_min, t_coord, t_back_face))
                 {
                     // ++search_num;
                     // hit_idx_prim = t_hit_prim;//test
@@ -187,6 +200,7 @@ void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout f
                         hit_min = t_min;
                         hit_coordinate = t_coord;
                         hit_idx_prim = t_hit_prim;
+                        back_face = t_back_face;
                     }
                 }
             }
