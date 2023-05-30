@@ -33,6 +33,11 @@ namespace Diligent
 		float3 dir;
 	};
 
+	struct GenSubdivisionPosInTriangle
+	{
+		float3 pos;
+	};
+
 	struct GenVertexAORaysUniformData
 	{
 		int num_vertex;
@@ -43,7 +48,13 @@ namespace Diligent
 		float lum;
 	};
 
+	struct GenTriangleFaceAOUniformData
+	{
+		int num_triangle;
+	};
+
 	static const Uint32 VERTEX_AO_RAY_SAMPLE_NUM = 256;
+	static const Uint32 TRIANGLE_SUBDIVISION_NUM = 16;
 
 	class BVHTrace
 	{
@@ -58,6 +69,7 @@ namespace Diligent
 		ITexture *GetOutputPixelTex();
 
 		void DispatchVertexAOTrace();
+		void DispatchTriangleAOTrace();
 
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
@@ -67,8 +79,20 @@ namespace Diligent
 		void CreateGenVertexAORaysBuffer();
 		void GenVertexAORays();
 
+		void CreateGenTriangleAORaysPSO();
+		void CreateGenTriangleAORaysBuffer();
+		void CreateGenTriangleAOPosPSO();
+		void CreateGenTriangleAOPosBuffer();
+		void GenTriangleAORaysAndPos();
+
 		void CreateVertexAOTracePSO();
 		void CreateVertexAOTraceBuffer();
+
+		void CreateTriangleAOTracePSO();
+		void CreateTriangleAOTraceBuffer();
+
+		void CreateTriangleFaceAOPSO();
+		void CreateTriangleFaceAOBuffer();
 
 		void CreateTracePSO();
 		void CreateBuffer();
@@ -97,7 +121,27 @@ namespace Diligent
 		RefCntAutoPtr<IShaderResourceBinding> m_apVertexAOTraceSRB;
 		RefCntAutoPtr<IBuffer> m_apVertexAOColorBuffer;
 		RefCntAutoPtr<IBuffer> m_apVertexAOColorStageBuffer;		
-		
+
+		//triangle ao gen rays
+		RefCntAutoPtr<IPipelineState> m_apGenTriangleAORaysPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apGenTriangleAORaysSRB;
+		//RefCntAutoPtr<IBuffer> m_apTriangleAORaysUniformBuffer;
+		RefCntAutoPtr<IBuffer> m_apTriangleAOOutRaysBuffer;
+
+		RefCntAutoPtr<IPipelineState> m_apGenTriangleAOPosPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apGenTriangleAOPosSRB;
+		RefCntAutoPtr<IBuffer> m_apTriangleAOOutPosBuffer;
+
+		RefCntAutoPtr<IPipelineState> m_apGenTriangleAOTracePSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apGenTriangleAOTraceSRB;
+		RefCntAutoPtr<IBuffer> m_apTriangleAOOutPosColorBuffer;
+
+		RefCntAutoPtr<IPipelineState> m_apGenTriangleFaceAOPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apGenTriangleFaceAOSRB;
+		RefCntAutoPtr<IBuffer> m_apTriangleFaceAOColorUniformBuffer;
+		RefCntAutoPtr<IBuffer> m_apTriangleFaceAOColorBuffer;
+		RefCntAutoPtr<IBuffer> m_apTriangleFaceAOColorStageBuffer;
+
 		FirstPersonCamera m_Camera;
 		std::string m_mesh_file_name;
 	};

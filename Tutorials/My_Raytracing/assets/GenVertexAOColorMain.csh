@@ -4,13 +4,8 @@
 
 // cbuffer GenVertexAORaysUniformData
 // {
-//     int num_vertex;  
+//     int num_vertex;
 // }
-
-struct GenAOColorData
-{
-    float lum;
-};
 
 StructuredBuffer<GenAORayData> AORayDatas;
 

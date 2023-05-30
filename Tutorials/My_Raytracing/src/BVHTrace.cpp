@@ -29,8 +29,20 @@ Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice,
 	CreateGenVertexAORaysPSO();
 	CreateGenVertexAORaysBuffer();
 
+	CreateGenTriangleAORaysPSO();
+	CreateGenTriangleAORaysBuffer();
+
+	CreateGenTriangleAOPosPSO();
+	CreateGenTriangleAOPosBuffer();
+
 	CreateVertexAOTracePSO();
 	CreateVertexAOTraceBuffer();
+
+	CreateTriangleAOTracePSO();
+	CreateTriangleAOTraceBuffer();
+
+	CreateTriangleFaceAOPSO();
+	CreateTriangleFaceAOBuffer();
 }
 
 Diligent::BVHTrace::~BVHTrace()
@@ -157,6 +169,89 @@ void Diligent::BVHTrace::DispatchVertexAOTrace()
 
 }
 
+void Diligent::BVHTrace::DispatchTriangleAOTrace()
+{
+	GenTriangleAORaysAndPos();
+
+	m_pDeviceCtx->SetPipelineState(m_apGenTriangleAOTracePSO);	
+
+	IShaderResourceVariable* pMeshIdx = m_apGenTriangleAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx");
+	if (pMeshIdx)
+		pMeshIdx->Set(m_pBVH->GetMeshIdxBufferView());
+	m_apGenTriangleAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
+	m_apGenTriangleAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
+	m_apGenTriangleAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());	
+	m_apGenTriangleAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TriangleAORayDatas")->Set(m_apTriangleAOOutRaysBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apGenTriangleAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TriangleAOPosDatas")->Set(m_apTriangleAOOutPosBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apGenTriangleAOTraceSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutTriangleAOColorDatas")->Set(m_apTriangleAOOutPosColorBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apGenTriangleAOTraceSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(m_pBVH->GetBVHMeshData().primitive_num * TRIANGLE_SUBDIVISION_NUM, 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+
+	//to triangle face ao
+	m_pDeviceCtx->SetPipelineState(m_apGenTriangleFaceAOPSO);
+	IShaderResourceVariable* pGenTriangleFaceAOUniformData = m_apGenTriangleFaceAOSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "GenTriangleFaceAOUniformData");
+	if (pGenTriangleFaceAOUniformData)
+	{
+		{
+			MapHelper<GenTriangleFaceAOUniformData> CBGlobalData(m_pDeviceCtx, m_apTriangleFaceAOColorUniformBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+			CBGlobalData->num_triangle = m_pBVH->GetBVHMeshData().primitive_num;
+		}
+		pGenTriangleFaceAOUniformData->Set(m_apTriangleFaceAOColorUniformBuffer);
+	}
+	m_apGenTriangleFaceAOSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InTriangleAOPosColorDatas")->Set(m_apTriangleAOOutPosColorBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	m_apGenTriangleFaceAOSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutTriangleFaceAOColorDatas")->Set(m_apTriangleFaceAOColorBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+	m_pDeviceCtx->CommitShaderResources(m_apGenTriangleFaceAOSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs triangle_face_ao_attr(std::ceil(m_pBVH->GetBVHMeshData().primitive_num / 128.0f), 1);
+	m_pDeviceCtx->DispatchCompute(triangle_face_ao_attr);
+
+
+	////read back color buffer to CPU
+	//m_pDeviceCtx->CopyBuffer(m_apVertexAOColorBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+	//	m_apVertexAOColorStageBuffer, 0, sizeof(GenAOColorData) * m_pBVH->GetBVHMeshData().vertex_num,
+	//	RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	////sync gpu finish copy operation.
+	//m_pDeviceCtx->WaitForIdle();
+
+	//MapHelper<GenAOColorData> map_ao_color_datas(m_pDeviceCtx, m_apVertexAOColorStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+
+	//std::vector<GenAOColorData> out_color_cpu;
+	//out_color_cpu.resize(m_pBVH->GetBVHMeshData().vertex_num);
+	//memcpy(&out_color_cpu[0], &(*map_ao_color_datas), sizeof(GenAOColorData) * out_color_cpu.size());
+
+	//aiScene *pFBXScene = m_pBVH->GetAssimpScene();
+	//unsigned int mesh_num = pFBXScene->mNumMeshes;
+	//Uint32 vertex_idx = 0;
+	//for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
+	//{
+	//	aiMesh* mesh_ptr = pFBXScene->mMeshes[mesh_i];
+
+	//	int vertex_num = mesh_ptr->mNumVertices;
+
+	//	for (int i = 0; i < vertex_num; ++i)
+	//	{
+	//		//set vertex color
+	//		aiColor4D** t_vertex_color = &(mesh_ptr->mColors[0]);
+	//		if (*t_vertex_color == nullptr)
+	//		{
+	//			*t_vertex_color = new aiColor4D[vertex_num];
+	//		}
+	//		mesh_ptr->mColors[0][i].r = out_color_cpu[vertex_idx++].lum;
+	//		mesh_ptr->mColors[0][i].g = 0.0f;
+	//		mesh_ptr->mColors[0][i].b = 0.0f;
+	//		mesh_ptr->mColors[0][i].a = 0.0f;
+	//	}
+	//}
+
+	//Assimp::Exporter exp;
+	//std::string out_put_mesh_name = m_mesh_file_name.substr(0, m_mesh_file_name.find('.')) + "_vc" + m_mesh_file_name.substr(m_mesh_file_name.find('.'));
+	//exp.Export(pFBXScene, "fbxa", out_put_mesh_name.c_str());
+}
+
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVHTrace::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type /*= SHADER_TYPE_COMPUTE*/, ShaderMacroHelper *pMacro /*= nullptr*/)
 {
 	ShaderCreateInfo ShaderCI;
@@ -278,6 +373,115 @@ void Diligent::BVHTrace::GenVertexAORays()
 	m_pDeviceCtx->DispatchCompute(attr);
 }
 
+void Diligent::BVHTrace::CreateGenTriangleAORaysPSO()
+{
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("TRIANGLE_AO_SAMPLE_NUM", VERTEX_AO_RAY_SAMPLE_NUM);
+	Macros.AddShaderMacro("TRIANGLE_SUBDIVISION_NUM", TRIANGLE_SUBDIVISION_NUM);
+	RefCntAutoPtr<IShader> pGenTriangleAORaysShader = CreateShader("GenTriangleAORaysMain", "Trace.csh", "gen triangle ao rays cs", SHADER_TYPE_COMPUTE, &Macros);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		//{SHADER_TYPE_COMPUTE, "GenVertexAORaysUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutAORayDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutSubdivisionPositions", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen triangle ao rays pso");
+
+	PSOCreateInfo.pCS = pGenTriangleAORaysShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apGenTriangleAORaysPSO);
+
+	//SRB
+	m_apGenTriangleAORaysPSO->CreateShaderResourceBinding(&m_apGenTriangleAORaysSRB, true);
+}
+
+void Diligent::BVHTrace::CreateGenTriangleAORaysBuffer()
+{
+	BufferDesc TriangleAOOutRayBuffDesc;
+	TriangleAOOutRayBuffDesc.Name = "triangle ao out ray datas";
+	TriangleAOOutRayBuffDesc.Usage = USAGE_DEFAULT;
+	TriangleAOOutRayBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	TriangleAOOutRayBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	TriangleAOOutRayBuffDesc.ElementByteStride = sizeof(GenAORayData);
+	TriangleAOOutRayBuffDesc.uiSizeInBytes = sizeof(GenAORayData) * m_pBVH->GetBVHMeshData().primitive_num * VERTEX_AO_RAY_SAMPLE_NUM;
+	m_pDevice->CreateBuffer(TriangleAOOutRayBuffDesc, nullptr, &m_apTriangleAOOutRaysBuffer);	
+}
+
+void Diligent::BVHTrace::CreateGenTriangleAOPosPSO()
+{
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("TRIANGLE_SUBDIVISION_NUM", TRIANGLE_SUBDIVISION_NUM);
+	RefCntAutoPtr<IShader> pGenTriangleAOPosShader = CreateShader("GenTriangleAOPosMain", "Trace.csh", "gen triangle ao pos cs", SHADER_TYPE_COMPUTE, &Macros);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		//{SHADER_TYPE_COMPUTE, "GenVertexAORaysUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutSubdivisionPositions", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen triangle ao pos pso");
+
+	PSOCreateInfo.pCS = pGenTriangleAOPosShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apGenTriangleAOPosPSO);
+
+	//SRB
+	m_apGenTriangleAOPosPSO->CreateShaderResourceBinding(&m_apGenTriangleAOPosSRB, true);
+}
+
+void Diligent::BVHTrace::CreateGenTriangleAOPosBuffer()
+{
+	BufferDesc TriangleAOOutPosBuffDesc;
+	TriangleAOOutPosBuffDesc.Name = "triangle ao out pos datas";
+	TriangleAOOutPosBuffDesc.Usage = USAGE_DEFAULT;
+	TriangleAOOutPosBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	TriangleAOOutPosBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	TriangleAOOutPosBuffDesc.ElementByteStride = sizeof(GenSubdivisionPosInTriangle);
+	TriangleAOOutPosBuffDesc.uiSizeInBytes = sizeof(GenSubdivisionPosInTriangle) * m_pBVH->GetBVHMeshData().primitive_num * TRIANGLE_SUBDIVISION_NUM;
+	m_pDevice->CreateBuffer(TriangleAOOutPosBuffDesc, nullptr, &m_apTriangleAOOutPosBuffer);
+}
+
+void Diligent::BVHTrace::GenTriangleAORaysAndPos()
+{
+	//rays
+	m_pDeviceCtx->SetPipelineState(m_apGenTriangleAORaysPSO);	
+
+	m_apGenTriangleAORaysSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
+	m_apGenTriangleAORaysSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx")->Set(m_pBVH->GetMeshIdxBufferView());
+	m_apGenTriangleAORaysSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutAORayDatas")->Set(m_apTriangleAOOutRaysBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apGenTriangleAORaysSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(m_pBVH->GetBVHMeshData().primitive_num, 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+
+	//pos
+	m_pDeviceCtx->SetPipelineState(m_apGenTriangleAOPosPSO);
+	
+	m_apGenTriangleAOPosSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex")->Set(m_pBVH->GetMeshVertexBufferView());
+	m_apGenTriangleAOPosSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx")->Set(m_pBVH->GetMeshIdxBufferView());
+	m_apGenTriangleAOPosSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutSubdivisionPositions")->Set(m_apTriangleAOOutPosBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apGenTriangleAOPosSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr_pos(m_pBVH->GetBVHMeshData().primitive_num, 1);
+	m_pDeviceCtx->DispatchCompute(attr_pos);
+}
+
 void Diligent::BVHTrace::CreateVertexAOTracePSO()
 {
 	ShaderMacroHelper Macros;
@@ -343,6 +547,124 @@ void Diligent::BVHTrace::CreateVertexAOTraceBuffer()
 	VertexAOOutColorStageBuffer.uiSizeInBytes = VertexAOOutColorBuffDesc.uiSizeInBytes;
 	VertexAOOutColorStageBuffer.ElementByteStride = VertexAOOutColorBuffDesc.ElementByteStride;
 	m_pDevice->CreateBuffer(VertexAOOutColorStageBuffer, nullptr, &m_apVertexAOColorStageBuffer);
+}
+
+void Diligent::BVHTrace::CreateTriangleAOTracePSO()
+{
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("VERTEX_AO_SAMPLE_NUM", VERTEX_AO_RAY_SAMPLE_NUM);
+	Macros.AddShaderMacro("TRIANGLE_SUBDIVISION_NUM", TRIANGLE_SUBDIVISION_NUM);
+	RefCntAutoPtr<IShader> pGenTriangleAOTraceShader = CreateShader("GenTriangleAOColorMain", "Trace.csh", "trace triangle ao color cs", SHADER_TYPE_COMPUTE, &Macros);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "BVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "BVHNodeAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "TriangleAORayDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "TriangleAOPosDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutTriangleAOColorDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen triangle ao color pso");
+
+	/*SamplerDesc SamLinearClampDesc
+	{
+		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+		TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
+	};
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{SHADER_TYPE_COMPUTE, "BakeAOTexture", SamLinearClampDesc}
+	};*/
+	// clang-format on
+	/*PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);*/
+
+	PSOCreateInfo.pCS = pGenTriangleAOTraceShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apGenTriangleAOTracePSO);
+
+	//SRB
+	m_apGenTriangleAOTracePSO->CreateShaderResourceBinding(&m_apGenTriangleAOTraceSRB, true);
+}
+
+void Diligent::BVHTrace::CreateTriangleAOTraceBuffer()
+{
+	BufferDesc TriangleAOOutColorBuffDesc;
+	TriangleAOOutColorBuffDesc.Name = "triangle ao out color datas";
+	TriangleAOOutColorBuffDesc.Usage = USAGE_DEFAULT;
+	TriangleAOOutColorBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	TriangleAOOutColorBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	TriangleAOOutColorBuffDesc.ElementByteStride = sizeof(GenAOColorData);
+	TriangleAOOutColorBuffDesc.uiSizeInBytes = sizeof(GenAOColorData) * m_pBVH->GetBVHMeshData().primitive_num * TRIANGLE_SUBDIVISION_NUM;
+	m_pDevice->CreateBuffer(TriangleAOOutColorBuffDesc, nullptr, &m_apTriangleAOOutPosColorBuffer);
+}
+
+void Diligent::BVHTrace::CreateTriangleFaceAOPSO()
+{
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("TRIANGLE_SUBDIVISION_NUM", TRIANGLE_SUBDIVISION_NUM);
+	RefCntAutoPtr<IShader> pGenTriangleFaceAOShader = CreateShader("GenTriangleFaceAOColorMain", "GenTriangleFaceAOColorMain.csh", " triangle face ao color cs", SHADER_TYPE_COMPUTE, &Macros);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "GenTriangleFaceAOUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "InTriangleAOPosColorDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "OutTriangleFaceAOColorDatas", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},		
+	};
+
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "gen triangle face ao color pso");
+
+	PSOCreateInfo.pCS = pGenTriangleFaceAOShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apGenTriangleFaceAOPSO);
+
+	//SRB
+	m_apGenTriangleFaceAOPSO->CreateShaderResourceBinding(&m_apGenTriangleFaceAOSRB, true);
+}
+
+void Diligent::BVHTrace::CreateTriangleFaceAOBuffer()
+{
+	BufferDesc TriangleFaceAOColorBuffDesc;
+	TriangleFaceAOColorBuffDesc.Name = "triangle face ao color datas";
+	TriangleFaceAOColorBuffDesc.Usage = USAGE_DEFAULT;
+	TriangleFaceAOColorBuffDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	TriangleFaceAOColorBuffDesc.Mode = BUFFER_MODE_STRUCTURED;
+	TriangleFaceAOColorBuffDesc.ElementByteStride = sizeof(GenAOColorData);
+	TriangleFaceAOColorBuffDesc.uiSizeInBytes = sizeof(GenAOColorData) * m_pBVH->GetBVHMeshData().primitive_num;
+	m_pDevice->CreateBuffer(TriangleFaceAOColorBuffDesc, nullptr, &m_apTriangleFaceAOColorBuffer);
+
+	BufferDesc TriangleFaceAOColorStageBuffer;
+	TriangleFaceAOColorStageBuffer.Name = "triangle face ao color staging buffer";
+	TriangleFaceAOColorStageBuffer.Usage = USAGE_STAGING;
+	TriangleFaceAOColorStageBuffer.BindFlags = BIND_NONE;
+	TriangleFaceAOColorStageBuffer.Mode = BUFFER_MODE_UNDEFINED;
+	TriangleFaceAOColorStageBuffer.CPUAccessFlags = CPU_ACCESS_READ;
+	TriangleFaceAOColorStageBuffer.uiSizeInBytes = TriangleFaceAOColorBuffDesc.uiSizeInBytes;
+	TriangleFaceAOColorStageBuffer.ElementByteStride = TriangleFaceAOColorBuffDesc.ElementByteStride;
+	m_pDevice->CreateBuffer(TriangleFaceAOColorStageBuffer, nullptr, &m_apTriangleFaceAOColorStageBuffer);
+
+	BufferDesc TriangleFaceAOUniformDataDesc;
+	TriangleFaceAOUniformDataDesc.Name = "Triangle face AO Uniform Data Desc";
+	TriangleFaceAOUniformDataDesc.Usage = USAGE_DYNAMIC;
+	TriangleFaceAOUniformDataDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	TriangleFaceAOUniformDataDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	TriangleFaceAOUniformDataDesc.Mode = BUFFER_MODE_STRUCTURED;
+	TriangleFaceAOUniformDataDesc.ElementByteStride = sizeof(GenTriangleFaceAOUniformData);
+	TriangleFaceAOUniformDataDesc.uiSizeInBytes = sizeof(GenTriangleFaceAOUniformData);
+	m_pDevice->CreateBuffer(TriangleFaceAOUniformDataDesc, nullptr, &m_apTriangleFaceAOColorUniformBuffer);
 }
 
 void Diligent::BVHTrace::CreateTracePSO()

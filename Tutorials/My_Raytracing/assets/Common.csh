@@ -52,3 +52,8 @@ BVHAABB merge(const in BVHAABB lhs, const in BVHAABB rhs)
 
     return merged;
 }
+
+struct GenAOColorData
+{
+    float lum;
+};

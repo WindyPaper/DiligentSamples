@@ -218,3 +218,4 @@ void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout f
 #include "GenVertexAOColorMain.csh"
 #include "GenTriangleAORaysMain.csh"
 #include "GenTriangleAOPosMain.csh"
+#include "GenTriangleAOColorMain.csh"
