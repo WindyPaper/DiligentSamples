@@ -22,9 +22,9 @@ RWStructuredBuffer<GenSubdivisionPosInTriangle> OutSubdivisionPositions;
 float3x3 bitToXform (in uint bit )
 {
   float s = float ( bit ) - 0.5;
-  float3 c1 = float3 ( s, -0.5, 0);
-  float3 c2 = float3 ( -0.5 , -s, 0);
-  float3 c3 = float3 (+0.5 , +0.5 , 1);
+  float3 c1 = float3 ( s, -0.5, 0.5);
+  float3 c2 = float3 ( -0.5 , -s, 0.5);
+  float3 c3 = float3 (0.0 , 0.0 , 1.0);
   return float3x3 (c1 , c2 , c3);
 }
 
@@ -33,7 +33,7 @@ float3x3 keyToXform (in uint key )
   float3x3 xf = float3x3(float3(1.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f), float3(0.0f, 0.0f, 1.0f)) ;
   for(int i = 0; i < SQRT_TRIANGLE_SUBDIVISION_NUM; ++i)
   {
-    xf = bitToXform( key & 1u) * xf;
+    xf = mul(bitToXform( key & 1u), xf);
     key = key >> 1u;
   }
   return xf;
@@ -70,12 +70,12 @@ float3 get_subd_center(in uint key, in float3 v_in[3])
     float2 u2 = mul(xf, float3 (0.0f, 1.0f, 1.0f)).xy;
     float2 u3 = mul(xf, float3 (1.0f, 0.0f, 1.0f)).xy;
 
-    float3 v_out[3];
-    v_out[0] = berp (v_in , u1);
-    v_out[1] = berp (v_in , u2);
-    v_out[2] = berp (v_in , u3);
+    float3 v_out0, v_out1, v_out2;
+    v_out0 = berp (v_in , u1);
+    v_out1 = berp (v_in , u2);
+    v_out2 = berp (v_in , u3);
 
-    return (v_out[0] + v_out[1] + v_out[2]) / 3.0f;
+    return (v_out0 + v_out1 + v_out2) / 3.0f;
 }
 
 [numthreads(TRIANGLE_SUBDIVISION_NUM, 1, 1)]
