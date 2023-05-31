@@ -209,47 +209,66 @@ void Diligent::BVHTrace::DispatchTriangleAOTrace()
 	m_pDeviceCtx->DispatchCompute(triangle_face_ao_attr);
 
 
-	////read back color buffer to CPU
-	//m_pDeviceCtx->CopyBuffer(m_apVertexAOColorBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-	//	m_apVertexAOColorStageBuffer, 0, sizeof(GenAOColorData) * m_pBVH->GetBVHMeshData().vertex_num,
-	//	RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	//read back color buffer to CPU
+	m_pDeviceCtx->CopyBuffer(m_apTriangleFaceAOColorBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+		m_apTriangleFaceAOColorStageBuffer, 0, sizeof(GenAOColorData) * m_pBVH->GetBVHMeshData().primitive_num,
+		RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-	////sync gpu finish copy operation.
-	//m_pDeviceCtx->WaitForIdle();
+	//sync gpu finish copy operation.
+	m_pDeviceCtx->WaitForIdle();
 
-	//MapHelper<GenAOColorData> map_ao_color_datas(m_pDeviceCtx, m_apVertexAOColorStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+	MapHelper<GenAOColorData> map_ao_color_datas(m_pDeviceCtx, m_apTriangleFaceAOColorStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
 
-	//std::vector<GenAOColorData> out_color_cpu;
-	//out_color_cpu.resize(m_pBVH->GetBVHMeshData().vertex_num);
-	//memcpy(&out_color_cpu[0], &(*map_ao_color_datas), sizeof(GenAOColorData) * out_color_cpu.size());
+	std::vector<GenAOColorData> out_triangle_color_cpu;
+	out_triangle_color_cpu.resize(m_pBVH->GetBVHMeshData().primitive_num);
+	memcpy(&out_triangle_color_cpu[0], &(*map_ao_color_datas), sizeof(GenAOColorData) * out_triangle_color_cpu.size());
 
-	//aiScene *pFBXScene = m_pBVH->GetAssimpScene();
-	//unsigned int mesh_num = pFBXScene->mNumMeshes;
-	//Uint32 vertex_idx = 0;
-	//for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
-	//{
-	//	aiMesh* mesh_ptr = pFBXScene->mMeshes[mesh_i];
+	std::vector<GenAOColorData> out_vertex_color;
+	out_vertex_color.resize(m_pBVH->GetBVHMeshData().vertex_num);
+	std::unordered_map<Uint32, std::vector<Uint32>> *pSharedTriangleInVertexs = m_pBVH->GetSharedTrianglesInVertexs();
+	for (int v_i = 0; v_i < out_vertex_color.size(); ++v_i)
+	{
+		const std::vector<Uint32> &tri_idx_vec = (*pSharedTriangleInVertexs)[v_i];
 
-	//	int vertex_num = mesh_ptr->mNumVertices;
+		float avg_vc_lum = 0.0;
+		for each (Uint32 tri_idx in tri_idx_vec)
+		{
+			avg_vc_lum += out_triangle_color_cpu[tri_idx].lum;
+		}
+		avg_vc_lum /= tri_idx_vec.size();
 
-	//	for (int i = 0; i < vertex_num; ++i)
-	//	{
-	//		//set vertex color
-	//		aiColor4D** t_vertex_color = &(mesh_ptr->mColors[0]);
-	//		if (*t_vertex_color == nullptr)
-	//		{
-	//			*t_vertex_color = new aiColor4D[vertex_num];
-	//		}
-	//		mesh_ptr->mColors[0][i].r = out_color_cpu[vertex_idx++].lum;
-	//		mesh_ptr->mColors[0][i].g = 0.0f;
-	//		mesh_ptr->mColors[0][i].b = 0.0f;
-	//		mesh_ptr->mColors[0][i].a = 0.0f;
-	//	}
-	//}
+		GenAOColorData vc_data;
+		vc_data.lum = avg_vc_lum;
+		out_vertex_color[v_i] = vc_data;
+	}
 
-	//Assimp::Exporter exp;
-	//std::string out_put_mesh_name = m_mesh_file_name.substr(0, m_mesh_file_name.find('.')) + "_vc" + m_mesh_file_name.substr(m_mesh_file_name.find('.'));
-	//exp.Export(pFBXScene, "fbxa", out_put_mesh_name.c_str());
+	aiScene *pFBXScene = m_pBVH->GetAssimpScene();
+	unsigned int mesh_num = pFBXScene->mNumMeshes;
+	Uint32 vertex_idx = 0;
+	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
+	{
+		aiMesh* mesh_ptr = pFBXScene->mMeshes[mesh_i];
+
+		int vertex_num = mesh_ptr->mNumVertices;
+
+		for (int i = 0; i < vertex_num; ++i)
+		{
+			//set vertex color
+			aiColor4D** t_vertex_color = &(mesh_ptr->mColors[0]);
+			if (*t_vertex_color == nullptr)
+			{
+				*t_vertex_color = new aiColor4D[vertex_num];
+			}
+			mesh_ptr->mColors[0][i].r = out_vertex_color[vertex_idx++].lum;
+			mesh_ptr->mColors[0][i].g = 0.0f;
+			mesh_ptr->mColors[0][i].b = 0.0f;
+			mesh_ptr->mColors[0][i].a = 0.0f;
+		}
+	}
+
+	Assimp::Exporter exp;
+	std::string out_put_mesh_name = m_mesh_file_name.substr(0, m_mesh_file_name.find('.')) + "_vc" + m_mesh_file_name.substr(m_mesh_file_name.find('.'));
+	exp.Export(pFBXScene, "fbxa", out_put_mesh_name.c_str());
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVHTrace::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type /*= SHADER_TYPE_COMPUTE*/, ShaderMacroHelper *pMacro /*= nullptr*/)

@@ -143,6 +143,8 @@ namespace Diligent
 
 		BVHMeshData GetBVHMeshData() const;
 
+		std::unordered_map<Uint32, std::vector<Uint32>> *GetSharedTrianglesInVertexs();
+
 		aiScene* GetAssimpScene();
 
 	protected:
@@ -258,6 +260,8 @@ namespace Diligent
 		Assimp::Importer* m_assimp_importer;
 
 		RefCntAutoPtr<ITexture> m_apAOTex;
+
+		std::unordered_map<Uint32, std::vector<Uint32>> m_shared_triangle_in_vertexs;
 
 #if DILIGENT_DEBUG
 		RefCntAutoPtr<IPipelineState> m_apDebugBVHPSO;

@@ -210,12 +210,99 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 		indices_offset += vertex_num;
 	}
 
-	/*Exporter exp;
-	exp.Export(m_import_fbx_scene, "fbxa", "test_chaju.fbx");*/
+	//find shared triangles in vertexs		
+	struct VertexHash
+	{
+		float3 pos;
+		float3 normal;
 
-	//importer.FreeScene();
+		VertexHash(const float3 &p, const float3 &n) :
+			pos(p),
+			normal(n)
+		{}
 
-	//Uint32 *p = &mesh_index_data[0];
+		bool operator ==(const VertexHash &other) const
+		{
+			const float pos_eps = 0.01f;
+			const float normal_eps = 0.3f;
+
+			float3 pos_offset = other.pos - pos;
+			bool bPosSame = (std::fabsf(pos_offset.x) < pos_eps) && (std::fabsf(pos_offset.y) < pos_eps) && (std::fabsf(pos_offset.z) < pos_eps);
+			float3 normal_offset = other.normal - normal;
+			bool bNormalSame = (std::fabsf(normal_offset.x) < normal_eps) && (std::fabsf(normal_offset.y) < normal_eps) && (std::fabsf(normal_offset.z) < normal_eps);
+
+			if (bPosSame && bNormalSame)
+			{
+				return true;
+			}
+
+			return false;
+		}
+	};
+
+	struct VertexHashCombine
+	{
+		std::size_t operator()(VertexHash const& item) const
+		{
+			std::size_t seed = 0;
+			/*hash_combine(seed, item.pos);
+			hash_combine(seed, item.normal);*/
+			return seed;
+		}
+	};
+
+	std::unordered_map<VertexHash, std::vector<Uint32>, VertexHashCombine> shared_vertexs;
+	for (Uint32 v_i = 0; v_i < mesh_vertex_data.size(); ++v_i)
+	{
+		const BVHVertex &v = mesh_vertex_data[v_i];
+
+		VertexHash v_hash(v.pos, v.normal);
+
+		if (shared_vertexs.find(v_hash) == shared_vertexs.end())
+		{
+			std::vector<Uint32> v_idx_vec;
+			v_idx_vec.emplace_back(v_i);
+			shared_vertexs.insert(std::make_pair(v_hash, v_idx_vec));
+		}
+		else
+		{
+			shared_vertexs[v_hash].emplace_back(v_i);
+		}
+	}
+
+	for (Uint32 prim_i = 0; prim_i < mesh_index_data.size() / 3; ++prim_i)
+	{
+		Uint32 v0_idx = mesh_index_data[prim_i * 3];
+		Uint32 v1_idx = mesh_index_data[prim_i * 3 + 1];
+		Uint32 v2_idx = mesh_index_data[prim_i * 3 + 2];
+
+		auto find_and_insert = [&](Uint32 _idx)
+		{
+			const BVHVertex &v_data = mesh_vertex_data[_idx];
+			VertexHash v_hash(v_data.pos, v_data.normal);
+
+			const std::vector<Uint32> &s_vertexs_vec = shared_vertexs[v_hash];
+
+			for each (Uint32 shared_v_idx in s_vertexs_vec)
+			{
+				if (m_shared_triangle_in_vertexs.find(shared_v_idx) != m_shared_triangle_in_vertexs.end())
+				{
+					m_shared_triangle_in_vertexs[shared_v_idx].emplace_back(prim_i);
+				}
+				else
+				{
+					std::vector<Uint32> idx_vec;
+					idx_vec.emplace_back(prim_i);
+					m_shared_triangle_in_vertexs.insert(std::make_pair(shared_v_idx, idx_vec));
+				}
+			}			
+		};
+
+		find_and_insert(v0_idx);
+		find_and_insert(v1_idx);
+		find_and_insert(v2_idx);
+	}
+
 
 	// Create a vertex buffer that stores cube vertices
 	BufferDesc VertBuffDesc;
@@ -386,6 +473,11 @@ Diligent::ITexture * Diligent::BVH::GetAOTexture()
 Diligent::BVHMeshData Diligent::BVH::GetBVHMeshData() const
 {
 	return m_BVHMeshData;
+}
+
+std::unordered_map<Diligent::Uint32, std::vector<Diligent::Uint32>> * Diligent::BVH::GetSharedTrianglesInVertexs()
+{
+	return &m_shared_triangle_in_vertexs;
 }
 
 aiScene* Diligent::BVH::GetAssimpScene()

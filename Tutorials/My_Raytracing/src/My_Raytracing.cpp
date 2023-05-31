@@ -144,7 +144,8 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.InvalidUpdate();
 
 	std::vector<std::string> FileList;
-	FileList.emplace_back("chaju.fbx");
+	FileList.emplace_back("cjfj_guizi.FBX");
+	//FileList.emplace_back("test_combine_v.FBX");
 	/*FileList.emplace_back("cjfj_guizi.fbx");
 	FileList.emplace_back("heihufangjian_yugang.fbx");
 	FileList.emplace_back("ws_guahua_men.fbx");
@@ -164,7 +165,8 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		m_pMeshBVH->BuildBVH();
 
 		m_pTrace = new BVHTrace(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain, m_pMeshBVH, m_Camera, FileList[fidx]);
-		m_pTrace->DispatchVertexAOTrace();		
+		//m_pTrace->DispatchVertexAOTrace();		
+		m_pTrace->DispatchTriangleAOTrace();
 	}
 
 	IShaderResourceVariable *p_gtexture = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
