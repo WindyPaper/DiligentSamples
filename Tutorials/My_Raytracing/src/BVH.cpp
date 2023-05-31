@@ -17,6 +17,13 @@
 #include "assimp/postprocess.h"
 #include "assimp/Exporter.hpp"
 
+template <class T>
+inline void hash_combine(std::size_t & seed, const T & v)
+{
+	std::hash<T> hasher;
+	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
 Diligent::BVH::BVH(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice, IShaderSourceInputStreamFactory *pShaderFactory, const std::string &mesh_file_name) :
 	m_pDeviceCtx(pDeviceCtx),
 	m_pDevice(pDevice),
@@ -245,8 +252,8 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 		std::size_t operator()(VertexHash const& item) const
 		{
 			std::size_t seed = 0;
-			/*hash_combine(seed, item.pos);
-			hash_combine(seed, item.normal);*/
+			hash_combine(seed, item.pos);
+			//hash_combine(seed, item.normal);
 			return seed;
 		}
 	};
