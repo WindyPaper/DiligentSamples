@@ -53,8 +53,15 @@ namespace Diligent
 		int num_triangle;
 	};
 
+	struct TraceBakeMeshData
+	{
+		float4 BakeVerticalNorDir;
+	};
+
 	static const Uint32 VERTEX_AO_RAY_SAMPLE_NUM = 256;
 	static const Uint32 TRIANGLE_SUBDIVISION_NUM = 16;
+	static const Uint32 BAKE_MESH_TEX_XY = 256;
+	static const Uint32 BAKE_MESH_TEX_Z  = 32;
 
 	class BVHTrace
 	{
@@ -70,6 +77,8 @@ namespace Diligent
 
 		void DispatchVertexAOTrace();
 		void DispatchTriangleAOTrace();
+
+		void DispatchBakeMesh3DTexture();
 
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
@@ -93,6 +102,9 @@ namespace Diligent
 
 		void CreateTriangleFaceAOPSO();
 		void CreateTriangleFaceAOBuffer();
+
+		void CreateBakeMesh3DTexPSO();
+		void CreateBakeMesh3DTexBuffer();
 
 		void CreateTracePSO();
 		void CreateBuffer();
@@ -141,6 +153,12 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> m_apTriangleFaceAOColorUniformBuffer;
 		RefCntAutoPtr<IBuffer> m_apTriangleFaceAOColorBuffer;
 		RefCntAutoPtr<IBuffer> m_apTriangleFaceAOColorStageBuffer;
+
+		RefCntAutoPtr<IPipelineState> m_apBakeMesh3DTexPSO;
+		RefCntAutoPtr<IShaderResourceBinding> m_apBakeMesh3DTexSRB;
+		RefCntAutoPtr<ITexture> m_apBakeMesh3DTexData;
+		RefCntAutoPtr<IBuffer> m_apBakeMesh3DTexUniformBuffer;
+
 
 		FirstPersonCamera m_Camera;
 		std::string m_mesh_file_name;

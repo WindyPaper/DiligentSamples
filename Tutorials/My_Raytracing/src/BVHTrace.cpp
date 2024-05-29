@@ -43,6 +43,9 @@ Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice,
 
 	CreateTriangleFaceAOPSO();
 	CreateTriangleFaceAOBuffer();
+
+	CreateBakeMesh3DTexPSO();
+	CreateBakeMesh3DTexBuffer();
 }
 
 Diligent::BVHTrace::~BVHTrace()
@@ -269,6 +272,36 @@ void Diligent::BVHTrace::DispatchTriangleAOTrace()
 	Assimp::Exporter exp;
 	std::string out_put_mesh_name = m_mesh_file_name.substr(0, m_mesh_file_name.find('.')) + "_vc" + m_mesh_file_name.substr(m_mesh_file_name.find('.'));
 	exp.Export(pFBXScene, "fbxa", out_put_mesh_name.c_str());
+}
+
+void Diligent::BVHTrace::DispatchBakeMesh3DTexture()
+{
+	m_pDeviceCtx->SetPipelineState(m_apBakeMesh3DTexPSO);
+
+	{
+		MapHelper<TraceBakeMeshData> TraceBakeMeshUniformData(m_pDeviceCtx, m_apBakeMesh3DTexUniformBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+		float3 BakeInitDir = normalize(float3(-1.0f, -1.0f, 0.0f));
+		TraceBakeMeshUniformData->BakeVerticalNorDir = float4(BakeInitDir, 0.0f);
+	}
+
+	m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "TraceBakeMeshData")->Set(m_apBakeMesh3DTexUniformBuffer);
+	IShaderResourceVariable* pMeshVertex = m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshVertex");
+	if (pMeshVertex)
+		pMeshVertex->Set(m_pBVH->GetMeshVertexBufferView());
+	IShaderResourceVariable* pMeshIdx = m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshIdx");
+	if (pMeshIdx)
+		pMeshIdx->Set(m_pBVH->GetMeshIdxBufferView());
+	IShaderResourceVariable* pMeshPrimData = m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "MeshPrimData");
+	if (pMeshPrimData)
+		pMeshPrimData->Set(m_pBVH->GetMeshPrimBufferView());
+	m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
+	m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());
+	m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Out3DTex")->Set(m_apBakeMesh3DTexData->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+	m_pDeviceCtx->CommitShaderResources(m_apBakeMesh3DTexSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	DispatchComputeAttribs attr(std::ceilf(BAKE_MESH_TEX_XY/16.0f), std::ceilf(BAKE_MESH_TEX_XY/16.0f), BAKE_MESH_TEX_Z);
+	m_pDeviceCtx->DispatchCompute(attr);
 }
 
 Diligent::RefCntAutoPtr<Diligent::IShader> Diligent::BVHTrace::CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type /*= SHADER_TYPE_COMPUTE*/, ShaderMacroHelper *pMacro /*= nullptr*/)
@@ -684,6 +717,77 @@ void Diligent::BVHTrace::CreateTriangleFaceAOBuffer()
 	TriangleFaceAOUniformDataDesc.ElementByteStride = sizeof(GenTriangleFaceAOUniformData);
 	TriangleFaceAOUniformDataDesc.uiSizeInBytes = sizeof(GenTriangleFaceAOUniformData);
 	m_pDevice->CreateBuffer(TriangleFaceAOUniformDataDesc, nullptr, &m_apTriangleFaceAOColorUniformBuffer);
+}
+
+void Diligent::BVHTrace::CreateBakeMesh3DTexPSO()
+{	
+	ShaderMacroHelper Macros;
+	Macros.AddShaderMacro("BAKE_MESH_TEX_XY", BAKE_MESH_TEX_XY);
+	Macros.AddShaderMacro("BAKE_MESH_TEX_Z", BAKE_MESH_TEX_Z);
+	RefCntAutoPtr<IShader> pTraceBakeMeshShader = CreateShader("TraceBakeMesh3DTexMain", "Trace.csh", "trace bake mesh 3d tex", SHADER_TYPE_COMPUTE, &Macros);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "MeshVertex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshIdx", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "MeshPrimData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "BVHNodeData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "BVHNodeAABB", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "TraceUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "TraceBakeMeshData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "Out3DTex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "trace bake mesh pso");
+
+	//SamplerDesc SamLinearClampDesc
+	//{
+	//	FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+	//	TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
+	//};
+	//ImmutableSamplerDesc ImtblSamplers[] =
+	//{
+	//	{SHADER_TYPE_COMPUTE, "DiffTextures", SamLinearClampDesc}
+	//};
+	//// clang-format on
+	//PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	//PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+
+	PSOCreateInfo.pCS = pTraceBakeMeshShader;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apBakeMesh3DTexPSO);
+
+	//SRB
+	m_apBakeMesh3DTexPSO->CreateShaderResourceBinding(&m_apBakeMesh3DTexSRB, true);
+}
+
+void Diligent::BVHTrace::CreateBakeMesh3DTexBuffer()
+{
+	BufferDesc BakeMeshBufferDesc;
+	BakeMeshBufferDesc.Name = "Bake Mesh 3DTex Uniform Buffer";
+	BakeMeshBufferDesc.Usage = USAGE_DYNAMIC;
+	BakeMeshBufferDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	BakeMeshBufferDesc.Mode = BUFFER_MODE_STRUCTURED;
+	BakeMeshBufferDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	BakeMeshBufferDesc.ElementByteStride = sizeof(TraceBakeMeshData);
+	BakeMeshBufferDesc.uiSizeInBytes = sizeof(TraceBakeMeshData);
+	m_pDevice->CreateBuffer(BakeMeshBufferDesc, nullptr, &m_apBakeMesh3DTexUniformBuffer);
+
+	TextureDesc BakeMesh3DTextureDesc;
+	BakeMesh3DTextureDesc.Name = "Bake Mesh 3DTexture";
+	BakeMesh3DTextureDesc.Type = RESOURCE_DIM_TEX_3D;
+	BakeMesh3DTextureDesc.Width = BAKE_MESH_TEX_XY;
+	BakeMesh3DTextureDesc.Height = BAKE_MESH_TEX_XY;
+	BakeMesh3DTextureDesc.Depth = BAKE_MESH_TEX_Z;
+	BakeMesh3DTextureDesc.MipLevels = 1;
+	BakeMesh3DTextureDesc.Format = TEX_FORMAT_RGBA32_FLOAT;// TEX_FORMAT_RGBA8_UINT;
+	BakeMesh3DTextureDesc.Usage = USAGE_DYNAMIC;
+	BakeMesh3DTextureDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(BakeMesh3DTextureDesc, nullptr, &m_apBakeMesh3DTexData);
 }
 
 void Diligent::BVHTrace::CreateTracePSO()

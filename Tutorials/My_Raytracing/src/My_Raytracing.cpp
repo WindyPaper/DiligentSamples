@@ -144,7 +144,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.InvalidUpdate();
 
 	std::vector<std::string> FileList;
-	FileList.emplace_back("cjfj_guizi.FBX");
+	FileList.emplace_back("test_grass.FBX");
 	//FileList.emplace_back("test_combine_v.FBX");
 	/*FileList.emplace_back("cjfj_guizi.fbx");
 	FileList.emplace_back("heihufangjian_yugang.fbx");
@@ -166,7 +166,10 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 
 		m_pTrace = new BVHTrace(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain, m_pMeshBVH, m_Camera, FileList[fidx]);
 		//m_pTrace->DispatchVertexAOTrace();		
-		m_pTrace->DispatchTriangleAOTrace();
+		//m_pTrace->DispatchTriangleAOTrace();
+
+		//bake texture
+		m_pTrace->DispatchBakeMesh3DTexture();
 	}
 
 	IShaderResourceVariable *p_gtexture = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
@@ -180,6 +183,8 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 // Render a frame
 void MyRayTracing::Render()
 {
+	//m_pTrace->DispatchBakeMesh3DTexture();
+
 	m_pTrace->DispatchBVHTrace();
 
     // Clear the back buffer
