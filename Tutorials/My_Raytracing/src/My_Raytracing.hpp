@@ -34,6 +34,7 @@ namespace Diligent
 {
 	class BVH;
 	class BVHTrace;
+	class BVHMeshData;
 
 class MyRayTracing final : public SampleBase
 {
@@ -50,6 +51,8 @@ public:
 	virtual void WindowResize(Uint32 Width, Uint32 Height);
 
 protected:
+	void load_mesh();
+
 	void UpdateUI();
 
 private:
@@ -57,10 +60,16 @@ private:
 	RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 	RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
 
+	RefCntAutoPtr<IBuffer> m_VSConstants;
+
 	FirstPersonCamera m_Camera;
 
 	BVH *m_pMeshBVH;
 	BVHTrace *m_pTrace;
+
+	RefCntAutoPtr<IBuffer> m_apPlaneMeshVertexData;
+	RefCntAutoPtr<IBuffer> m_apPlaneMeshIndexData;
+	BVHMeshData *m_pPlaneMeshData;
 };
 
 } // namespace Diligent

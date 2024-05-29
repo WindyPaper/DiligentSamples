@@ -75,6 +75,8 @@ namespace Diligent
 
 		ITexture *GetOutputPixelTex();
 
+		ITexture *GetBakeMesh3DTexture();
+
 		void DispatchVertexAOTrace();
 		void DispatchTriangleAOTrace();
 

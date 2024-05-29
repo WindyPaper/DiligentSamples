@@ -97,6 +97,11 @@ Diligent::ITexture * Diligent::BVHTrace::GetOutputPixelTex()
 	return m_apOutRTPixelTex;
 }
 
+Diligent::ITexture * Diligent::BVHTrace::GetBakeMesh3DTexture()
+{
+	return m_apBakeMesh3DTexData;
+}
+
 void Diligent::BVHTrace::DispatchVertexAOTrace()
 {
 	GenVertexAORays();

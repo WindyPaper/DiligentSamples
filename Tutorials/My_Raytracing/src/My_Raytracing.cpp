@@ -29,11 +29,14 @@
 #include "BVH.h"
 #include "BVHTrace.h"
 #include "CommonlyUsedStates.h"
+#include "MapHelper.hpp"
 
 #include "imgui.h"
 #include "imGuIZMO.h"
 #include "ImGuiUtils.hpp"
 
+#include "assimp/postprocess.h"
+#include "assimp/Exporter.hpp"
 
 namespace Diligent
 {
@@ -68,9 +71,9 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
     // Primitive topology defines what kind of primitives will be rendered by this pipeline state
     PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
     // No back face culling for this tutorial
-    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_BACK;
     // Disable depth testing
-    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = False;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = True;
     // clang-format on
 
     ShaderCreateInfo ShaderCI;
@@ -82,27 +85,36 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_pEngineFactory->CreateDefaultShaderSourceStreamFactory(nullptr, &m_pShaderSourceFactory);
 	ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
     // Create a vertex shader
-    RefCntAutoPtr<IShader> pVS;
-    {
-        ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
-        ShaderCI.EntryPoint      = "main";
-        ShaderCI.Desc.Name       = "Triangle vertex shader";
-        ShaderCI.FilePath		 = "simple_vs.vs";
-        m_pDevice->CreateShader(ShaderCI, &pVS);
-    }
+	RefCntAutoPtr<IShader> pVS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "simple obj VS";
+		ShaderCI.FilePath = "simple_obj.vsh";
+		m_pDevice->CreateShader(ShaderCI, &pVS);
+		// Create dynamic uniform buffer that will store our transformation matrix
+		// Dynamic buffers can be frequently updated by the CPU
+		BufferDesc CBDesc;
+		CBDesc.Name = "VS constants CB";
+		CBDesc.uiSizeInBytes = sizeof(float4x4);
+		CBDesc.Usage = USAGE_DYNAMIC;
+		CBDesc.BindFlags = BIND_UNIFORM_BUFFER;
+		CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+		m_pDevice->CreateBuffer(CBDesc, nullptr, &m_VSConstants);
+	}
 
-    // Create a pixel shader
-    RefCntAutoPtr<IShader> pPS;
-    {
-        ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
-        ShaderCI.EntryPoint      = "main";
-        ShaderCI.Desc.Name       = "Triangle pixel shader";
-        ShaderCI.FilePath		 = "simple_ps.ps";
-        m_pDevice->CreateShader(ShaderCI, &pPS);
-    }
+	// Create a pixel shader
+	RefCntAutoPtr<IShader> pPS;
+	{
+		ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
+		ShaderCI.EntryPoint = "main";
+		ShaderCI.Desc.Name = "simple_obj PS";
+		ShaderCI.FilePath = "simple_obj.psh";
+		m_pDevice->CreateShader(ShaderCI, &pPS);
+	}
 
 	// Define variable type that will be used by default
-	PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
+	PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
 
 	// clang-format off
 	// Shader variables should typically be mutable, which means they are expected
@@ -125,11 +137,35 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
 	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
 
+	// Define vertex shader input layout
+	LayoutElement LayoutElems[] =
+	{
+		// Attribute 0 - vertex position
+		LayoutElement{0, 0, 3, VT_FLOAT32, False},
+		// Attribute 1 - normal
+		LayoutElement{1, 0, 3, VT_FLOAT32, False},
+		//uv0
+		LayoutElement{2, 0, 2, VT_FLOAT32, False},
+		//uv1
+		LayoutElement{3, 0, 2, VT_FLOAT32, False},
+	};
+	// clang-format on
+	PSOCreateInfo.GraphicsPipeline.InputLayout.LayoutElements = LayoutElems;
+	PSOCreateInfo.GraphicsPipeline.InputLayout.NumElements = _countof(LayoutElems);		
+
     // Finally, create the pipeline state
     PSOCreateInfo.pVS = pVS;
     PSOCreateInfo.pPS = pPS;
-    m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPSO);
+    m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pPSO);	
+
+	// Since we did not explcitly specify the type for 'Constants' variable, default
+	// type (SHADER_RESOURCE_VARIABLE_TYPE_STATIC) will be used. Static variables never
+	// change and are bound directly through the pipeline state object.
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_VSConstants);
+
 	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);	
+
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_VSConstants);
 
 	//-----	
 
@@ -139,7 +175,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
-	m_Camera.SetPos(float3(0.0f, 0.0f, -50.0f));
+	m_Camera.SetPos(float3(0.0f, 20.0f, -100.0f));
 	m_Camera.SetMoveSpeed(10.0f);
 	m_Camera.InvalidUpdate();
 
@@ -154,6 +190,10 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		
 	m_pMeshBVH = nullptr;
 	m_pTrace = nullptr;
+	m_pPlaneMeshData = nullptr;
+
+	load_mesh();
+
 	for (int fidx = 0; fidx < FileList.size(); ++fidx)
 	{
 		if (m_pMeshBVH)
@@ -170,13 +210,15 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 
 		//bake texture
 		m_pTrace->DispatchBakeMesh3DTexture();
+
+		m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(m_pTrace->GetBakeMesh3DTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	}
 
-	IShaderResourceVariable *p_gtexture = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
+	/*IShaderResourceVariable *p_gtexture = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
 	if (p_gtexture)
 	{
 		p_gtexture->Set(m_pTrace->GetOutputPixelTex()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	}
+	}*/
 	
 }
 
@@ -185,27 +227,49 @@ void MyRayTracing::Render()
 {
 	//m_pTrace->DispatchBakeMesh3DTexture();
 
-	m_pTrace->DispatchBVHTrace();
+	//m_pTrace->DispatchBVHTrace();
 
-    // Clear the back buffer
-    const float ClearColor[] = {0.350f, 0.350f, 0.350f, 1.0f};
-    // Let the engine perform required state transitions
-    auto* pRTV = m_pSwapChain->GetCurrentBackBufferRTV();
-    auto* pDSV = m_pSwapChain->GetDepthBufferDSV();
-    m_pImmediateContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
-    m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	auto* pRTV = m_pSwapChain->GetCurrentBackBufferRTV();
+	auto* pDSV = m_pSwapChain->GetDepthBufferDSV();
+	// Clear the back buffer
+	const float ClearColor[] = { 0.350f, 0.350f, 0.350f, 1.0f };
+	m_pImmediateContext->ClearRenderTarget(pRTV, ClearColor, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	m_pImmediateContext->ClearDepthStencil(pDSV, CLEAR_DEPTH_FLAG, 1.f, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    // Set the pipeline state in the immediate context
-    m_pImmediateContext->SetPipelineState(m_pPSO);
+	//render plane
+	{
+		// Map the buffer and write current world-view-projection matrix
+		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_VSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
+		*CBConstants = m_Camera.GetViewProjMatrix().Transpose();
+	}
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_VSConstants);
 
-	//m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_texture")->Set(m_pTrace->GetOutputPixelTex()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	
+	// Bind vertex and index buffers
+	Uint32   offset = 0;
+	IBuffer* pBuffs[] = { m_apPlaneMeshVertexData };
+	m_pImmediateContext->SetVertexBuffers(0, 1, pBuffs, &offset, RESOURCE_STATE_TRANSITION_MODE_TRANSITION, SET_VERTEX_BUFFERS_FLAG_RESET);
+	m_pImmediateContext->SetIndexBuffer(m_apPlaneMeshIndexData, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	// Set the pipeline state
+	m_pImmediateContext->SetPipelineState(m_pPSO);
+	// Commit shader resources. RESOURCE_STATE_TRANSITION_MODE_TRANSITION mode
+	// makes sure that resources are transitioned to required states.
 	m_pImmediateContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-    DrawAttribs drawAttrs;
-	drawAttrs.NumVertices = 4;
-	drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL; // Verify the state of vertex and index buffers
-    m_pImmediateContext->Draw(drawAttrs);
+	DrawIndexedAttribs DrawAttrs;     // This is an indexed draw call
+	DrawAttrs.IndexType = VT_UINT32; // Index type
+	DrawAttrs.NumIndices = m_pPlaneMeshData->index_num;
+	// Verify the state of vertex and index buffers
+	DrawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
+	m_pImmediateContext->DrawIndexed(DrawAttrs);
+
+	
+	//m_pImmediateContext->CommitShaderResources(m_pSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+ //   DrawAttribs drawAttrs;
+	//drawAttrs.NumVertices = 4;
+	//drawAttrs.Flags = DRAW_FLAG_VERIFY_ALL; // Verify the state of vertex and index buffers
+ //   m_pImmediateContext->Draw(drawAttrs);
 }
 
 void MyRayTracing::Update(double CurrTime, double ElapsedTime)
@@ -232,6 +296,12 @@ MyRayTracing::~MyRayTracing()
 		delete m_pTrace;
 		m_pTrace = nullptr;
 	}
+
+	if (m_pPlaneMeshData)
+	{
+		delete m_pPlaneMeshData;
+		m_pPlaneMeshData = nullptr;
+	}
 }
 
 void MyRayTracing::WindowResize(Uint32 Width, Uint32 Height)
@@ -256,6 +326,110 @@ void MyRayTracing::UpdateUI()
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 	}
 	ImGui::End();
+}
+
+void MyRayTracing::load_mesh()
+{
+	if (m_pPlaneMeshData)
+	{
+		delete m_pPlaneMeshData;
+		m_pPlaneMeshData = nullptr;
+	}
+
+	if (m_pPlaneMeshData == nullptr)
+	{
+		m_pPlaneMeshData = new BVHMeshData();
+	}
+
+	using namespace Assimp;
+	Importer* p_assimp_importer = new Importer();
+	unsigned int flags = aiProcess_Triangulate |
+		aiProcess_JoinIdenticalVertices |
+		aiProcess_PreTransformVertices |
+		aiProcess_RemoveRedundantMaterials |
+		aiProcess_OptimizeMeshes |
+		aiProcess_ConvertToLeftHanded;
+	aiScene* p_import_fbx_scene = (aiScene*)(p_assimp_importer->ReadFile("./test_plane.fbx", flags));
+
+	if (p_import_fbx_scene == NULL)
+	{
+		std::string error_code = p_assimp_importer->GetErrorString();
+		printf("Load FBX", "load fbx file failed! " + error_code);
+		return;
+	}
+
+	int indices_offset = 0;
+	unsigned int mesh_num = p_import_fbx_scene->mNumMeshes;
+
+	std::vector<BVHVertex> mesh_vertex_data;
+	std::vector<Uint32> mesh_index_data;
+
+	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
+	{
+		aiMesh* mesh_ptr = p_import_fbx_scene->mMeshes[mesh_i];
+		const aiMaterial *mats = p_import_fbx_scene->mMaterials[mesh_ptr->mMaterialIndex];
+
+		int vertex_num = mesh_ptr->mNumVertices;
+
+		for (int i = 0; i < vertex_num; ++i)
+		{
+			const aiVector3D& v = mesh_ptr->mVertices[i];
+			const aiVector3D& uv = mesh_ptr->mTextureCoords[0][i];
+			aiVector3D uv1;
+			if (mesh_ptr->mTextureCoords[1])
+			{
+				uv1 = mesh_ptr->mTextureCoords[1][i];
+			}
+			const aiVector3D& normal = mesh_ptr->mNormals[i];
+
+			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y), float2(uv1.x, uv1.y)));
+		}
+
+		int triangle_num = mesh_ptr->mNumFaces;
+		//int index_num = triangle_num * 3;
+		for (int i = 0; i < triangle_num; ++i)
+		{
+			const aiFace& face = mesh_ptr->mFaces[i];
+			//pMesh->triangles.emplace_back(Triangle{ face.mIndices[0], face.mIndices[1], face.mIndices[2] });
+			for (int tri = 0; tri < 3; ++tri)
+			{
+				mesh_index_data.emplace_back(face.mIndices[tri] + indices_offset);
+			}
+		}
+		indices_offset += vertex_num;
+	}	
+
+	// Create a vertex buffer that stores cube vertices
+	BufferDesc VertBuffDesc;
+	VertBuffDesc.Name = "mesh vertex buffer";
+	VertBuffDesc.Usage = USAGE_IMMUTABLE;
+	VertBuffDesc.BindFlags = BIND_VERTEX_BUFFER;
+	VertBuffDesc.uiSizeInBytes = sizeof(BVHVertex) * mesh_vertex_data.size();
+	BufferData VBData;
+	VBData.pData = &mesh_vertex_data[0];
+	VBData.DataSize = VertBuffDesc.uiSizeInBytes;
+	m_pDevice->CreateBuffer(VertBuffDesc, &VBData, &m_apPlaneMeshVertexData);
+
+	BufferDesc IndBuffDesc;
+	IndBuffDesc.Name = "mesh index buffer";
+	IndBuffDesc.Usage = USAGE_IMMUTABLE;
+	IndBuffDesc.BindFlags = BIND_INDEX_BUFFER;	
+	IndBuffDesc.uiSizeInBytes = sizeof(Uint32) * mesh_index_data.size();
+	BufferData IBData;
+	IBData.pData = &mesh_index_data[0];
+	IBData.DataSize = IndBuffDesc.uiSizeInBytes;
+	m_pDevice->CreateBuffer(IndBuffDesc, &IBData, &m_apPlaneMeshIndexData);
+
+	m_pPlaneMeshData->vertex_num = mesh_vertex_data.size();
+	m_pPlaneMeshData->index_num = mesh_index_data.size();
+
+	if (p_assimp_importer)
+	{
+		p_assimp_importer->FreeScene();
+
+		delete p_assimp_importer;
+		p_assimp_importer = nullptr;
+	}
 }
 
 } // namespace Diligent
