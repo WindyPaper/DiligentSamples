@@ -19,9 +19,6 @@ StructuredBuffer<BVHAABB> BVHNodeAABB;
 #   define DIFFUSE_TEX_NUM 1
 #endif
 
-Texture2D DiffTextures[DIFFUSE_TEX_NUM];
-SamplerState DiffTextures_sampler; // By convention, texture samplers must use the '_sampler' suffix
-
 RWTexture2D<float4> OutPixel;
 
 #define kEpsilon 0.00001
@@ -219,3 +216,4 @@ void RayTrace(RayData ray, inout float hit_min, inout uint hit_idx_prim, inout f
 #include "GenTriangleAORaysMain.csh"
 #include "GenTriangleAOPosMain.csh"
 #include "GenTriangleAOColorMain.csh"
+#include "TraceBakeMesh3DTex.csh"

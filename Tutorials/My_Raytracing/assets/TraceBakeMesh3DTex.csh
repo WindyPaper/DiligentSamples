@@ -44,7 +44,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     uint layer_idx = id.z;
 
     float rotate_rad_interp = float(layer_idx) / BAKE_MESH_TEX_Z;
-    float rotate_rad = lerp(-1.0f, 1.0f, rotate_rad_interp);
+    float rotate_rad = lerp(0.0f, 3.14f, rotate_rad_interp);
 
     float3 y_up = float3(0.0f, 1.0f, 0.0f);
     float3x3 rotate_mat = AngleAxis3x3(-rotate_rad, y_up); //neg 
@@ -56,8 +56,11 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     float per_texel_w = (MeshAABB.upper.x - MeshAABB.lower.x) / BAKE_MESH_TEX_XY;
     float per_texel_h = (MeshAABB.upper.z - MeshAABB.lower.z) / BAKE_MESH_TEX_XY;
 
+    float2 ray_start_xz = MeshAABB.lower.xz;
+    float2 ray_offset_xz = ray_start_xz + float2((id.x + 0.5f) * per_texel_w, (id.y + 0.5f) * per_texel_h);
+
     //offset avoid self-intersection
-    float3 ray_origin = float3((id.x + 0.5f) * per_texel_w, bake_plane_y, (id.y + 0.5f) * per_texel_h) - curr_layer_bake_dir * 0.01f;
+    float3 ray_origin = float3(ray_offset_xz.x, bake_plane_y, ray_offset_xz.y) - curr_layer_bake_dir * 0.01f;
 
     RayData ray;
     ray.dir = curr_layer_bake_dir;
@@ -87,13 +90,14 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
         float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
         float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;       
 
-        float hit_depth = min_near;        
+        float hit_depth = min_near * 0.1f;
         Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));
+        //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, min_near);
     }
     else
     {
-        float2 hdr_uv = DirToUV_Normalize(ray.dir);
-        float4 sky_color = SkyHDRTexture.SampleLevel(SkyHDRTexture_sampler, hdr_uv, 0);
+        // float2 hdr_uv = DirToUV_Normalize(ray.dir);
+        // float4 sky_color = SkyHDRTexture.SampleLevel(SkyHDRTexture_sampler, hdr_uv, 0);
 
         Out3DTex[out_3dtex_idx] = float4(0.0f, 1.0f, 0.0f, 0.0f);
     }

@@ -1,3 +1,19 @@
+Texture2D DiffTextures[DIFFUSE_TEX_NUM];
+SamplerState DiffTextures_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
+Texture2D SkyHDRTexture;
+SamplerState SkyHDRTexture_sampler; // By convention, texture samplers must use the '_sampler' suffix
+
+float2 DirToUV_Normalize(float3 n)
+{
+	n = normalize(n);
+	float2 uv;
+
+	uv.x = atan(n.z/n.x) / 3.14f;
+	uv.y = acos(n.y) / ( 1.0f * 3.14f);
+	return uv;
+}
+
 [numthreads(16, 16, 1)]
 void TraceMain(uint3 id : SV_DispatchThreadID)
 {
@@ -41,7 +57,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;
 
         //get mat texture
-        float4 diff_tex_data = DiffTextures[MeshPrimData[hit_idx_prim].tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);
+        //float4 diff_tex_data = DiffTextures[MeshPrimData[hit_idx_prim].tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);
 
         // float profile_color_intensity = float(search_num) / PROFILE_MAX_SEARCH_NUM;
         // float3 red_color = float3(1.0f, 0.0f, 0.0f);
@@ -64,6 +80,9 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
     }
     else
     {
-        OutPixel[pixel_pos] = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        float2 hdr_uv = DirToUV_Normalize(ray.dir);
+        float4 sky_color = SkyHDRTexture.SampleLevel(SkyHDRTexture_sampler, hdr_uv, 0);
+
+        OutPixel[pixel_pos] = sky_color;
     }
 }
