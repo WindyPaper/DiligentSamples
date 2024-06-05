@@ -13,7 +13,7 @@ struct PSInput
 struct PSOutput
 { 
     float4 Color : SV_TARGET; 
-    //float depth : SV_Depth;
+    float depth : SV_Depth;
 };
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
@@ -22,7 +22,7 @@ struct PSOutput
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
-    float3 view_dir = normalize(g_CamPos - PSIn.PixelWPos);
+    float3 view_dir = normalize(g_CamPos - PSIn.PixelWPos.xyz);
     float3 bake_start_dir = float3(1.0f, 0.0f, 0.0f);
     float sample_z = 1.0f - (dot(bake_start_dir, normalize(float3(view_dir.x, 0.0f, view_dir.z))) * 0.5f + 0.5f);
     //PSOut.Color = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, 0.0f)); 
@@ -33,12 +33,13 @@ void main(in  PSInput  PSIn,
 
     float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
 
-    float3 new_offset_pos = PSIn.Pos - view_dir * offset_depth;
+    float3 new_offset_pos = PSIn.PixelWPos - view_dir * offset_depth;
 
-    float4 new_ndc_pos = mul(float4(new_offset_pos,1.0), g_WorldViewProj);
+    //float4 new_ndc_pos = mul(float4(new_offset_pos,1.0), g_WorldViewProj);
+    float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);
     float new_depth = new_ndc_pos.z / new_ndc_pos.w;
 
-    //PSOut.depth = new_depth;
+    PSOut.depth = new_depth;
 
     //PSOut.OutDepth = g_Texture.Sample(g_Texture_sampler, float3)
 }

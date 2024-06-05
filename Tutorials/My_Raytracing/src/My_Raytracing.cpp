@@ -41,6 +41,13 @@
 namespace Diligent
 {
 
+	struct SimpleObjConstants
+	{
+		float4x4 g_WorldViewProj;
+		float4 g_CamPos;
+		float g_BakeDirNum;
+	};
+
 SampleBase* CreateSample()
 {
     return new MyRayTracing();
@@ -91,16 +98,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		ShaderCI.EntryPoint = "main";
 		ShaderCI.Desc.Name = "simple obj VS";
 		ShaderCI.FilePath = "simple_obj.vsh";
-		m_pDevice->CreateShader(ShaderCI, &pVS);
-		// Create dynamic uniform buffer that will store our transformation matrix
-		// Dynamic buffers can be frequently updated by the CPU
-		BufferDesc CBDesc;
-		CBDesc.Name = "VS constants CB";
-		CBDesc.uiSizeInBytes = sizeof(float4x4);
-		CBDesc.Usage = USAGE_DYNAMIC;
-		CBDesc.BindFlags = BIND_UNIFORM_BUFFER;
-		CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
-		m_pDevice->CreateBuffer(CBDesc, nullptr, &m_VSConstants);
+		m_pDevice->CreateShader(ShaderCI, &pVS);		
 	}
 
 	// Create a pixel shader
@@ -112,6 +110,16 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		ShaderCI.FilePath = "simple_obj.psh";
 		m_pDevice->CreateShader(ShaderCI, &pPS);
 	}
+
+	// Create dynamic uniform buffer that will store our transformation matrix
+	// Dynamic buffers can be frequently updated by the CPU
+	BufferDesc CBDesc;
+	CBDesc.Name = "simple obj constants CB";
+	CBDesc.uiSizeInBytes = sizeof(SimpleObjConstants);
+	CBDesc.Usage = USAGE_DYNAMIC;
+	CBDesc.BindFlags = BIND_UNIFORM_BUFFER;
+	CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+	m_pDevice->CreateBuffer(CBDesc, nullptr, &m_VSConstants);
 
 	// Define variable type that will be used by default
 	PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
@@ -131,7 +139,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	// Define immutable sampler for g_Texture. Immutable samplers should be used whenever possible
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{ SHADER_TYPE_PIXEL, "g_Texture", Sam_LinearClamp }
+		{ SHADER_TYPE_PIXEL, "g_Texture", Sam_LinearWrap }
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
@@ -161,11 +169,10 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	// Since we did not explcitly specify the type for 'Constants' variable, default
 	// type (SHADER_RESOURCE_VARIABLE_TYPE_STATIC) will be used. Static variables never
 	// change and are bound directly through the pipeline state object.
-	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_VSConstants);
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "SimpleObjConstants")->Set(m_VSConstants);
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "SimpleObjConstants")->Set(m_VSConstants);
 
-	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);	
-
-	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_VSConstants);
+	m_pPSO->CreateShaderResourceBinding(&m_pSRB, true);
 
 	//-----	
 
@@ -239,10 +246,13 @@ void MyRayTracing::Render()
 	//render plane
 	{
 		// Map the buffer and write current world-view-projection matrix
-		MapHelper<float4x4> CBConstants(m_pImmediateContext, m_VSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
-		*CBConstants = m_Camera.GetViewProjMatrix().Transpose();
+		MapHelper<SimpleObjConstants> CBConstants(m_pImmediateContext, m_VSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
+		CBConstants->g_WorldViewProj = m_Camera.GetViewProjMatrix().Transpose();
+		CBConstants->g_CamPos = m_Camera.GetPos();
+		CBConstants->g_BakeDirNum = BAKE_MESH_TEX_Z;
 	}
-	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants")->Set(m_VSConstants);
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "SimpleObjConstants")->Set(m_VSConstants);
+	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "SimpleObjConstants")->Set(m_VSConstants);
 
 	// Bind vertex and index buffers
 	Uint32   offset = 0;
