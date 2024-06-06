@@ -184,8 +184,8 @@ public:
     {
         m_hWnd = hWnd;
 
-        try
-        {
+        /*try
+        {*/
             Win32NativeWindow Window{hWnd};
             InitializeDiligentEngine(&Window);
 
@@ -194,11 +194,11 @@ public:
             m_pImGui.reset(new ImGuiImplWin32(m_hWnd, m_pDevice, SCDesc.ColorBufferFormat, SCDesc.DepthBufferFormat));
 
             InitializeSample();
-        }
-        catch (...)
-        {
-            LOG_ERROR("Failed to initialize Diligent Engine.");
-        }
+			/*}
+			catch (...)
+			{
+				LOG_ERROR("Failed to initialize Diligent Engine.");
+			}*/
     }
 
 

@@ -80,7 +80,7 @@ namespace Diligent
 		void DispatchVertexAOTrace();
 		void DispatchTriangleAOTrace();
 
-		void DispatchBakeMesh3DTexture();
+		void DispatchBakeMesh3DTexture(const float3 &BakeInitDir);
 
 	protected:
 		RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);

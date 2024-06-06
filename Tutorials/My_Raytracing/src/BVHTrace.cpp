@@ -279,13 +279,13 @@ void Diligent::BVHTrace::DispatchTriangleAOTrace()
 	exp.Export(pFBXScene, "fbxa", out_put_mesh_name.c_str());
 }
 
-void Diligent::BVHTrace::DispatchBakeMesh3DTexture()
+void Diligent::BVHTrace::DispatchBakeMesh3DTexture(const float3 &BakeInitDir)
 {
 	m_pDeviceCtx->SetPipelineState(m_apBakeMesh3DTexPSO);
 
 	{
 		MapHelper<TraceBakeMeshData> TraceBakeMeshUniformData(m_pDeviceCtx, m_apBakeMesh3DTexUniformBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
-		float3 BakeInitDir = normalize(float3(-1.0f, -1.0f, 0.0f));
+		//float3 BakeInitDir = normalize(float3(-1.0f, -1.0f, 0.0f));
 		TraceBakeMeshUniformData->BakeVerticalNorDir = float4(BakeInitDir, 0.0f);
 	}
 

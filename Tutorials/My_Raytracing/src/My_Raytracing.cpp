@@ -45,7 +45,7 @@ namespace Diligent
 	{
 		float4x4 g_WorldViewProj;
 		float4 g_CamPos;
-		float g_BakeDirNum;
+		float4 g_BakeDirAndNum;
 	};
 
 SampleBase* CreateSample()
@@ -186,6 +186,8 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.SetMoveSpeed(10.0f);
 	m_Camera.InvalidUpdate();
 
+	BakeInitDir = normalize(float3(-1.0f, -1.0f, 0.0f));
+
 	std::vector<std::string> FileList;
 	FileList.emplace_back("test_grass.FBX");
 	//FileList.emplace_back("test_combine_v.FBX");
@@ -216,7 +218,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		//m_pTrace->DispatchTriangleAOTrace();
 
 		//bake texture
-		m_pTrace->DispatchBakeMesh3DTexture();
+		m_pTrace->DispatchBakeMesh3DTexture(BakeInitDir);
 
 		m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(m_pTrace->GetBakeMesh3DTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	}
@@ -249,7 +251,7 @@ void MyRayTracing::Render()
 		MapHelper<SimpleObjConstants> CBConstants(m_pImmediateContext, m_VSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
 		CBConstants->g_WorldViewProj = m_Camera.GetViewProjMatrix().Transpose();
 		CBConstants->g_CamPos = m_Camera.GetPos();
-		CBConstants->g_BakeDirNum = BAKE_MESH_TEX_Z;
+		CBConstants->g_BakeDirAndNum = float4(BakeInitDir, BAKE_MESH_TEX_Z);
 	}
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "SimpleObjConstants")->Set(m_VSConstants);
 	m_pPSO->GetStaticVariableByName(SHADER_TYPE_PIXEL, "SimpleObjConstants")->Set(m_VSConstants);

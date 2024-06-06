@@ -64,6 +64,8 @@ private:
 
 	FirstPersonCamera m_Camera;
 
+	float3 BakeInitDir;
+
 	BVH *m_pMeshBVH;
 	BVHTrace *m_pTrace;
 

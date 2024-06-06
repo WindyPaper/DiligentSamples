@@ -53,8 +53,11 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     BVHAABB MeshAABB = BVHNodeAABB[0];
     float bake_plane_y = MeshAABB.upper.y;
 
-    float per_texel_w = (MeshAABB.upper.x - MeshAABB.lower.x) / BAKE_MESH_TEX_XY;
-    float per_texel_h = (MeshAABB.upper.z - MeshAABB.lower.z) / BAKE_MESH_TEX_XY;
+    float bbx_x = MeshAABB.upper.x - MeshAABB.lower.x;
+    float bbx_z = MeshAABB.upper.z - MeshAABB.lower.z;
+
+    float per_texel_w = bbx_x / BAKE_MESH_TEX_XY;
+    float per_texel_h = bbx_z / BAKE_MESH_TEX_XY;
 
     float2 ray_start_xz = MeshAABB.lower.xz;
     float2 ray_offset_xz = ray_start_xz + float2((id.x + 0.5f) * per_texel_w, (id.y + 0.5f) * per_texel_h);
@@ -73,7 +76,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
 
     RayTrace(ray, min_near, hit_idx_prim, hit_coordinate, back_face);
 
-    if(hit_idx_prim != -1)
+    if(hit_idx_prim != -1) //Main ray pos start hit
     {
         uint v_idx0 = MeshIdx[hit_idx_prim * 3]; 
         uint v_idx1 = MeshIdx[hit_idx_prim * 3 + 1]; 
@@ -96,9 +99,49 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     }
     else
     {
-        // float2 hdr_uv = DirToUV_Normalize(ray.dir);
-        // float4 sky_color = SkyHDRTexture.SampleLevel(SkyHDRTexture_sampler, hdr_uv, 0);
-
         Out3DTex[out_3dtex_idx] = float4(0.0f, 1.0f, 0.0f, 0.0f);
+
+        //surounding 8 neighor element
+        min_near = MAX_INT;
+        float neighor_hit_min = MAX_INT;
+        for(int j = 0; j < 3; ++j)
+        {
+            for(int i = 0; i < 3; ++i)
+            {
+                if((i != 1) && (j != 1))
+                {
+                    float tex_ray_offset_x = (i - 1) * bbx_x;
+                    float tex_ray_offset_z = (j - 1) * bbx_z;
+
+                    ray.o = ray_origin - float3(tex_ray_offset_x, 0.0f, tex_ray_offset_z);
+                    RayTrace(ray, min_near, hit_idx_prim, hit_coordinate, back_face);
+                    if(hit_idx_prim != -1)
+                    {
+                        if(min_near < neighor_hit_min)
+                        {
+                            neighor_hit_min = min_near;
+
+                            uint v_idx0 = MeshIdx[hit_idx_prim * 3]; 
+                            uint v_idx1 = MeshIdx[hit_idx_prim * 3 + 1]; 
+                            uint v_idx2 = MeshIdx[hit_idx_prim * 3 + 2]; 
+
+                            BVHVertex v0 = MeshVertex[v_idx0];
+                            BVHVertex v1 = MeshVertex[v_idx1];
+                            BVHVertex v2 = MeshVertex[v_idx2];
+
+                            float u = 1.0f - hit_coordinate.x - hit_coordinate.y;
+                            float v = hit_coordinate.x;
+                            float w = hit_coordinate.y;
+                            //float2 out_uv = v1.uv * hit_coordinate.x + v2.uv * hit_coordinate.y + (1.0f - hit_coordinate.x - hit_coordinate.y) * v0.uv;
+                            //float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
+                            float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;       
+
+                            float hit_depth = neighor_hit_min * 0.1f;
+                            Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));
+                        }
+                    }
+                }
+            }
+        }        
     }
 }

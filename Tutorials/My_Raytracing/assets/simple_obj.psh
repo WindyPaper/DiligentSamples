@@ -8,6 +8,7 @@ struct PSInput
     float4 Pos   : SV_POSITION; 
     float2 UV : TEX_COORD; 
     float3 PixelWPos : TEX_COORD1;
+    float3 WNormal : TEX_COORD2;
 };
 
 struct PSOutput
@@ -23,8 +24,8 @@ void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
     float3 view_dir = normalize(g_CamPos - PSIn.PixelWPos.xyz);
-    float3 bake_start_dir = float3(1.0f, 0.0f, 0.0f);
-    float sample_z = 1.0f - (dot(bake_start_dir, normalize(float3(view_dir.x, 0.0f, view_dir.z))) * 0.5f + 0.5f);
+    float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
+    float sample_z = 1.0f - (dot(bake_start_dir_on_Plane, normalize(float3(view_dir.x, 0.0f, view_dir.z))) * 0.5f + 0.5f);
     //PSOut.Color = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, 0.0f)); 
     float4 bake_data = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, sample_z));
     //PSOut.Color = float4(bake_data.rgb, 1.0f);
@@ -33,7 +34,12 @@ void main(in  PSInput  PSIn,
 
     float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
 
-    float3 new_offset_pos = PSIn.PixelWPos - view_dir * offset_depth;
+    //depth-correction
+    float cosV = dot(PSIn.WNormal, view_dir);
+    float cosBakeDir = dot(PSIn.WNormal, -g_BakeDirAndNum.xyz);
+    float correct_depth = cosV / cosBakeDir * offset_depth;
+
+    float3 new_offset_pos = PSIn.PixelWPos - view_dir * correct_depth;
 
     //float4 new_ndc_pos = mul(float4(new_offset_pos,1.0), g_WorldViewProj);
     float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);

@@ -16,6 +16,7 @@ struct PSInput
     float4 Pos   : SV_POSITION; 
     float2 UV  : TEX_COORD; 
     float3 PixelWPos : TEX_COORD1;
+    float3 WNormal : TEX_COORD2;
 };
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
@@ -25,6 +26,7 @@ void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
     PSIn.Pos = mul( float4(VSIn.Pos,1.0), g_WorldViewProj);
-    PSIn.UV  = VSIn.UV0 * 40.0f;
+    PSIn.UV  = VSIn.UV0 * 10.0f;
     PSIn.PixelWPos = VSIn.Pos;
+    PSIn.WNormal = VSIn.Normal;
 }
