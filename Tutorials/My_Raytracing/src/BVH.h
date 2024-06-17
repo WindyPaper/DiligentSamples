@@ -40,6 +40,23 @@ namespace Diligent
 		{}
 	};
 
+	struct BVHVertexWithTangent
+	{
+		float3 pos;
+		float3 normal;
+		float3 tangent;
+		float2 uv;
+		float2 uv1;
+
+		BVHVertexWithTangent(const float3 &v, const float3 &n, const float3 &t, const float2 &uv0, const float2 &uv1) :
+			pos(v),
+			normal(n),
+			tangent(t),
+			uv(uv0),
+			uv1(uv1)
+		{}
+	};
+
 	struct BVHMeshPrimData
 	{
 		BVHMeshPrimData(const int t_id) :
