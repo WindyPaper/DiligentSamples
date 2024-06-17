@@ -29,7 +29,7 @@ void main(in  PSInput  PSIn,
     //PSOut.Color = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, 0.0f)); 
     float4 bake_data = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, sample_z));
     //PSOut.Color = float4(bake_data.rgb, 1.0f);
-    PSOut.Color = float4(bake_data.a, bake_data.a, bake_data.a, 1.0f) + bake_data * 0.00001f;
+    PSOut.Color = float4(bake_data.r, bake_data.g, bake_data.b, 1.0f) + bake_data * 0.00001f;
     
 
     float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
@@ -40,6 +40,9 @@ void main(in  PSInput  PSIn,
     float correct_depth = cosV / cosBakeDir * offset_depth;
 
     float3 new_offset_pos = PSIn.PixelWPos - view_dir * correct_depth;
+
+    float offsett = saturate(correct_depth - offset_depth);
+    //PSOut.Color = float4(offsett, offsett, offsett, 1.0f) + bake_data * 0.00001f;
 
     //float4 new_ndc_pos = mul(float4(new_offset_pos,1.0), g_WorldViewProj);
     float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);

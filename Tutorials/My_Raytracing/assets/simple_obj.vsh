@@ -26,7 +26,7 @@ void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
     PSIn.Pos = mul( float4(VSIn.Pos,1.0), g_WorldViewProj);
-    PSIn.UV  = VSIn.UV0 * 10.0f;
+    PSIn.UV  = VSIn.UV0 * 40.0f;
     PSIn.PixelWPos = VSIn.Pos;
     PSIn.WNormal = VSIn.Normal;
 }

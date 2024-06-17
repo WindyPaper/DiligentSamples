@@ -43,7 +43,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     uint3 out_3dtex_idx = id;
     uint layer_idx = id.z;
 
-    float rotate_rad_interp = float(layer_idx) / BAKE_MESH_TEX_Z;
+    float rotate_rad_interp = float(layer_idx) / (BAKE_MESH_TEX_Z - 1);
     float rotate_rad = lerp(0.0f, 3.14f, rotate_rad_interp);
 
     float3 y_up = float3(0.0f, 1.0f, 0.0f);
@@ -101,22 +101,23 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     {
         Out3DTex[out_3dtex_idx] = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
-        //surounding 8 neighor element
-        min_near = MAX_INT;
+        //surounding 8 neighor element        
         float neighor_hit_min = MAX_INT;
         for(int j = 0; j < 3; ++j)
         {
             for(int i = 0; i < 3; ++i)
             {
-                if((i != 1) && (j != 1))
+                if((i != 1) || (j != 1))
                 {
-                    float tex_ray_offset_x = (i - 1) * bbx_x;
+                    float tex_ray_offset_x = -(i - 1) * bbx_x;
                     float tex_ray_offset_z = (j - 1) * bbx_z;
 
+                    hit_idx_prim = -1;
+                    min_near = MAX_INT;
                     ray.o = ray_origin - float3(tex_ray_offset_x, 0.0f, tex_ray_offset_z);
                     RayTrace(ray, min_near, hit_idx_prim, hit_coordinate, back_face);
                     if(hit_idx_prim != -1)
-                    {
+                    {                        
                         if(min_near < neighor_hit_min)
                         {
                             neighor_hit_min = min_near;
@@ -137,7 +138,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
                             float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;       
 
                             float hit_depth = neighor_hit_min * 0.1f;
-                            Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));
+                            Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));                            
                         }
                     }
                 }
