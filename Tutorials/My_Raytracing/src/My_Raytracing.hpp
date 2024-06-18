@@ -36,6 +36,18 @@ namespace Diligent
 	class BVHTrace;
 	class BVHMeshData;
 
+	struct RasterMeshData
+	{
+		RefCntAutoPtr<IBuffer> apMeshVertexData;
+		RefCntAutoPtr<IBuffer> apMeshIndexData;
+		BVHMeshData *pBVHMeshData;
+		std::string meshName;
+
+		RasterMeshData() :
+			pBVHMeshData(nullptr)
+		{}
+	};
+
 class MyRayTracing final : public SampleBase
 {
 public:
@@ -51,7 +63,9 @@ public:
 	virtual void WindowResize(Uint32 Width, Uint32 Height);
 
 protected:
-	void load_mesh();
+	RasterMeshData load_mesh(const std::string MeshName);
+
+	void CreateNormalObjPSO();
 
 	void UpdateUI();
 
@@ -59,6 +73,9 @@ private:
     RefCntAutoPtr<IPipelineState> m_pPSO;
 	RefCntAutoPtr<IShaderResourceBinding> m_pSRB;
 	RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
+
+	RefCntAutoPtr<IPipelineState> m_pNormalObjPSO;
+	RefCntAutoPtr<IShaderResourceBinding> m_pNormalObjSRB;
 
 	RefCntAutoPtr<IBuffer> m_VSConstants;
 
@@ -69,9 +86,15 @@ private:
 	BVH *m_pMeshBVH;
 	BVHTrace *m_pTrace;
 
-	RefCntAutoPtr<IBuffer> m_apPlaneMeshVertexData;
-	RefCntAutoPtr<IBuffer> m_apPlaneMeshIndexData;
-	BVHMeshData *m_pPlaneMeshData;
+	//RefCntAutoPtr<IBuffer> m_apPlaneMeshVertexData;
+	//RefCntAutoPtr<IBuffer> m_apPlaneMeshIndexData;
+	//BVHMeshData *m_pPlaneMeshData;
+
+	float mTestPlaneOffsetY;
+	float mBakeHeightScale;
+	float mBakeTexTiling;
+
+	std::vector<RasterMeshData> RasterMeshVec;
 };
 
 } // namespace Diligent
