@@ -33,6 +33,7 @@ void main(in  PSInput  PSIn,
     
 
     float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
+    offset_depth = offset_depth / BakeTexTiling * BakeHeightScale; //tiling
 
     //depth-correction
     float cosV = dot(PSIn.WNormal, view_dir);

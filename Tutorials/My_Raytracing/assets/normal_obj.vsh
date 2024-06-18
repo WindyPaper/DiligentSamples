@@ -25,9 +25,8 @@ struct PSInput
 void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
-    float3 local_pos_offset = VSIn.Pos + float3(0.0f, TestPlaneOffsetY, 0.0f);
-    PSIn.Pos = mul( float4(local_pos_offset,1.0), g_WorldViewProj);
-    PSIn.UV  = VSIn.UV0 * BakeTexTiling;
-    PSIn.PixelWPos = local_pos_offset;
+    PSIn.Pos = mul( float4(VSIn.Pos,1.0), g_WorldViewProj);
+    PSIn.UV  = VSIn.UV0;
+    PSIn.PixelWPos = VSIn.Pos;
     PSIn.WNormal = VSIn.Normal;
 }
