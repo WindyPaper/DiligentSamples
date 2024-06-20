@@ -27,7 +27,7 @@ void main(in  VSInput VSIn,
 {
     float3 local_pos_offset = VSIn.Pos + float3(0.0f, TestPlaneOffsetY, 0.0f);
     PSIn.Pos = mul( float4(local_pos_offset,1.0), g_WorldViewProj);
-    PSIn.UV  = VSIn.UV0 * BakeTexTiling;
+    PSIn.UV  = VSIn.UV0;
     PSIn.PixelWPos = local_pos_offset;
     PSIn.WNormal = VSIn.Normal;
 }

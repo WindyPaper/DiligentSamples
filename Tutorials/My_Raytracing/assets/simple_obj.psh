@@ -17,19 +17,107 @@ struct PSOutput
     float depth : SV_Depth;
 };
 
+static const float pi = 3.141592;
+static const float2 hexRatio = float2(1.0, sqrt(3.0));
+
+//credits for hex tiling goes to Shane (https://www.shadertoy.com/view/Xljczw)
+//center, index
+float4 GetHexGridInfo(float2 uv)
+{
+  float4 hexIndex = round(float4(uv, uv - float2(0.5, 1.0)) / hexRatio.xyxy);
+  float4 hexCenter = float4(hexIndex.xy * hexRatio, (hexIndex.zw + 0.5) * hexRatio);
+  float4 offset = uv.xyxy - hexCenter;
+  return dot(offset.xy, offset.xy) < dot(offset.zw, offset.zw) ? 
+    float4(hexCenter.xy, hexIndex.xy) : 
+    float4(hexCenter.zw, hexIndex.zw);
+}
+
+float GetHexSDF(in float2 p)
+{
+  p = abs(p);
+  return 0.5 - max(dot(p, hexRatio * 0.5), p.x);
+}
+
+//xy: node pos, z: weight
+float3 GetTriangleInterpNode(in float2 pos, in float freq, in int nodeIndex)
+{
+  float2 nodeOffsets[3] = {
+    float2(0.0, 0.0),
+    float2(1.0, 1.0),
+    float2(1.0,-1.0)};
+
+  float2 uv = pos * freq + nodeOffsets[nodeIndex] / hexRatio.xy * 0.5;
+  float4 hexInfo = GetHexGridInfo(uv);
+  float dist = GetHexSDF(uv - hexInfo.xy) * 2.0;
+  return float3(hexInfo.xy / freq, dist);
+}
+
+float3 hash33( float3 p )
+{
+	p = float3( dot(p,float3(127.1,311.7, 74.7)),
+			  dot(p,float3(269.5,183.3,246.1)),
+			  dot(p,float3(113.5,271.9,124.6)));
+
+	return frac(sin(p)*43758.5453123);
+}
+
+float2 GetTextureSampleUV(float2 pos, float freq, float2 nodePoint)
+{
+    float3 hash = hash33(float3(nodePoint.xy, 0));
+    float ang = hash.x * 2.0 * pi;
+    float2x2 rotation = {cos(ang), sin(ang), -sin(ang), cos(ang)};
+    
+    //float2 rot_pos = mul(pos, rotation);
+    float2 rot_pos = mul(rotation, pos);
+    float2 uv = rot_pos * freq + hash.yz;
+    //return texture(iChannel0, uv);
+    return uv;
+}
+
+//from Qizhi Yu, et al [2011]. Lagrangian Texture Advection: Preserving Both Spectrum and Velocity Field. 
+//IEEE Transactions on Visualization and Computer Graphics 17, 11 (2011), 1612–1623
+float3 PreserveVariance(float3 linearColor, float3 meanColor, float moment2)
+{
+    return (linearColor - meanColor) / sqrt(moment2) + meanColor;
+}
+
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
 // shader output variable name must match exactly the name of the pixel shader input variable.
 // If the variable has structure type (like in this example), the structure declarations must also be indentical.
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
+    //test
+    //float texFreq = 10.0;
+    float tileFreq = BakeTexTiling;
+
     float3 view_dir = normalize(g_CamPos - PSIn.PixelWPos.xyz);
     float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
     float sample_z = 1.0f - (dot(bake_start_dir_on_Plane, normalize(float3(view_dir.x, 0.0f, view_dir.z))) * 0.5f + 0.5f);
     //PSOut.Color = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, 0.0f)); 
-    float4 bake_data = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, sample_z));
+
+    //float moment1 = 0.0;
+    float moment2 = 0.0;
+    float4 bake_data = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    for(int i = 0; i < 3; i++)
+    {
+        float3 interpNode = GetTriangleInterpNode(PSIn.UV, tileFreq, i);
+        float2 mainTexUV = GetTextureSampleUV(PSIn.UV, tileFreq, interpNode.xy);
+        //fragColor += GetTextureSample(PSIn.UV, tileFreq, interpNode.xy) * interpNode.z;
+        bake_data += g_Texture.Sample(g_Texture_sampler, float3(mainTexUV, sample_z)) * interpNode.z;
+        //bake_data += g_Texture.Sample(g_Texture_sampler, float3(mainTexUV, 0.0f + (0.000000001f * sample_z)));
+        
+        //moment1 += interpNode.z;
+        moment2 += interpNode.z * interpNode.z;
+    }
+    //float3 meanColor = textureLod(iChannel0, vec2(0.0), 10.0).rgb;
+    //float3 meanColor = g_Texture.SampleLevel(g_Texture_sampler, float3(float2(0.0f, 0.0f), sample_z), 10).rgb;    
+    //bake_data.rgb = PreserveVariance(bake_data.rgb, meanColor, moment2);
+
+
+    //float4 bake_data = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, sample_z));
     //PSOut.Color = float4(bake_data.rgb, 1.0f);
-    PSOut.Color = float4(bake_data.r, bake_data.g, bake_data.b, 1.0f) + bake_data * 0.00001f;
+    PSOut.Color = float4(bake_data.r, bake_data.g, bake_data.b, 1.0f);
     
 
     float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
@@ -38,7 +126,8 @@ void main(in  PSInput  PSIn,
     //depth-correction
     float cosV = dot(PSIn.WNormal, view_dir);
     float cosBakeDir = dot(PSIn.WNormal, -g_BakeDirAndNum.xyz);
-    float correct_depth = cosV / cosBakeDir * offset_depth;
+    //float correct_depth = cosV / cosBakeDir * offset_depth;
+    float correct_depth = offset_depth * sqrt((1 - cosBakeDir * cosBakeDir) / (1 - cosV * cosV));
 
     float3 new_offset_pos = PSIn.PixelWPos - view_dir * correct_depth;
 

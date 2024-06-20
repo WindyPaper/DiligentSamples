@@ -204,8 +204,9 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	BakeInitDir = normalize(float3(-1.0f, -1.0f, 0.0f));
 
 	std::vector<std::string> FileList;
-	FileList.emplace_back("high_poly_grass.FBX");
-	//FileList.emplace_back("gzc_plant_grass_bai.FBX");
+	//FileList.emplace_back("high_poly_grass.FBX");
+	FileList.emplace_back("gzc_plant_grass_bai.FBX");
+	//FileList.emplace_back("test_grass.FBX");
 	//FileList.emplace_back("test_combine_v.FBX");
 	/*FileList.emplace_back("cjfj_guizi.fbx");
 	FileList.emplace_back("heihufangjian_yugang.fbx");
@@ -384,7 +385,7 @@ void MyRayTracing::UpdateUI()
 	}
 
 	ImGui::SliderFloat("TestPlaneOffsetY", &mTestPlaneOffsetY, 0.0f, 10.0f);
-	ImGui::SliderFloat("BakeHeightScale", &mBakeHeightScale, 0.0f, 1.0f);
+	ImGui::SliderFloat("BakeHeightScale", &mBakeHeightScale, 0.0f, 5.0f);
 	ImGui::SliderFloat("BakeTexTiling", &mBakeTexTiling, 0.01f, 100.0f);
 
 	ImGui::End();
