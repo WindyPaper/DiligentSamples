@@ -8,4 +8,7 @@ cbuffer SimpleObjConstants
     float BakeHeightScale;
     float BakeTexTiling;
     float padding;
+
+    float4 bbox_min;
+    float4 bbox_max;
 };

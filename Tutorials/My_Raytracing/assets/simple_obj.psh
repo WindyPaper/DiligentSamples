@@ -87,13 +87,13 @@ float3 PreserveVariance(float3 linearColor, float3 meanColor, float moment2)
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
+    float plane_w = bbox_max.x - bbox_min.x;
+    float plane_h = bbox_max.z - bbox_min.z;
+
     //test
     //float texFreq = 10.0;
     float tileFreq = BakeTexTiling;
-
-    float3 view_dir = normalize(g_CamPos - PSIn.PixelWPos.xyz);
-    float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
-    float sample_z = 1.0f - (dot(bake_start_dir_on_Plane, normalize(float3(view_dir.x, 0.0f, view_dir.z))) * 0.5f + 0.5f);
+    
     //PSOut.Color = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, 0.0f)); 
 
     //float moment1 = 0.0;
@@ -104,6 +104,12 @@ void main(in  PSInput  PSIn,
         float3 interpNode = GetTriangleInterpNode(PSIn.UV, tileFreq, i);
         float2 mainTexUV = GetTextureSampleUV(PSIn.UV, tileFreq, interpNode.xy);
         //fragColor += GetTextureSample(PSIn.UV, tileFreq, interpNode.xy) * interpNode.z;
+
+        float2 offset_wpos = (mainTexUV - PSIn.UV) * float2(1.0f, -1.0f) * float2(plane_w, plane_h);
+        float3 sample_view_dir = normalize(g_CamPos - (PSIn.PixelWPos.xyz + float3(offset_wpos.x, 0.0f, offset_wpos.y)));
+        float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
+        float sample_z = 1.0f - (dot(bake_start_dir_on_Plane, normalize(float3(sample_view_dir.x, 0.0f, sample_view_dir.z))) * 0.5f + 0.5f);
+
         bake_data += g_Texture.Sample(g_Texture_sampler, float3(mainTexUV, sample_z)) * interpNode.z;
         //bake_data += g_Texture.Sample(g_Texture_sampler, float3(mainTexUV, 0.0f + (0.000000001f * sample_z)));
         
@@ -117,7 +123,13 @@ void main(in  PSInput  PSIn,
 
     //float4 bake_data = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, sample_z));
     //PSOut.Color = float4(bake_data.rgb, 1.0f);
-    PSOut.Color = float4(bake_data.r, bake_data.g, bake_data.b, 1.0f);
+
+    float3 view_dir = normalize(g_CamPos - PSIn.PixelWPos.xyz);
+
+    //lighting 
+    float3 test_dir_light = normalize(float3(0.5f, 0.5f, 0.5f));
+    float3 dir_lighting = saturate(dot(test_dir_light, bake_data.rgb)) * float3(1.0f, 1.0f, 1.0f);
+    PSOut.Color = float4(dir_lighting, 1.0f);
     
 
     float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
