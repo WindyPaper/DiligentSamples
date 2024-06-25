@@ -51,6 +51,9 @@ namespace Diligent
 		float BakeHeightScale;
 		float BakeTexTiling;
 		float padding;
+
+		float4 bbox_min;
+		float4 bbox_max;
 	};
 
 SampleBase* CreateSample()
@@ -205,8 +208,8 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 
 	std::vector<std::string> FileList;
 	//FileList.emplace_back("high_poly_grass.FBX");
-	FileList.emplace_back("gzc_plant_grass_bai.FBX");
-	//FileList.emplace_back("test_grass.FBX");
+	//FileList.emplace_back("gzc_plant_grass_bai.FBX");
+	FileList.emplace_back("test_grass.FBX");
 	//FileList.emplace_back("test_combine_v.FBX");
 	/*FileList.emplace_back("cjfj_guizi.fbx");
 	FileList.emplace_back("heihufangjian_yugang.fbx");
@@ -274,6 +277,9 @@ void MyRayTracing::Render()
 			CBConstants->BakeHeightScale = mBakeHeightScale;
 			CBConstants->BakeTexTiling = mBakeTexTiling;
 			CBConstants->TestPlaneOffsetY = mTestPlaneOffsetY;
+
+			CBConstants->bbox_min = raster_data.bbox_min;
+			CBConstants->bbox_max = raster_data.bbox_max;
 		}
 
 		RefCntAutoPtr<IPipelineState> apSelectPSO;
@@ -432,7 +438,7 @@ RasterMeshData MyRayTracing::load_mesh(const std::string MeshName)
 
 	std::vector<BVHVertex> mesh_vertex_data;
 	std::vector<Uint32> mesh_index_data;
-
+	
 	for (unsigned int mesh_i = 0; mesh_i < mesh_num; ++mesh_i)
 	{
 		aiMesh* mesh_ptr = p_import_fbx_scene->mMeshes[mesh_i];
@@ -450,6 +456,14 @@ RasterMeshData MyRayTracing::load_mesh(const std::string MeshName)
 				uv1 = mesh_ptr->mTextureCoords[1][i];
 			}
 			const aiVector3D& normal = mesh_ptr->mNormals[i];
+
+			mesh_data.bbox_max.x = std::max(v.x, mesh_data.bbox_max.x);
+			mesh_data.bbox_max.y = std::max(v.y, mesh_data.bbox_max.y);
+			mesh_data.bbox_max.z = std::max(v.z, mesh_data.bbox_max.z);
+
+			mesh_data.bbox_min.x = std::min(v.x, mesh_data.bbox_min.x);
+			mesh_data.bbox_min.y = std::min(v.y, mesh_data.bbox_min.y);
+			mesh_data.bbox_min.z = std::min(v.z, mesh_data.bbox_min.z);
 
 			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y), float2(uv1.x, uv1.y)));
 		}

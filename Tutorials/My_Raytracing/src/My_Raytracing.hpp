@@ -42,10 +42,18 @@ namespace Diligent
 		RefCntAutoPtr<IBuffer> apMeshIndexData;
 		BVHMeshData *pBVHMeshData;
 		std::string meshName;
+		float4 bbox_min;
+		float4 bbox_max;
 
 		RasterMeshData() :
 			pBVHMeshData(nullptr)
-		{}
+		{
+			float maxi_float = std::numeric_limits<float>::max();
+			bbox_min = float4(maxi_float, maxi_float, maxi_float, maxi_float);
+
+			float mini_float = std::numeric_limits<float>::min();
+			bbox_max = float4(mini_float, mini_float, mini_float, mini_float);
+		}
 	};
 
 class MyRayTracing final : public SampleBase
