@@ -47,7 +47,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     float rotate_rad = lerp(0.0f, 3.14f, rotate_rad_interp);
 
     float3 y_up = float3(0.0f, 1.0f, 0.0f);
-    float3x3 rotate_mat = AngleAxis3x3(-rotate_rad, y_up); //neg 
+    float3x3 rotate_mat = AngleAxis3x3(rotate_rad, y_up); //neg 
     float3 curr_layer_bake_dir = mul(rotate_mat, BakeVerticalNorDir.xyz);
 
     BVHAABB MeshAABB = BVHNodeAABB[0];
@@ -94,12 +94,13 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
         float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;       
 
         float hit_depth = min_near * 0.1f;
-        Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));
+        //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));
+        Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, min_near);
         //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, min_near);
     }
     else
     {
-        Out3DTex[out_3dtex_idx] = float4(0.0f, 1.0f, 0.0f, 0.0f);
+        Out3DTex[out_3dtex_idx] = float4(0.0f, 1.0f, 0.0f, 20000.0f);
 
         //surounding 8 neighor element        
         float neighor_hit_min = MAX_INT;
@@ -138,7 +139,8 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
                             float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;       
 
                             float hit_depth = neighor_hit_min * 0.1f;
-                            Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));                            
+                            //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));                            
+                            Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, neighor_hit_min);                            
                         }
                     }
                 }

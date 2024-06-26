@@ -99,23 +99,23 @@ void main(in  PSInput  PSIn,
     //float moment1 = 0.0;
     float moment2 = 0.0;
     float4 bake_data = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    for(int i = 0; i < 3; i++)
-    {
-        float3 interpNode = GetTriangleInterpNode(PSIn.UV, tileFreq, i);
-        float2 mainTexUV = GetTextureSampleUV(PSIn.UV, tileFreq, interpNode.xy);
+    // for(int i = 0; i < 3; i++)
+    // {
+    //     float3 interpNode = GetTriangleInterpNode(PSIn.UV, tileFreq, i);
+    //     float2 mainTexUV = GetTextureSampleUV(PSIn.UV, tileFreq, interpNode.xy);
         //fragColor += GetTextureSample(PSIn.UV, tileFreq, interpNode.xy) * interpNode.z;
 
-        float2 offset_wpos = (mainTexUV - PSIn.UV) * float2(1.0f, -1.0f) * float2(plane_w, plane_h);
-        float3 sample_view_dir = normalize(g_CamPos - (PSIn.PixelWPos.xyz + float3(offset_wpos.x, 0.0f, offset_wpos.y)));
+        // float2 offset_wpos = (mainTexUV - PSIn.UV) * float2(1.0f, -1.0f) * float2(plane_w, plane_h);
+        float3 sample_view_dir = normalize(g_CamPos - (PSIn.PixelWPos.xyz));
         float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
         float sample_z = 1.0f - (dot(bake_start_dir_on_Plane, normalize(float3(sample_view_dir.x, 0.0f, sample_view_dir.z))) * 0.5f + 0.5f);
 
-        bake_data += g_Texture.Sample(g_Texture_sampler, float3(mainTexUV, sample_z)) * interpNode.z;
+        bake_data += g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV * tileFreq, sample_z));// * interpNode.z;
         //bake_data += g_Texture.Sample(g_Texture_sampler, float3(mainTexUV, 0.0f + (0.000000001f * sample_z)));
         
         //moment1 += interpNode.z;
-        moment2 += interpNode.z * interpNode.z;
-    }
+    //     moment2 += interpNode.z * interpNode.z;
+    // }
     //float3 meanColor = textureLod(iChannel0, vec2(0.0), 10.0).rgb;
     //float3 meanColor = g_Texture.SampleLevel(g_Texture_sampler, float3(float2(0.0f, 0.0f), sample_z), 10).rgb;    
     //bake_data.rgb = PreserveVariance(bake_data.rgb, meanColor, moment2);
@@ -129,17 +129,18 @@ void main(in  PSInput  PSIn,
     //lighting 
     float3 test_dir_light = normalize(float3(0.5f, 0.5f, 0.5f));
     float3 dir_lighting = saturate(dot(test_dir_light, bake_data.rgb)) * float3(1.0f, 1.0f, 1.0f);
+    //float3 dir_lighting = saturate(bake_data.rgb) * float3(1.0f, 1.0f, 1.0f);
     PSOut.Color = float4(dir_lighting, 1.0f);
     
 
-    float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
-    offset_depth = offset_depth / BakeTexTiling * BakeHeightScale; //tiling
+    float offset_depth = bake_data.a;//((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
+    offset_depth = offset_depth / tileFreq * BakeHeightScale; //tiling
 
     //depth-correction
     float cosV = dot(PSIn.WNormal, view_dir);
     float cosBakeDir = dot(PSIn.WNormal, -g_BakeDirAndNum.xyz);
     //float correct_depth = cosV / cosBakeDir * offset_depth;
-    float correct_depth = offset_depth * sqrt((1 - cosBakeDir * cosBakeDir) / (1 - cosV * cosV));
+    float correct_depth = offset_depth * sqrt((1.000001f - cosBakeDir * cosBakeDir) / (1.00001f - cosV * cosV));
 
     float3 new_offset_pos = PSIn.PixelWPos - view_dir * correct_depth;
 
