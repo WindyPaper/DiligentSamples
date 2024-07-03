@@ -5,8 +5,8 @@
 // labeled 'ATTRIBn', where n is the attribute number.
 struct VSInput
 {
-    float3 Pos   : ATTRIB0;
-    float3 Normal  : ATTRIB1;
+    float4 Pos   : ATTRIB0;
+    float4 Normal  : ATTRIB1;
     float2 UV0  : ATTRIB2;
     float2 UV1  : ATTRIB3;
 };
@@ -15,8 +15,9 @@ struct PSInput
 { 
     float4 Pos   : SV_POSITION; 
     float2 UV  : TEX_COORD; 
-    float3 PixelWPos : TEX_COORD1;
+    float4 PixelWPos : TEX_COORD1;
     float3 WNormal : TEX_COORD2;
+    float3 PixelViewPos : TEX_COORD3;
 };
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
@@ -25,9 +26,10 @@ struct PSInput
 void main(in  VSInput VSIn,
           out PSInput PSIn) 
 {
-    float3 local_pos_offset = VSIn.Pos + float3(0.0f, TestPlaneOffsetY, 0.0f);
+    float3 local_pos_offset = VSIn.Pos.xyz + float3(0.0f, TestPlaneOffsetY, 0.0f);
     PSIn.Pos = mul( float4(local_pos_offset,1.0), g_WorldViewProj);
     PSIn.UV  = VSIn.UV0;
-    PSIn.PixelWPos = local_pos_offset;
-    PSIn.WNormal = VSIn.Normal;
+    PSIn.PixelWPos = float4(local_pos_offset, PSIn.Pos.z);
+    PSIn.PixelViewPos = mul(float4(local_pos_offset, 1.0f), g_ViewMat);
+    PSIn.WNormal = VSIn.Normal.xyz;
 }

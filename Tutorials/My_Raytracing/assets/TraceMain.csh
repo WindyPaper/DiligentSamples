@@ -54,7 +54,7 @@ void TraceMain(uint3 id : SV_DispatchThreadID)
         float w = hit_coordinate.y;
         //float2 out_uv = v1.uv * hit_coordinate.x + v2.uv * hit_coordinate.y + (1.0f - hit_coordinate.x - hit_coordinate.y) * v0.uv;
         float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
-        float3 out_normal = v0.normal * u + v1.normal * v + v2.normal * w;
+        float3 out_normal = v0.normal.xyz * u + v1.normal.xyz * v + v2.normal.xyz * w;
 
         //get mat texture
         //float4 diff_tex_data = DiffTextures[MeshPrimData[hit_idx_prim].tex_idx].SampleLevel(DiffTextures_sampler, out_uv, 0);

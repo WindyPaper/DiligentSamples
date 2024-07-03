@@ -2,8 +2,8 @@
 
 struct BVHVertex
 {
-    float3 pos;
-    float3 normal;
+    float4 pos;
+    float4 normal;
     float2 uv;
     float2 uv1;
 };

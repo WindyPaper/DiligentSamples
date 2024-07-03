@@ -186,7 +186,7 @@ void Diligent::BVH::LoadFBXFile(const std::string &name)
 			}			
 			const aiVector3D& normal = mesh_ptr->mNormals[i];
 
-			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y), float2(uv1.x, uv1.y)));
+			mesh_vertex_data.emplace_back(BVHVertex(float4(v.x, v.y, v.z, 1.0f), float4(normal.x, normal.y, normal.z, 1.0f), float2(uv.x, uv.y), float2(uv1.x, uv1.y)));
 
 			//test
 			////set vertex color

@@ -44,7 +44,10 @@ namespace Diligent
 	struct SimpleObjConstants
 	{
 		float4x4 g_WorldViewProj;
+		float4x4 g_ViewMat;
+		float4x4 g_ProjMat;
 		float4 g_CamPos;
+		float4 g_CamForward;
 		float4 g_BakeDirAndNum;
 
 		float TestPlaneOffsetY;
@@ -84,7 +87,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
     // Use the depth buffer format from the swap chain
     PSOCreateInfo.GraphicsPipeline.DSVFormat                    = m_pSwapChain->GetDesc().DepthBufferFormat;
     // Primitive topology defines what kind of primitives will be rendered by this pipeline state
-    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     // No back face culling for this tutorial
     PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_BACK;
     // Disable depth testing
@@ -157,9 +160,9 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	LayoutElement LayoutElems[] =
 	{
 		// Attribute 0 - vertex position
-		LayoutElement{0, 0, 3, VT_FLOAT32, False},
+		LayoutElement{0, 0, 4, VT_FLOAT32, False},
 		// Attribute 1 - normal
-		LayoutElement{1, 0, 3, VT_FLOAT32, False},
+		LayoutElement{1, 0, 4, VT_FLOAT32, False},
 		//uv0
 		LayoutElement{2, 0, 2, VT_FLOAT32, False},
 		//uv1
@@ -191,25 +194,27 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	RasterMeshVec.emplace_back(load_mesh("./normal_obj.fbx"));
 
 	float NearPlane = 0.1f;
-	float FarPlane = 100000.f;
+	float FarPlane = 10000.f;
 	float AspectRatio = static_cast<float>(m_pSwapChain->GetDesc().Width) / static_cast<float>(m_pSwapChain->GetDesc().Height);
 	m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
 		m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
 	m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
-	m_Camera.SetPos(float3(0.0f, 20.0f, -100.0f));
+	m_Camera.SetPos(float3(0.0f, 20.0f, 70.0f));
 	m_Camera.SetMoveSpeed(10.0f);
+	m_Camera.SetLookAt(float3(0.0f, 0.0f, 0.0f));
 	m_Camera.InvalidUpdate();
 
 	mBakeHeightScale = 1.0f;
 	mBakeTexTiling = 40.0f;
-	mTestPlaneOffsetY = 2.0f;
+	mTestPlaneOffsetY = 1.0f;
 
 	BakeInitDir = normalize(float3(-1.0f, -1.0f, 0.0f));
 
 	std::vector<std::string> FileList;
 	//FileList.emplace_back("high_poly_grass.FBX");
 	//FileList.emplace_back("gzc_plant_grass_bai.FBX");
-	FileList.emplace_back("test_grass.FBX");
+	//FileList.emplace_back("test_grass.FBX");
+	FileList.emplace_back("grass_patch2.FBX");
 	//FileList.emplace_back("test_combine_v.FBX");
 	/*FileList.emplace_back("cjfj_guizi.fbx");
 	FileList.emplace_back("heihufangjian_yugang.fbx");
@@ -220,7 +225,6 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_pMeshBVH = nullptr;
 	m_pTrace = nullptr;
 	//m_pPlaneMeshData = nullptr;
-
 	for (int fidx = 0; fidx < FileList.size(); ++fidx)
 	{
 		if (m_pMeshBVH)
@@ -272,6 +276,7 @@ void MyRayTracing::Render()
 			MapHelper<SimpleObjConstants> CBConstants(m_pImmediateContext, m_VSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
 			CBConstants->g_WorldViewProj = m_Camera.GetViewProjMatrix().Transpose();
 			CBConstants->g_CamPos = m_Camera.GetPos();
+			CBConstants->g_CamForward = m_Camera.GetWorldAhead();
 			CBConstants->g_BakeDirAndNum = float4(BakeInitDir, BAKE_MESH_TEX_Z);
 
 			CBConstants->BakeHeightScale = mBakeHeightScale;
@@ -280,6 +285,9 @@ void MyRayTracing::Render()
 
 			CBConstants->bbox_min = raster_data.bbox_min;
 			CBConstants->bbox_max = raster_data.bbox_max;
+
+			CBConstants->g_ViewMat = m_Camera.GetViewMatrix().Transpose();
+			CBConstants->g_ProjMat = m_Camera.GetProjMatrix().Transpose();
 		}
 
 		RefCntAutoPtr<IPipelineState> apSelectPSO;
@@ -390,7 +398,7 @@ void MyRayTracing::UpdateUI()
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 	}
 
-	ImGui::SliderFloat("TestPlaneOffsetY", &mTestPlaneOffsetY, 0.0f, 10.0f);
+	ImGui::SliderFloat("TestPlaneOffsetY", &mTestPlaneOffsetY, -10.0f, 10.0f);
 	ImGui::SliderFloat("BakeHeightScale", &mBakeHeightScale, 0.0f, 5.0f);
 	ImGui::SliderFloat("BakeTexTiling", &mBakeTexTiling, 0.01f, 100.0f);
 
@@ -415,9 +423,8 @@ RasterMeshData MyRayTracing::load_mesh(const std::string MeshName)
 	using namespace Assimp;
 	Importer* p_assimp_importer = new Importer();
 	unsigned int flags = aiProcess_Triangulate |
-		aiProcess_JoinIdenticalVertices |
+		aiProcess_JoinIdenticalVertices |		
 		aiProcess_PreTransformVertices |
-		aiProcess_RemoveRedundantMaterials |
 		aiProcess_OptimizeMeshes |
 		aiProcess_ConvertToLeftHanded;
 	//"./test_plane.fbx"
@@ -465,7 +472,7 @@ RasterMeshData MyRayTracing::load_mesh(const std::string MeshName)
 			mesh_data.bbox_min.y = std::min(v.y, mesh_data.bbox_min.y);
 			mesh_data.bbox_min.z = std::min(v.z, mesh_data.bbox_min.z);
 
-			mesh_vertex_data.emplace_back(BVHVertex(float3(v.x, v.y, v.z), float3(normal.x, normal.y, normal.z), float2(uv.x, uv.y), float2(uv1.x, uv1.y)));
+			mesh_vertex_data.emplace_back(BVHVertex(float4(v.x, v.y, v.z, 1.0f), float4(normal.x, normal.y, normal.z, 1.0f), float2(uv.x, uv.y), float2(uv1.x, uv1.y)));
 		}
 
 		int triangle_num = mesh_ptr->mNumFaces;
@@ -537,7 +544,7 @@ void MyRayTracing::CreateNormalObjPSO()
 	// Use the depth buffer format from the swap chain
 	PSOCreateInfo.GraphicsPipeline.DSVFormat = m_pSwapChain->GetDesc().DepthBufferFormat;
 	// Primitive topology defines what kind of primitives will be rendered by this pipeline state
-	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+	PSOCreateInfo.GraphicsPipeline.PrimitiveTopology = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	// No back face culling for this tutorial
 	PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode = CULL_MODE_BACK;
 	// Disable depth testing
@@ -600,9 +607,9 @@ void MyRayTracing::CreateNormalObjPSO()
 	LayoutElement LayoutElems[] =
 	{
 		// Attribute 0 - vertex position
-		LayoutElement{0, 0, 3, VT_FLOAT32, False},
+		LayoutElement{0, 0, 4, VT_FLOAT32, False},
 		// Attribute 1 - normal
-		LayoutElement{1, 0, 3, VT_FLOAT32, False},
+		LayoutElement{1, 0, 4, VT_FLOAT32, False},
 		//uv0
 		LayoutElement{2, 0, 2, VT_FLOAT32, False},
 		//uv1

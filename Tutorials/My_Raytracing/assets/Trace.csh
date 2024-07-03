@@ -62,9 +62,9 @@ bool RayTriangleIntersect(
     BVHVertex v1 = MeshVertex[v_idx1];
     BVHVertex v2 = MeshVertex[v_idx2];
 
-    float3 e0 = (v1.pos - v0.pos);
-    float3 e1 = (v2.pos - v0.pos);
-    float3 v0_pos = v0.pos;
+    float3 e0 = (v1.pos.xyz - v0.pos.xyz);
+    float3 e1 = (v2.pos.xyz - v0.pos.xyz);
+    float3 v0_pos = v0.pos.xyz;
 
 	const float3 s1 = cross(dir.xyz, e1);
 	const float  invd = 1.0 / (dot(s1, e0));

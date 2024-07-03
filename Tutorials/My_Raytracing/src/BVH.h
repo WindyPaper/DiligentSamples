@@ -27,12 +27,12 @@ namespace Diligent
 
 	struct BVHVertex
 	{
-		float3 pos;
-		float3 normal;
+		float4 pos;
+		float4 normal;
 		float2 uv;
 		float2 uv1;
 
-		BVHVertex(const float3 &v, const float3 &n, const float2 &uv0, const float2 &uv1) :
+		BVHVertex(const float4 &v, const float4 &n, const float2 &uv0, const float2 &uv1) :
 			pos(v),
 			normal(n),
 			uv(uv0),
@@ -40,7 +40,7 @@ namespace Diligent
 		{}
 	};
 
-	struct BVHVertexWithTangent
+	/*struct BVHVertexWithTangent
 	{
 		float3 pos;
 		float3 normal;
@@ -55,7 +55,7 @@ namespace Diligent
 			uv(uv0),
 			uv1(uv1)
 		{}
-	};
+	};*/
 
 	struct BVHMeshPrimData
 	{

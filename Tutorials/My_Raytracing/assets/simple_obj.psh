@@ -7,8 +7,9 @@ struct PSInput
 { 
     float4 Pos   : SV_POSITION; 
     float2 UV : TEX_COORD; 
-    float3 PixelWPos : TEX_COORD1;
+    float4 PixelWPos : TEX_COORD1;
     float3 WNormal : TEX_COORD2;
+    float3 PixelViewPos : TEX_COORD3;
 };
 
 struct PSOutput
@@ -106,6 +107,7 @@ void main(in  PSInput  PSIn,
         //fragColor += GetTextureSample(PSIn.UV, tileFreq, interpNode.xy) * interpNode.z;
 
         // float2 offset_wpos = (mainTexUV - PSIn.UV) * float2(1.0f, -1.0f) * float2(plane_w, plane_h);
+        float dist_cam_to_pixel = length(g_CamPos - (PSIn.PixelWPos.xyz));
         float3 sample_view_dir = normalize(g_CamPos - (PSIn.PixelWPos.xyz));
         float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
         float sample_z = 1.0f - (dot(bake_start_dir_on_Plane, normalize(float3(sample_view_dir.x, 0.0f, sample_view_dir.z))) * 0.5f + 0.5f);
@@ -130,26 +132,49 @@ void main(in  PSInput  PSIn,
     float3 test_dir_light = normalize(float3(0.5f, 0.5f, 0.5f));
     float3 dir_lighting = saturate(dot(test_dir_light, bake_data.rgb)) * float3(1.0f, 1.0f, 1.0f);
     //float3 dir_lighting = saturate(bake_data.rgb) * float3(1.0f, 1.0f, 1.0f);
-    PSOut.Color = float4(dir_lighting, 1.0f);
+    //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z)) + 0.00000001f * float4(dir_lighting, 1.0f);
     
 
-    float offset_depth = bake_data.a;//((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 10.0f;
-    offset_depth = offset_depth / tileFreq * BakeHeightScale; //tiling
+    float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 0.01f;
+    offset_depth = offset_depth * BakeHeightScale; //tiling
 
     //depth-correction
     float cosV = dot(PSIn.WNormal, view_dir);
     float cosBakeDir = dot(PSIn.WNormal, -g_BakeDirAndNum.xyz);
     //float correct_depth = cosV / cosBakeDir * offset_depth;
-    float correct_depth = offset_depth * sqrt((1.000001f - cosBakeDir * cosBakeDir) / (1.00001f - cosV * cosV));
+    float correct_depth = offset_depth / sqrt((1.000001f - cosBakeDir * cosBakeDir) * (1.00001f - cosV * cosV));
 
-    float3 new_offset_pos = PSIn.PixelWPos - view_dir * correct_depth;
+    //clamp depth 
+    //correct_depth = min(2.0f, correct_depth);
+    //float3 new_offset_pos = PSIn.PixelViewPos + normalize(PSIn.PixelViewPos.xyz) * offset_depth;
+
+    // float trueZ = g_ProjMat._43 / (PSIn.Pos.z - g_ProjMat._33);
+    // float viewZDist = dot(g_CamForward, -view_dir);
+    // float3 testPixelWPos = -view_dir * (trueZ * viewZDist) + g_CamPos.xyz;
+    float3 new_offset_pos = PSIn.PixelWPos.xyz + float3(0.0f, -1.0f, 0.0f) * BakeHeightScale;
+    //float3 new_offset_pos = float3(0.0f, 0.0f, 0.0f) + float3(0.0f, -1.0f, 0.0f) * BakeHeightScale;
 
     float offsett = saturate(correct_depth - offset_depth);
     //PSOut.Color = float4(offsett, offsett, offsett, 1.0f) + bake_data * 0.00001f;
 
     //float4 new_ndc_pos = mul(float4(new_offset_pos,1.0), g_WorldViewProj);
+    //float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);
     float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);
     float new_depth = new_ndc_pos.z / new_ndc_pos.w;
+    //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z));
+    float offset_d_val = new_offset_pos.y / 10.0f;
+    //PSOut.Color = float4(offset_d_val, offset_d_val, offset_d_val, offset_d_val) + 0.000000001f * float4(dir_lighting, 1.0f);
+    PSOut.Color = float4(dir_lighting, 1.0f);
+    //float depth_offset = abs(new_depth - PSIn.Pos.z) * 10000.0f;
+    //PSOut.Color = float4(depth_offset, depth_offset, depth_offset, 1.0f) + bake_data * 0.0000001f;
+
+    //test
+    float DeviceDepth = PSIn.Pos.z * PSIn.Pos.w / (PSIn.Pos.w - correct_depth * 0.01f);
+    //BakeHeightScale = (PSIn.Pos.z - DeviceDepth * PSIn.Pos.w) / DeviceDepth;
+    new_depth = DeviceDepth;
+
+    // float trueZ = g_ProjMat._43 / (PSIn.Pos.z - g_ProjMat._33);
+    // new_depth = g_ProjMat._43 / (trueZ + BakeHeightScale) + g_ProjMat._33;
 
     PSOut.depth = new_depth;
 
