@@ -44,7 +44,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     uint layer_idx = id.z;
 
     float rotate_rad_interp = float(layer_idx) / (BAKE_MESH_TEX_Z - 1);
-    float rotate_rad = lerp(0.0f, 3.14f, rotate_rad_interp);
+    float rotate_rad = lerp(0.0f, 3.14f * 2.0f, rotate_rad_interp);
 
     float3 y_up = float3(0.0f, 1.0f, 0.0f);
     float3x3 rotate_mat = AngleAxis3x3(rotate_rad, y_up); //neg 
@@ -53,13 +53,15 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     BVHAABB MeshAABB = BVHNodeAABB[0];
     float bake_plane_y = MeshAABB.upper.y;
 
-    float bbx_x = MeshAABB.upper.x - MeshAABB.lower.x;
-    float bbx_z = MeshAABB.upper.z - MeshAABB.lower.z;
+    float offset_bbx_x = 10.0f;
+    float offset_bbx_z = 10.0f;
+    float bbx_x = MeshAABB.upper.x - MeshAABB.lower.x - 2.0f * offset_bbx_x;
+    float bbx_z = MeshAABB.upper.z - MeshAABB.lower.z - 2.0f * offset_bbx_z;
 
     float per_texel_w = bbx_x / BAKE_MESH_TEX_XY;
     float per_texel_h = bbx_z / BAKE_MESH_TEX_XY;
 
-    float2 ray_start_xz = MeshAABB.lower.xz;
+    float2 ray_start_xz = MeshAABB.lower.xz + float2(offset_bbx_x, offset_bbx_z);
 
     uint per_texel_sample_num = 16;
     float4 out_sample_data[16];
