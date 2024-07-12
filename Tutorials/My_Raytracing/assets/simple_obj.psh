@@ -109,7 +109,10 @@ void main(in  PSInput  PSIn,
     float plane_w = bbox_max.x - bbox_min.x;
     float plane_h = bbox_max.z - bbox_min.z;
 
-    float3 view_dir = normalize(g_CamPos - PSIn.PixelWPos.xyz);
+    float3 cam_offset_dir = -normalize(float3(g_CamForward.x, 0.0f, g_CamForward.z));
+    float cam_offset_weight = pow(saturate(dot(PSIn.WNormal, -g_CamForward)), 10.0f);
+    float3 ref_CamPos = g_CamPos.y * cam_offset_dir * cam_offset_weight + g_CamPos;
+    float3 view_dir = normalize(ref_CamPos - PSIn.PixelWPos.xyz);
 
     //test
     //float texFreq = 10.0;
@@ -128,10 +131,11 @@ void main(in  PSInput  PSIn,
 
         // float2 offset_wpos = (mainTexUV - PSIn.UV) * float2(1.0f, -1.0f) * float2(plane_w, plane_h);
         float dist_cam_to_pixel = length(g_CamPos - (PSIn.PixelWPos.xyz));
-        float weight = pow(saturate(dot(view_dir, PSIn.WNormal.xyz)), 1.0f);
-        float3 sample_view_dir = view_dir;//lerp(-g_CamForward, view_dir, 0.0f);
+        //float weight = pow(saturate(dot(view_dir, PSIn.WNormal.xyz)), 1.0f);
+        float3 sample_view_dir = view_dir;//lerp(, -g_CamForward, 0.0f);
+
         float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
-        float3 view_dir_on_plane = normalize(float3(sample_view_dir.x, 0.0f, sample_view_dir.z));
+        float3 view_dir_on_plane = normalize(float3(sample_view_dir.x, 0.000001f, sample_view_dir.z));        
         //float dot_dir = step(0.0f, -cross(view_dir_on_plane, bake_start_dir_on_Plane).y);
         float dot_dir = cross(view_dir_on_plane, bake_start_dir_on_Plane).y;
         float dot_view_and_plane = dot(bake_start_dir_on_Plane, view_dir_on_plane);
@@ -216,8 +220,8 @@ void main(in  PSInput  PSIn,
     float new_depth = new_ndc_pos.z / new_ndc_pos.w;
     //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z));
     // float offset_d_val = new_offset_pos.y / 10.0f;
-    PSOut.Color = float4(sample_z, sample_z, sample_z, 1.0f) + 0.000000001f * float4(dir_lighting, 1.0f);
-    //PSOut.Color = float4(dir_lighting, 1.0f);
+    //PSOut.Color = float4(weight, weight, weight, 1.0f) + 0.000000001f * float4(dir_lighting, 1.0f);
+    PSOut.Color = float4(dir_lighting * float3(0.0f, 0.8f, 0.0f), 1.0f);
     //PSOut.Color = float4(sample_z, sample_z, sample_z, 1.0f);
     
     //PSOut.Color = float4(bake_data.xyz, 1.0f);
