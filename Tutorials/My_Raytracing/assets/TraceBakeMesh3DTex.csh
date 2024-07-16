@@ -11,6 +11,9 @@ cbuffer TraceBakeMeshData
     float4 BakeVerticalNorDir;
 }
 
+Texture2D DiffTex;
+SamplerState DiffTex_sampler;
+
 RWTexture3D<float4> Out3DTex;
 
 // Rotation with angle (in radians) and axis
@@ -105,7 +108,9 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
             //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));
             //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, min_near);
             //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, min_near);
-            out_sample_data[sample_i] = float4(out_normal.xyz, min_near);
+            float2 DiffTexUV = v0.uv * u + v1.uv * v + v2.uv * w;
+            float3 diff = DiffTex.SampleLevel(DiffTex_sampler, DiffTexUV, 3).rgb;
+            out_sample_data[sample_i] = float4(diff.xyz, min_near);
         }
         else
         {
@@ -146,12 +151,14 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
                                 float w = hit_coordinate.y;
                                 //float2 out_uv = v1.uv * hit_coordinate.x + v2.uv * hit_coordinate.y + (1.0f - hit_coordinate.x - hit_coordinate.y) * v0.uv;
                                 //float2 out_uv = v0.uv * u + v1.uv * v + v2.uv * w;
+                                float2 DiffTexUV = v0.uv * u + v1.uv * v + v2.uv * w;
+                                float3 diff = DiffTex.SampleLevel(DiffTex_sampler, DiffTexUV, 3).rgb;
                                 float3 out_normal = v0.normal.xyz * u + v1.normal.xyz * v + v2.normal.xyz * w;       
 
                                 float hit_depth = neighor_hit_min * 0.1f;
                                 //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, 1.0f / (1.0f + hit_depth));                            
                                 //Out3DTex[out_3dtex_idx] = float4(out_normal.xyz, neighor_hit_min);                            
-                                out_sample_data[sample_i] = float4(out_normal.xyz, neighor_hit_min);
+                                out_sample_data[sample_i] = float4(diff.xyz, neighor_hit_min);
                             }
                         }
                     }

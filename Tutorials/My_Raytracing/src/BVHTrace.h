@@ -60,7 +60,7 @@ namespace Diligent
 
 	static const Uint32 VERTEX_AO_RAY_SAMPLE_NUM = 256;
 	static const Uint32 TRIANGLE_SUBDIVISION_NUM = 16;
-	static const Uint32 BAKE_MESH_TEX_XY = 256;
+	static const Uint32 BAKE_MESH_TEX_XY = 512;
 	static const Uint32 BAKE_MESH_TEX_Z  = 32;
 
 	class BVHTrace
@@ -159,6 +159,7 @@ namespace Diligent
 		RefCntAutoPtr<IPipelineState> m_apBakeMesh3DTexPSO;
 		RefCntAutoPtr<IShaderResourceBinding> m_apBakeMesh3DTexSRB;
 		RefCntAutoPtr<ITexture> m_apBakeMesh3DTexData;
+		RefCntAutoPtr<ITexture> m_apBakeMeshDiffTexData;
 		RefCntAutoPtr<IBuffer> m_apBakeMesh3DTexUniformBuffer;
 
 

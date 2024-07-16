@@ -8,6 +8,7 @@
 #include "Shader.h"
 #include "MapHelper.hpp"
 #include "BVH.h"
+#include "TextureUtilities.h"
 
 #include "assimp/Exporter.hpp"
 
@@ -302,6 +303,8 @@ void Diligent::BVHTrace::DispatchBakeMesh3DTexture(const float3 &BakeInitDir)
 	m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeData")->Set(m_pBVH->GetBVHNodeBufferView());
 	m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "BVHNodeAABB")->Set(m_pBVH->GetBVHNodeAABBBufferView());
 	m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "Out3DTex")->Set(m_apBakeMesh3DTexData->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	if(m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DiffTex"))
+		m_apBakeMesh3DTexSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DiffTex")->Set(m_apBakeMeshDiffTexData->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
 	m_pDeviceCtx->CommitShaderResources(m_apBakeMesh3DTexSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
@@ -746,22 +749,23 @@ void Diligent::BVHTrace::CreateBakeMesh3DTexPSO()
 		{SHADER_TYPE_COMPUTE, "TraceUniformData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "TraceBakeMeshData", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 		{SHADER_TYPE_COMPUTE, "Out3DTex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
+		{SHADER_TYPE_COMPUTE, "DiffTex", SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC},
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc = CreatePSODescAndParam(Vars, _countof(Vars), "trace bake mesh pso");
 
-	//SamplerDesc SamLinearClampDesc
-	//{
-	//	FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
-	//	TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
-	//};
-	//ImmutableSamplerDesc ImtblSamplers[] =
-	//{
-	//	{SHADER_TYPE_COMPUTE, "DiffTextures", SamLinearClampDesc}
-	//};
-	//// clang-format on
-	//PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
-	//PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+	SamplerDesc SamLinearClampDesc
+	{
+		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+		TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP, TEXTURE_ADDRESS_WRAP
+	};
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{SHADER_TYPE_COMPUTE, "DiffTex", SamLinearClampDesc}
+	};
+	// clang-format on
+	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	PSOCreateInfo.PSODesc.ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
 
 	PSOCreateInfo.pCS = pTraceBakeMeshShader;
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_apBakeMesh3DTexPSO);
@@ -793,6 +797,20 @@ void Diligent::BVHTrace::CreateBakeMesh3DTexBuffer()
 	BakeMesh3DTextureDesc.Usage = USAGE_DYNAMIC;
 	BakeMesh3DTextureDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
 	m_pDevice->CreateTexture(BakeMesh3DTextureDesc, nullptr, &m_apBakeMesh3DTexData);
+
+	/*TextureDesc BakeMeshDiffTextureDesc;
+	BakeMeshDiffTextureDesc.Name = "Bake Mesh Diff tex";
+	BakeMeshDiffTextureDesc.Type = RESOURCE_DIM_TEX_2D;
+	BakeMeshDiffTextureDesc.Width = 2048;
+	BakeMeshDiffTextureDesc.Height = 2048;
+	BakeMeshDiffTextureDesc.Format = TEX_FORMAT_RGBA8_UINT;
+	BakeMeshDiffTextureDesc.Usage = USAGE_DYNAMIC;
+	BakeMeshDiffTextureDesc.BindFlags = BIND_SHADER_RESOURCE;
+	m_pDevice->CreateTexture(BakeMeshDiffTextureDesc, nullptr, &m_apBakeMeshDiffTexData);*/
+	TextureLoadInfo loadInfo;
+	loadInfo.IsSRGB = false;
+	loadInfo.MipLevels = 0;
+	CreateTextureFromFile("./wildGreen_aged_albedo.jpg", loadInfo, m_pDevice, &m_apBakeMeshDiffTexData);
 }
 
 void Diligent::BVHTrace::CreateTracePSO()
