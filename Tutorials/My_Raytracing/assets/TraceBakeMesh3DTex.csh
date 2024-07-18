@@ -66,7 +66,9 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
 
     float2 ray_start_xz = MeshAABB.lower.xz + float2(offset_bbx_x, offset_bbx_z);
 
-    uint per_texel_sample_num = 16;
+    float default_max_dist = 200.0f;
+
+    uint per_texel_sample_num = 1;
     float4 out_sample_data[16];
     for(int sample_i = 0; sample_i < per_texel_sample_num; ++sample_i)
     {
@@ -115,7 +117,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
         else
         {
             //Out3DTex[out_3dtex_idx] = float4(0.0f, 1.0f, 0.0f, 20000.0f);
-            out_sample_data[sample_i] = float4(0.0f, 1.0f, 0.0f, 200.0f);
+            out_sample_data[sample_i] = float4(0.0f, 0.0f, 0.0f, default_max_dist);
 
             //surounding 8 neighor element        
             float neighor_hit_min = MAX_INT;
@@ -169,11 +171,21 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
 
     //average
     float4 out_val = float4(0.0f, 0.0f, 0.0f, MAX_INT);
+    int valid_pixel = 0;
     for(int i = 0; i < per_texel_sample_num; ++i)
     {
-        out_val.rgb += out_sample_data[i].rgb / per_texel_sample_num;
-        out_val.a = min(out_val.a, out_sample_data[i].a);
+        if(out_sample_data[i].a < default_max_dist)
+        {
+            out_val.rgb += out_sample_data[i].rgb;
+            out_val.a = min(out_val.a, out_sample_data[i].a);
+            ++valid_pixel;
+        }
     }
+    if(valid_pixel > 0)
+    {
+        out_val.rgb = out_val.rgb / valid_pixel;
+    }
+
     out_val.a = 1.0f / (1.0f + out_val.a);
 
     Out3DTex[out_3dtex_idx] = out_val;

@@ -30,6 +30,7 @@
 #include "BVHTrace.h"
 #include "CommonlyUsedStates.h"
 #include "MapHelper.hpp"
+#include "TextureUtilities.h"
 
 #include "imgui.h"
 #include "imGuIZMO.h"
@@ -140,7 +141,8 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	// to change on a per-instance basis
 	ShaderResourceVariableDesc Vars[] =
 	{
-		{ SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE }
+		{ SHADER_TYPE_PIXEL, "g_Texture", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE },
+		{ SHADER_TYPE_PIXEL, "g_NoiseTex", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE }
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc.ResourceLayout.Variables = Vars;
@@ -150,7 +152,8 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	// Define immutable sampler for g_Texture. Immutable samplers should be used whenever possible
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{ SHADER_TYPE_PIXEL, "g_Texture", Sam_LinearWrap }
+		{ SHADER_TYPE_PIXEL, "g_Texture", Sam_LinearWrap },
+		{ SHADER_TYPE_PIXEL, "g_NoiseTex", Sam_LinearWrap }
 	};
 	// clang-format on
 	PSOCreateInfo.PSODesc.ResourceLayout.ImmutableSamplers = ImtblSamplers;
@@ -189,6 +192,12 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 
 	CreateNormalObjPSO();
 
+	//load tex
+	TextureLoadInfo loadInfo;
+	loadInfo.IsSRGB = false;
+	loadInfo.MipLevels = 0;
+	CreateTextureFromFile("./noise.jpg", loadInfo, m_pDevice, &m_apNoiseTex);
+
 	//load raster mesh
 	RasterMeshVec.emplace_back(load_mesh("./test_plane.fbx"));
 	RasterMeshVec.emplace_back(load_mesh("./normal_obj.fbx"));
@@ -214,7 +223,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	//FileList.emplace_back("high_poly_grass.FBX");
 	//FileList.emplace_back("gzc_plant_grass_bai.FBX");
 	//FileList.emplace_back("test_grass.FBX");
-	FileList.emplace_back("grass_patch3.FBX");
+	FileList.emplace_back("grass_patch4.FBX");
 	//FileList.emplace_back("test_combine_v.FBX");
 	/*FileList.emplace_back("cjfj_guizi.fbx");
 	FileList.emplace_back("heihufangjian_yugang.fbx");
@@ -243,14 +252,18 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		m_pTrace->DispatchBakeMesh3DTexture(BakeInitDir);
 
 		m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(m_pTrace->GetBakeMesh3DTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+
+		if (m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_NoiseTex"))
+		{
+			m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_NoiseTex")->Set(m_apNoiseTex->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+		}
 	}
 
 	/*IShaderResourceVariable *p_gtexture = m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture");
 	if (p_gtexture)
 	{
 		p_gtexture->Set(m_pTrace->GetOutputPixelTex()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-	}*/
-	
+	}*/	
 }
 
 // Render a frame

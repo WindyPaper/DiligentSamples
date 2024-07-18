@@ -3,6 +3,9 @@
 Texture3D    g_Texture;
 SamplerState g_Texture_sampler; // By convention, texture samplers must use the '_sampler' suffix
 
+Texture2D g_NoiseTex;
+SamplerState g_NoiseTex_sampler;
+
 struct PSInput 
 { 
     float4 Pos   : SV_POSITION; 
@@ -109,9 +112,9 @@ void main(in  PSInput  PSIn,
     float plane_w = bbox_max.x - bbox_min.x;
     float plane_h = bbox_max.z - bbox_min.z;
 
-    float3 cam_offset_dir = -normalize(float3(g_CamForward.x, 0.0f, g_CamForward.z));
+    float3 cam_offset_dir = -normalize(float3(g_CamForward.x, 0.00000001f, g_CamForward.z));
     float cam_offset_weight = pow(saturate(dot(PSIn.WNormal, -g_CamForward)), 10.0f);
-    float3 ref_CamPos = g_CamPos.y * cam_offset_dir * cam_offset_weight + g_CamPos;
+    float3 ref_CamPos = g_CamPos.xyz;//g_CamPos.y * cam_offset_dir * cam_offset_weight + g_CamPos;
     float3 view_dir = normalize(ref_CamPos - PSIn.PixelWPos.xyz);
 
     //test
@@ -130,7 +133,7 @@ void main(in  PSInput  PSIn,
         //fragColor += GetTextureSample(PSIn.UV, tileFreq, interpNode.xy) * interpNode.z;
 
         // float2 offset_wpos = (mainTexUV - PSIn.UV) * float2(1.0f, -1.0f) * float2(plane_w, plane_h);
-        float dist_cam_to_pixel = length(g_CamPos - (PSIn.PixelWPos.xyz));
+        float dist_cam_to_pixel = length(ref_CamPos - (PSIn.PixelWPos.xyz));
         //float weight = pow(saturate(dot(view_dir, PSIn.WNormal.xyz)), 1.0f);
         float3 sample_view_dir = view_dir;//lerp(, -g_CamForward, 0.0f);
 
@@ -145,13 +148,16 @@ void main(in  PSInput  PSIn,
         //float sample_z = dot_dir * dot_view_and_plane;
         //float sample_z = (atan2(view_dir_on_plane.z, view_dir_on_plane.x) - atan2(bake_start_dir_on_Plane.z, bake_start_dir_on_Plane.x)) / (2.0f * 3.14f);
         float sample_z = 0.0f;
+        float rot_radian = 0.0f;
         if(dot_dir < 0.0f)
         {
             sample_z = 1.0f - acos(dot_view_and_plane) / (2.0f * 3.14f);
+            rot_radian = 2.0f * 3.14f - acos(dot_view_and_plane);
         }
         else
         {
             sample_z = acos(dot_view_and_plane) / (2.0f * 3.14f);
+            rot_radian = acos(dot_view_and_plane);
         }
         
         bake_data += g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV * tileFreq, sample_z));// * interpNode.z;
@@ -189,10 +195,19 @@ void main(in  PSInput  PSIn,
     float cosV = dot(PSIn.WNormal, view_dir);
     float cosBakeDir = dot(PSIn.WNormal, -g_BakeDirAndNum.xyz);
     //float correct_depth = cosV / cosBakeDir * offset_depth;
-    float correct_depth = offset_depth;// / sqrt((1.000001f - cosBakeDir * cosBakeDir) * (1.00001f - cosV * cosV));
+    //float correct_depth = offset_depth;// / sqrt((1.000001f - cosBakeDir * cosBakeDir) * (1.00001f - cosV * cosV));
     //float correct_depth = abs((g_BakeDirAndNum.xyz * offset_depth).y) * cosV;
     //float correct_depth = offset_depth / cosBakeDir * cosV;
-    //float correct_depth = (1.0f - cosV) * offset_depth;
+    //float correct_depth = (1.0f - cosV) * offset_depth;    
+
+    //noise depth
+    float depth_noise_value = g_NoiseTex.Sample(g_NoiseTex_sampler, PSIn.UV * (BakeTexTiling / 10.0f)).r;
+    offset_depth += depth_noise_value;// * 5.0f * (1.0f - cosV);
+    //offset_depth = clamp(0.0f, 1.0f, offset_depth);
+    //correct_depth = clamp(0.0f, 2.0f, correct_depth);
+    float correct_depth = offset_depth * cosBakeDir / cosV;
+
+
 
     //clamp depth 
     //correct_depth = min(2.0f, correct_depth);
@@ -208,11 +223,18 @@ void main(in  PSInput  PSIn,
     // float3 bake_dir_pp = mul(rotate_mat, g_BakeDirAndNum.xyz);
     // float3 new_offset_pos = PSIn.PixelWPos.xyz + bake_dir_pp * BakeHeightScale;
     // float cam_z = mul(float4(PSIn.PixelWPos.xyz, 1.0f), g_ViewMat).z;
+
+    //offset dir
+    float3 y_up = float3(0.0f, 1.0f, 0.0f);  
+    float3x3 rotate_mat = AngleAxis3x3(-rot_radian, y_up);
+    float3 bake_dir_pp = mul(rotate_mat, g_BakeDirAndNum.xyz);
+
     float3 new_offset_pos = PSIn.PixelWPos.xyz + g_CamForward * correct_depth;
+    //float3 new_offset_pos = PSIn.PixelWPos.xyz + g_CamForward.xyz * correct_depth;
     //float3 new_offset_pos = float3(0.0f, 0.0f, 0.0f) + float3(0.0f, -1.0f, 0.0f) * BakeHeightScale;
 
     float offsett = saturate(correct_depth - offset_depth);
-    //PSOut.Color = float4(offsett, offsett, offsett, 1.0f) + bake_data * 0.00001f;
+    // PSOut.Color = float4(offsett, offsett, offsett, 1.0f) + bake_data * 0.00001f;
 
     //float4 new_ndc_pos = mul(float4(new_offset_pos,1.0), g_WorldViewProj);
     //float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);
@@ -221,10 +243,10 @@ void main(in  PSInput  PSIn,
     //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z));
     // float offset_d_val = new_offset_pos.y / 10.0f;
     //PSOut.Color = float4(weight, weight, weight, 1.0f) + 0.000000001f * float4(dir_lighting, 1.0f);
-    PSOut.Color = float4(dir_lighting * float3(0.0f, 0.8f, 0.0f), 1.0f);
+    //PSOut.Color = float4(bake_data.rgb, 1.0f);
     //PSOut.Color = float4(sample_z, sample_z, sample_z, 1.0f);
     
-    //PSOut.Color = float4(bake_data.xyz, 1.0f);
+    PSOut.Color = float4(bake_data.xyz, 1.0f);
     //float depth_offset = abs(new_depth - PSIn.Pos.z) * 10000.0f;
     //PSOut.Color = float4(depth_offset, depth_offset, depth_offset, 1.0f) + bake_data * 0.0000001f;
 

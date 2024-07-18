@@ -86,6 +86,7 @@ private:
 	RefCntAutoPtr<IShaderResourceBinding> m_pNormalObjSRB;
 
 	RefCntAutoPtr<IBuffer> m_VSConstants;
+	RefCntAutoPtr<ITexture> m_apNoiseTex;
 
 	FirstPersonCamera m_Camera;
 

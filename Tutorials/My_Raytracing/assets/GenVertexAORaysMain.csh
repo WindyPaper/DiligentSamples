@@ -9,7 +9,7 @@ cbuffer GenVertexAORaysUniformData
 
 struct GenAORayData
 {
-    float3 dir;
+    float4 dir;
 };
 
 RWStructuredBuffer<GenAORayData> OutAORayDatas;
@@ -121,7 +121,7 @@ void GenVertexAORaysMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThreadID,
     float3 ray_in_obj_space = normalize(tangent * ray_in_tangent_space.x + binormal * ray_in_tangent_space.y + local_normal * ray_in_tangent_space.z);
 
     GenAORayData out_ray;
-    out_ray.dir = ray_in_obj_space;
+    out_ray.dir = float4(ray_in_obj_space, 0.0f);
 
     OutAORayDatas[vertex_ray_id] = out_ray;
 }

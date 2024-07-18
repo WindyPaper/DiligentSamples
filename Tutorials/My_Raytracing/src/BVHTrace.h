@@ -30,7 +30,7 @@ namespace Diligent
 
 	struct GenAORayData
 	{
-		float3 dir;
+		float4 dir;
 	};
 
 	struct GenSubdivisionPosInTriangle
@@ -60,7 +60,7 @@ namespace Diligent
 
 	static const Uint32 VERTEX_AO_RAY_SAMPLE_NUM = 256;
 	static const Uint32 TRIANGLE_SUBDIVISION_NUM = 16;
-	static const Uint32 BAKE_MESH_TEX_XY = 512;
+	static const Uint32 BAKE_MESH_TEX_XY = 128;
 	static const Uint32 BAKE_MESH_TEX_Z  = 32;
 
 	class BVHTrace

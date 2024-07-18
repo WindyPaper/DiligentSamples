@@ -64,7 +64,7 @@ void GenVertexAOColorMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThreadID
     uint group_ray_idx = local_grp_idx;
 
     float3 ray_pos = MeshVertex[vertex_idx].pos;
-    float3 ray_dir = AORayDatas[VERTEX_AO_SAMPLE_NUM * vertex_idx + group_ray_idx].dir;
+    float3 ray_dir = AORayDatas[VERTEX_AO_SAMPLE_NUM * vertex_idx + group_ray_idx].dir.xyz;
 
     //offset ray_pos
     float3 local_normal = MeshVertex[vertex_idx].normal;    

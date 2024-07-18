@@ -27,7 +27,7 @@ Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice,
 
 	BindDiffTexs();
 
-	CreateGenVertexAORaysPSO();
+	/*CreateGenVertexAORaysPSO();
 	CreateGenVertexAORaysBuffer();
 
 	CreateGenTriangleAORaysPSO();
@@ -43,7 +43,7 @@ Diligent::BVHTrace::BVHTrace(IDeviceContext *pDeviceCtx, IRenderDevice *pDevice,
 	CreateTriangleAOTraceBuffer();
 
 	CreateTriangleFaceAOPSO();
-	CreateTriangleFaceAOBuffer();
+	CreateTriangleFaceAOBuffer();*/
 
 	CreateBakeMesh3DTexPSO();
 	CreateBakeMesh3DTexBuffer();

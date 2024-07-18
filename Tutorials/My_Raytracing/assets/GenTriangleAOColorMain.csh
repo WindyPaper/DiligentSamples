@@ -26,7 +26,7 @@ void GenTriangleAOColorMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
     uint triangle_idx = uint(subd_triangle_pos_idx / TRIANGLE_SUBDIVISION_NUM);
 
     float3 ray_pos = TriangleAOPosDatas[subd_triangle_pos_idx].pos;
-    float3 ray_dir = TriangleAORayDatas[VERTEX_AO_SAMPLE_NUM * triangle_idx + group_ray_idx].dir; 
+    float3 ray_dir = TriangleAORayDatas[VERTEX_AO_SAMPLE_NUM * triangle_idx + group_ray_idx].dir.xyz; 
 
     uint p0_i = MeshIdx[triangle_idx * 3];
     uint p1_i = MeshIdx[triangle_idx * 3 + 1];
