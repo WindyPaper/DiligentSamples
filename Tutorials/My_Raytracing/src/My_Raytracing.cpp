@@ -47,6 +47,7 @@ namespace Diligent
 		float4x4 g_WorldViewProj;
 		float4x4 g_ViewMat;
 		float4x4 g_ProjMat;
+		float4x4 g_ViewProjMatInv;
 		float4 g_CamPos;
 		float4 g_CamForward;
 		float4 g_BakeDirAndNum;
@@ -54,7 +55,7 @@ namespace Diligent
 		float TestPlaneOffsetY;
 		float BakeHeightScale;
 		float BakeTexTiling;
-		float padding;
+		float FlowIntensity;
 
 		float4 bbox_min;
 		float4 bbox_max;
@@ -196,7 +197,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	TextureLoadInfo loadInfo;
 	loadInfo.IsSRGB = false;
 	loadInfo.MipLevels = 0;
-	CreateTextureFromFile("./noise.jpg", loadInfo, m_pDevice, &m_apNoiseTex);
+	CreateTextureFromFile("./grass_flow_uncompressed.jpg", loadInfo, m_pDevice, &m_apNoiseTex);
 
 	//load raster mesh
 	RasterMeshVec.emplace_back(load_mesh("./test_plane.fbx"));
@@ -216,8 +217,9 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	mBakeHeightScale = 1.0f;
 	mBakeTexTiling = 40.0f;
 	mTestPlaneOffsetY = 1.0f;
+	mFlowIntensity = 1.0f;
 
-	BakeInitDir = normalize(float3(-1.0f, -1.0f, 0.0f));
+	BakeInitDir = normalize(float3(-0.3f, -1.0f, 0.0f));
 
 	std::vector<std::string> FileList;
 	//FileList.emplace_back("high_poly_grass.FBX");
@@ -249,7 +251,7 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 		//m_pTrace->DispatchTriangleAOTrace();
 
 		//bake texture
-		m_pTrace->DispatchBakeMesh3DTexture(BakeInitDir);
+		//m_pTrace->DispatchBakeMesh3DTexture(BakeInitDir);
 
 		m_pSRB->GetVariableByName(SHADER_TYPE_PIXEL, "g_Texture")->Set(m_pTrace->GetBakeMesh3DTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
@@ -288,6 +290,7 @@ void MyRayTracing::Render()
 			// Map the buffer and write current world-view-projection matrix
 			MapHelper<SimpleObjConstants> CBConstants(m_pImmediateContext, m_VSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
 			CBConstants->g_WorldViewProj = m_Camera.GetViewProjMatrix().Transpose();
+			CBConstants->g_ViewProjMatInv = m_Camera.GetViewProjMatrix().Inverse().Transpose();
 			CBConstants->g_CamPos = m_Camera.GetPos();
 			CBConstants->g_CamForward = m_Camera.GetWorldAhead();
 			CBConstants->g_BakeDirAndNum = float4(BakeInitDir, BAKE_MESH_TEX_Z);
@@ -295,6 +298,7 @@ void MyRayTracing::Render()
 			CBConstants->BakeHeightScale = mBakeHeightScale;
 			CBConstants->BakeTexTiling = mBakeTexTiling;
 			CBConstants->TestPlaneOffsetY = mTestPlaneOffsetY;
+			CBConstants->FlowIntensity = mFlowIntensity;
 
 			CBConstants->bbox_min = raster_data.bbox_min;
 			CBConstants->bbox_max = raster_data.bbox_max;
@@ -413,7 +417,8 @@ void MyRayTracing::UpdateUI()
 
 	ImGui::SliderFloat("TestPlaneOffsetY", &mTestPlaneOffsetY, -10.0f, 10.0f);
 	ImGui::SliderFloat("BakeHeightScale", &mBakeHeightScale, -5.0f, 5.0f);
-	ImGui::SliderFloat("BakeTexTiling", &mBakeTexTiling, 0.01f, 100.0f);
+	ImGui::SliderFloat("BakeTexTiling", &mBakeTexTiling, 0.01f, 500.0f);
+	ImGui::SliderFloat("FlowIntensity", &mFlowIntensity, 0.0f, 1.0f);
 
 	ImGui::End();
 }

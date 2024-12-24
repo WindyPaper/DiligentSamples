@@ -102,6 +102,7 @@ private:
 	float mTestPlaneOffsetY;
 	float mBakeHeightScale;
 	float mBakeTexTiling;
+	float mFlowIntensity;
 
 	std::vector<RasterMeshData> RasterMeshVec;
 };

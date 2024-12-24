@@ -103,6 +103,101 @@ float3x3 AngleAxis3x3(float angle, float3 axis)
     );
 }
 
+struct RaycastResult
+{
+    float3 world_normal;
+    float2 uv;
+    float3 world_pos;
+    float4 color;
+};
+RaycastResult RaycastFur(float3 world_pos, float3 world_dir, float2 uv, float3x3 world_to_uv, float3x3 uv_to_fur, float density_bias)
+{
+    float3x3 fur_to_uv = (Inverse3x3(uv_to_fur));
+    
+    float3 uv_ray_dir = mul(world_dir, world_to_uv);
+    
+    float3 fur_ray_start = mul(float3(uv, 0.0f), uv_to_fur);
+    float3 fur_ray_dir = mul(uv_ray_dir, uv_to_fur);
+    //fur_ray_dir.xy += normalize(fur_ray_dir.xy) * 0.01f;
+    
+    float fur_ray_length = length((fur_ray_dir).xy );
+    float2 fur_planar_dir = normalize(fur_ray_dir.xy);
+    float ang = atan2(fur_planar_dir.y, fur_planar_dir.x);
+    
+    float2 fur_planar_perp = float2(-fur_planar_dir.y, fur_planar_dir.x);
+    
+    float3 lookup_coord = float3(fur_ray_start.xy, ang / (2.0f * 3.1415f));
+    
+    float p = 5.0f;
+    float mult = 1.0f;
+    
+    float4 tex_sample = g_Texture.SampleLevel(g_Texture_sampler, lookup_coord, 0.0f); //tex3Dlod(precomputed_tex, precomputed_tex_sampler, float4(lookup_coord, 0.0f));
+    
+
+    float hit_dist = 1.0f / (tex_sample.r + 1e-7f) - 1.0f;
+    //float hit_dist = tex_sample.r;
+    float3 fur_hit_normal;
+
+    fur_hit_normal.xyz = tex_sample.gba * 2.0f - 1.0f;
+    fur_hit_normal.z *= -1.0f;
+    
+    
+    float angle_ratio = density_bias; 
+    //fur_hit_normal.z = angle_ratio;
+    //fur_hit_normal = normalize(fur_hit_normal);
+    
+    float dist_scale = hit_dist * 100.0f * BakeHeightScale / (length(fur_ray_dir.xy) + abs(normalize(fur_ray_dir).z) * angle_ratio + 0.01f * 0.0f);
+    float uv_dist_scale = hit_dist / length(fur_ray_dir.xy);
+
+    float3x3 fur_to_uv_normal = fur_to_uv;
+    /*fur_to_uv_normal[0] = normalize(fur_to_uv_normal[0]);
+    fur_to_uv_normal[1] = normalize(fur_to_uv_normal[1]);
+    fur_to_uv_normal[2] = normalize(fur_to_uv_normal[2]);*/
+    
+    float3 uv_hit_normal = mul(fur_hit_normal, transpose(uv_to_fur) );
+    
+    RaycastResult res;
+    res.world_normal = normalize(mul(uv_hit_normal, transpose(world_to_uv) )); //this is how normals are transformed
+    res.world_pos = world_pos + world_dir * dist_scale;
+    res.uv = uv + uv_ray_dir.xy * uv_dist_scale;
+    
+    return res;
+}
+
+float4x4 GetViewProjectionTransform()
+{
+    return g_WorldViewProj;
+}
+
+float3 Project(in float3 world_point, in float4x4 proj_matrix)
+{
+	float4 world_point4;
+	world_point4.xyz = world_point;
+	world_point4.w = 1.0f;
+	float4 normalized_pos = mul(world_point4, proj_matrix);
+	normalized_pos /= normalized_pos.w;
+	float2 screen_point = normalized_pos.xy * 0.5f + float2(0.5f, 0.5f);
+	screen_point.y = 1.0f - screen_point.y;
+	return float3(screen_point.xy, normalized_pos.z);
+}
+
+float4x4 GetViewProjectionTransformInv() 
+{
+    return g_ViewProjMatInv;
+}
+
+float3 GetWorldPoint(float2 screenspace_point, float nonlinear_depth)
+{
+    float4 projected_pos;
+    projected_pos.x = screenspace_point.x * 2.f - 1.f;
+    projected_pos.y = ( 1.f - screenspace_point.y ) * 2.f - 1.f;
+    projected_pos.z = nonlinear_depth;
+    projected_pos.w = 1.f;
+    float4 world_pos = mul( projected_pos, GetViewProjectionTransformInv() );
+    world_pos /= world_pos.w;
+    return world_pos.xyz;
+}
+
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
 // shader output variable name must match exactly the name of the pixel shader input variable.
 // If the variable has structure type (like in this example), the structure declarations must also be indentical.
@@ -112,157 +207,70 @@ void main(in  PSInput  PSIn,
     float plane_w = bbox_max.x - bbox_min.x;
     float plane_h = bbox_max.z - bbox_min.z;
 
-    float3 cam_offset_dir = -normalize(float3(g_CamForward.x, 0.00000001f, g_CamForward.z));
-    float cam_offset_weight = pow(saturate(dot(PSIn.WNormal, -g_CamForward)), 10.0f);
-    float3 ref_CamPos = g_CamPos.xyz;//g_CamPos.y * cam_offset_dir * cam_offset_weight + g_CamPos;
-    float3 view_dir = normalize(ref_CamPos - PSIn.PixelWPos.xyz);
+    //float2 flow_dir = float2(0.5f, 0.5f);
+    float2 flow_dir = g_NoiseTex.Sample(g_NoiseTex_sampler, PSIn.UV * BakeTexTiling / 30.0f).xy * 2.0f - 1.0f;
+    flow_dir *= FlowIntensity;
 
-    //test
-    //float texFreq = 10.0;
-    float tileFreq = BakeTexTiling;
+
+	float3 world_ray_origin = PSIn.PixelWPos.xyz;  
+	float2 screen_ray_origin = Project(world_ray_origin, GetViewProjectionTransform()).xy;
+	float3 world_ray_dir = normalize(GetWorldPoint(screen_ray_origin, 1.0f) - GetWorldPoint(screen_ray_origin, 0.0f));
+	
+	//out_world_pos = in_world_pos;
+	//out_uv = in_uv;
+	
+    float3x3 tbn_basis;
+    tbn_basis[0] = float3(1.0f, 0.0f, 0.0f);
+    tbn_basis[1] = float3(0.0f, 1.0f, 0.0f);
+    tbn_basis[2] = float3(0.0f, 0.0f, 1.0f);
     
-    //PSOut.Color = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, 0.0f)); 
+	float3 fiber_world_dir = normalize(tbn_basis[2] + normalize(tbn_basis[0]) * flow_dir.x + normalize(tbn_basis[1]) * flow_dir.y);
+	float gravity = 0.0f;
+	fiber_world_dir = normalize(fiber_world_dir + float3(0.0f, 0.0f, 1.0f) * gravity);
+	
+	float3x3 uv_to_world;
+	uv_to_world[0] = tbn_basis[0];
+	uv_to_world[1] = tbn_basis[1];
+	uv_to_world[2] = fiber_world_dir * length(tbn_basis[0]);	
+	uv_to_world = uv_to_world;
+	
+    float freq_mult = BakeTexTiling;
+	float3x3 uv_to_fur_0;
+	{
+		float rotation_ang = 0.1f + 0.3f;//3.14 / 2.0f;
+		//float2 planar_dir = float2(cos(rotation_ang), sin(rotation_ang));
+        float2 planar_dir = float2(1.0f, 0.0f);
+		float3 basis_dir0 = float3( planar_dir.x, planar_dir.y, 0.0f);
+		float3 basis_dir1 = float3(-planar_dir.y, planar_dir.x, 0.0f);
+		float3 basis_dir2 = float3(0.0f, 0.0f, 1.0f);
+		
+		uv_to_fur_0 = float3x3(basis_dir0, basis_dir1, basis_dir2) * freq_mult;	
+	}
 
-    //float moment1 = 0.0;
-    float moment2 = 0.0;
-    float4 bake_data = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    // for(int i = 0; i < 3; i++)
-    // {
-    //     float3 interpNode = GetTriangleInterpNode(PSIn.UV, tileFreq, i);
-    //     float2 mainTexUV = GetTextureSampleUV(PSIn.UV, tileFreq, interpNode.xy);
-        //fragColor += GetTextureSample(PSIn.UV, tileFreq, interpNode.xy) * interpNode.z;
-
-        // float2 offset_wpos = (mainTexUV - PSIn.UV) * float2(1.0f, -1.0f) * float2(plane_w, plane_h);
-        float dist_cam_to_pixel = length(ref_CamPos - (PSIn.PixelWPos.xyz));
-        //float weight = pow(saturate(dot(view_dir, PSIn.WNormal.xyz)), 1.0f);
-        float3 sample_view_dir = view_dir;//lerp(, -g_CamForward, 0.0f);
-
-        float3 bake_start_dir_on_Plane = float3(1.0f, 0.0f, 0.0f);
-        float3 view_dir_on_plane = normalize(float3(sample_view_dir.x, 0.000001f, sample_view_dir.z));        
-        //float dot_dir = step(0.0f, -cross(view_dir_on_plane, bake_start_dir_on_Plane).y);
-        float dot_dir = cross(view_dir_on_plane, bake_start_dir_on_Plane).y;
-        float dot_view_and_plane = dot(bake_start_dir_on_Plane, view_dir_on_plane);
-        //float view_theta = acos(dot_view_and_plane);
-
-        //float sample_z = (1.0f - (dot_view_and_plane * 0.5f + 0.5f)) * 0.5f + 0.5f * dot_dir;
-        //float sample_z = dot_dir * dot_view_and_plane;
-        //float sample_z = (atan2(view_dir_on_plane.z, view_dir_on_plane.x) - atan2(bake_start_dir_on_Plane.z, bake_start_dir_on_Plane.x)) / (2.0f * 3.14f);
-        float sample_z = 0.0f;
-        float rot_radian = 0.0f;
-        if(dot_dir < 0.0f)
-        {
-            sample_z = 1.0f - acos(dot_view_and_plane) / (2.0f * 3.14f);
-            rot_radian = 2.0f * 3.14f - acos(dot_view_and_plane);
-        }
-        else
-        {
-            sample_z = acos(dot_view_and_plane) / (2.0f * 3.14f);
-            rot_radian = acos(dot_view_and_plane);
-        }
-        
-        bake_data += g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV * tileFreq, sample_z));// * interpNode.z;
-        //bake_data += g_Texture.Sample(g_Texture_sampler, float3(mainTexUV, 0.0f + (0.000000001f * sample_z)));
-        
-        //moment1 += interpNode.z;
-    //     moment2 += interpNode.z * interpNode.z;
-    // }
-    //float3 meanColor = textureLod(iChannel0, vec2(0.0), 10.0).rgb;
-    //float3 meanColor = g_Texture.SampleLevel(g_Texture_sampler, float3(float2(0.0f, 0.0f), sample_z), 10).rgb;    
-    //bake_data.rgb = PreserveVariance(bake_data.rgb, meanColor, moment2);
-
-
-    //float4 bake_data = g_Texture.Sample(g_Texture_sampler, float3(PSIn.UV, sample_z));
-    //PSOut.Color = float4(bake_data.rgb, 1.0f);    
+    float density_bias = 0.262f;
+    float2 in_uv = PSIn.UV;
+    float3x3 world_to_uv = (Inverse3x3(uv_to_world));
+    RaycastResult raycast_res0 = RaycastFur(world_ray_origin, world_ray_dir, in_uv, world_to_uv, uv_to_fur_0, density_bias);
 
     //lighting 
     float3 test_dir_light = normalize(float3(0.5f, 0.5f, 0.5f));
-    float3 dir_lighting = saturate(dot(test_dir_light, bake_data.rgb)) * float3(1.0f, 1.0f, 1.0f);
+    float3 dir_lighting = saturate(dot(test_dir_light, raycast_res0.world_normal)) * float3(1.0f, 1.0f, 1.0f);
     //float3 dir_lighting = saturate(bake_data.rgb) * float3(1.0f, 1.0f, 1.0f);
     //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z)) + 0.00000001f * float4(dir_lighting, 1.0f);
+
+    float3 surface_norm = -normalize(tbn_basis[2]);
+	float fiber_depth = dot(raycast_res0.world_pos - world_ray_origin, surface_norm);
+
+	float cosa = -dot(surface_norm, fiber_world_dir);
+	//fiber_coord = fiber_depth / cosa;
+	float fiber_density_scale = 1.0f / cosa;
+    float attenuation_depth = 8.0f;
+	float attenuation = exp(-fiber_depth * fiber_density_scale / attenuation_depth);    
     
 
-    float offset_depth = ((1.0f / (bake_data.a + 0.00001f)) - 1.0f) * 0.01f;
+    PSOut.Color = float4(attenuation, attenuation, attenuation, 1.0f);   
 
-    if(offset_depth >= 1.9f)
-    {
-        discard;
-    }
-
-    //float offset_depth = bake_data.a * 0.01f;
-    offset_depth = offset_depth * BakeHeightScale; //tiling
-
-    //depth-correction
-    float cosV = dot(PSIn.WNormal, view_dir);
-    float cosBakeDir = dot(PSIn.WNormal, -g_BakeDirAndNum.xyz);
-    //float correct_depth = cosV / cosBakeDir * offset_depth;
-    //float correct_depth = offset_depth;// / sqrt((1.000001f - cosBakeDir * cosBakeDir) * (1.00001f - cosV * cosV));
-    //float correct_depth = abs((g_BakeDirAndNum.xyz * offset_depth).y) * cosV;
-    //float correct_depth = offset_depth / cosBakeDir * cosV;
-    //float correct_depth = (1.0f - cosV) * offset_depth;    
-
-    //noise depth
-    float depth_noise_value = g_NoiseTex.Sample(g_NoiseTex_sampler, PSIn.UV * (BakeTexTiling / 10.0f)).r;
-    offset_depth += depth_noise_value;// * 5.0f * (1.0f - cosV);
-    //offset_depth = clamp(0.0f, 1.0f, offset_depth);
-    //correct_depth = clamp(0.0f, 2.0f, correct_depth);
-    float correct_depth = offset_depth * cosBakeDir / cosV;
-
-
-
-    //clamp depth 
-    //correct_depth = min(2.0f, correct_depth);
-    //float3 new_offset_pos = PSIn.PixelViewPos + normalize(PSIn.PixelViewPos.xyz) * offset_depth;
-
-    // float trueZ = g_ProjMat._43 / (PSIn.Pos.z - g_ProjMat._33);
-    // float viewZDist = dot(g_CamForward, -view_dir);
-    // float3 testPixelWPos = -view_dir * (trueZ * viewZDist) + g_CamPos.xyz;
-    //float3 new_offset_pos = PSIn.PixelWPos.xyz + float3(0.0f, -1.0f, 0.0f) * BakeHeightScale;
-    // float3 y_up = float3(0.0f, 1.0f, 0.0f);  
-    // float rot_radian = (dot_view_and_plane * 0.5f + 0.5f) * 3.14f;  
-    // float3x3 rotate_mat = AngleAxis3x3(-rot_radian, y_up);
-    // float3 bake_dir_pp = mul(rotate_mat, g_BakeDirAndNum.xyz);
-    // float3 new_offset_pos = PSIn.PixelWPos.xyz + bake_dir_pp * BakeHeightScale;
-    // float cam_z = mul(float4(PSIn.PixelWPos.xyz, 1.0f), g_ViewMat).z;
-
-    //offset dir
-    float3 y_up = float3(0.0f, 1.0f, 0.0f);  
-    float3x3 rotate_mat = AngleAxis3x3(-rot_radian, y_up);
-    float3 bake_dir_pp = mul(rotate_mat, g_BakeDirAndNum.xyz);
-
-    float3 new_offset_pos = PSIn.PixelWPos.xyz + g_CamForward * correct_depth;
-    //float3 new_offset_pos = PSIn.PixelWPos.xyz + g_CamForward.xyz * correct_depth;
-    //float3 new_offset_pos = float3(0.0f, 0.0f, 0.0f) + float3(0.0f, -1.0f, 0.0f) * BakeHeightScale;
-
-    float offsett = saturate(correct_depth - offset_depth);
-    // PSOut.Color = float4(offsett, offsett, offsett, 1.0f) + bake_data * 0.00001f;
-
-    //float4 new_ndc_pos = mul(float4(new_offset_pos,1.0), g_WorldViewProj);
-    //float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);
-    float4 new_ndc_pos = mul(float4(new_offset_pos, 1.0f), g_WorldViewProj);
-    float new_depth = new_ndc_pos.z / new_ndc_pos.w;
-    //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z));
-    // float offset_d_val = new_offset_pos.y / 10.0f;
-    //PSOut.Color = float4(weight, weight, weight, 1.0f) + 0.000000001f * float4(dir_lighting, 1.0f);
-    //PSOut.Color = float4(bake_data.rgb, 1.0f);
-    //PSOut.Color = float4(sample_z, sample_z, sample_z, 1.0f);
-    
-    PSOut.Color = float4(bake_data.xyz, 1.0f);
-    //float depth_offset = abs(new_depth - PSIn.Pos.z) * 10000.0f;
-    //PSOut.Color = float4(depth_offset, depth_offset, depth_offset, 1.0f) + bake_data * 0.0000001f;
-
-    //test
-    // float world_p_ddx = length(abs(ddx(PSIn.PixelWPos.xyz)));
-    // float world_p_ddy = length(abs(ddy(PSIn.PixelWPos.xyz)));
-    // float world_p_offset = max(world_p_ddx, world_p_ddy);
-    // PSOut.Color = PSOut.Color * 0.00000001f + float4(world_p_offset, world_p_offset, world_p_offset, 1.0f);
-    // float DeviceDepth = PSIn.Pos.z * PSIn.Pos.w / (PSIn.Pos.w - correct_depth * 0.01f);
-    // //BakeHeightScale = (PSIn.Pos.z - DeviceDepth * PSIn.Pos.w) / DeviceDepth;
-    // new_depth = DeviceDepth;
-
-    // float trueZ = g_ProjMat._43 / (PSIn.Pos.z - g_ProjMat._33);
-    // new_depth = g_ProjMat._43 / (trueZ + BakeHeightScale) + g_ProjMat._33;
-
-    PSOut.depth = new_depth;
+    PSOut.depth = Project(raycast_res0.world_pos, GetViewProjectionTransform()).z;
 
     //PSOut.OutDepth = g_Texture.Sample(g_Texture_sampler, float3)
 }
