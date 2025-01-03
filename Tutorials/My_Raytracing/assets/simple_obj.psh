@@ -208,7 +208,8 @@ void main(in  PSInput  PSIn,
     float plane_h = bbox_max.z - bbox_min.z;
 
     //float2 flow_dir = float2(0.5f, 0.5f);
-    float2 flow_dir = g_NoiseTex.Sample(g_NoiseTex_sampler, PSIn.UV * BakeTexTiling / 30.0f).xy * 2.0f - 1.0f;
+    float3 flow_data = g_NoiseTex.Sample(g_NoiseTex_sampler, PSIn.UV * BakeTexTiling / 5.0f).rgb;
+    float2 flow_dir = flow_data.xy * 2.0f - 1.0f;
     flow_dir *= FlowIntensity;
 
 
@@ -224,22 +225,22 @@ void main(in  PSInput  PSIn,
     tbn_basis[1] = float3(0.0f, 1.0f, 0.0f);
     tbn_basis[2] = float3(0.0f, 0.0f, 1.0f);
     
-	float3 fiber_world_dir = normalize(tbn_basis[2] + normalize(tbn_basis[0]) * flow_dir.x + normalize(tbn_basis[1]) * flow_dir.y);
+	float3 fiber_world_dir = normalize(tbn_basis[1] + normalize(tbn_basis[0]) * flow_dir.x + normalize(tbn_basis[2]) * flow_dir.y);
 	float gravity = 0.0f;
-	fiber_world_dir = normalize(fiber_world_dir + float3(0.0f, 0.0f, 1.0f) * gravity);
+	fiber_world_dir = normalize(fiber_world_dir + float3(0.0f, 1.0f, 0.0f) * gravity);
 	
 	float3x3 uv_to_world;
 	uv_to_world[0] = tbn_basis[0];
-	uv_to_world[1] = tbn_basis[1];
-	uv_to_world[2] = fiber_world_dir * length(tbn_basis[0]);	
-	uv_to_world = uv_to_world;
+	uv_to_world[2] = tbn_basis[2];
+	uv_to_world[1] = fiber_world_dir * length(tbn_basis[0]);	
+	//uv_to_world = uv_to_world;
 	
     float freq_mult = BakeTexTiling;
 	float3x3 uv_to_fur_0;
 	{
 		float rotation_ang = 0.1f + 0.3f;//3.14 / 2.0f;
-		//float2 planar_dir = float2(cos(rotation_ang), sin(rotation_ang));
-        float2 planar_dir = float2(1.0f, 0.0f);
+		float2 planar_dir = float2(cos(rotation_ang), sin(rotation_ang));
+        //float2 planar_dir = float2(1.0f, 0.0f);
 		float3 basis_dir0 = float3( planar_dir.x, planar_dir.y, 0.0f);
 		float3 basis_dir1 = float3(-planar_dir.y, planar_dir.x, 0.0f);
 		float3 basis_dir2 = float3(0.0f, 0.0f, 1.0f);
@@ -247,28 +248,38 @@ void main(in  PSInput  PSIn,
 		uv_to_fur_0 = float3x3(basis_dir0, basis_dir1, basis_dir2) * freq_mult;	
 	}
 
-    float density_bias = 0.262f;
+    float density_bias = DensityBias;
     float2 in_uv = PSIn.UV;
     float3x3 world_to_uv = (Inverse3x3(uv_to_world));
     RaycastResult raycast_res0 = RaycastFur(world_ray_origin, world_ray_dir, in_uv, world_to_uv, uv_to_fur_0, density_bias);
 
     //lighting 
     float3 test_dir_light = normalize(float3(0.5f, 0.5f, 0.5f));
-    float3 dir_lighting = saturate(dot(test_dir_light, raycast_res0.world_normal)) * float3(1.0f, 1.0f, 1.0f);
+    float ndotl = saturate(dot(test_dir_light, raycast_res0.world_normal));
+    float3 dir_lighting = ndotl * float3(1.0f, 1.0f, 1.0f);
     //float3 dir_lighting = saturate(bake_data.rgb) * float3(1.0f, 1.0f, 1.0f);
     //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z)) + 0.00000001f * float4(dir_lighting, 1.0f);
 
-    float3 surface_norm = -normalize(tbn_basis[2]);
+    float3 surface_norm = -normalize(tbn_basis[1]);
 	float fiber_depth = dot(raycast_res0.world_pos - world_ray_origin, surface_norm);
 
-	float cosa = -dot(surface_norm, fiber_world_dir);
+	float cosa = -dot(surface_norm, fiber_world_dir.xyz);
 	//fiber_coord = fiber_depth / cosa;
 	float fiber_density_scale = 1.0f / cosa;
-    float attenuation_depth = 8.0f;
+    float attenuation_depth = AttenuationDepth;
 	float attenuation = exp(-fiber_depth * fiber_density_scale / attenuation_depth);    
-    
 
-    PSOut.Color = float4(attenuation, attenuation, attenuation, 1.0f);   
+    float3 GrassColor = float3(0.2f, 0.8f, 0.2f);
+    float3 subsurface_light = 
+				lerp(saturate(1.0f - ndotl), 1.0f, 1.0f) *
+				saturate( (ndotl + 0.5f) / (1.0f + 0.5f) ) * GrassColor;
+
+    
+    //float DepthColorGradient = 0.36f;
+    float3 subsurface_color = lerp(1.0f, attenuation, DepthColorGradient) * flow_data;
+
+    PSOut.Color = attenuation * float4(dir_lighting * GrassColor + subsurface_light + subsurface_color, 1.0f);   
+    //PSOut.Color = float4(attenuation, attenuation, attenuation, 1.0f);
 
     PSOut.depth = Project(raycast_res0.world_pos, GetViewProjectionTransform()).z;
 

@@ -68,7 +68,7 @@ void TraceBakeMesh3DTexMain(uint3 gid : SV_GroupID, uint3 id : SV_DispatchThread
 
     float default_max_dist = 200.0f;
 
-    uint per_texel_sample_num = 1;
+    uint per_texel_sample_num = 16;
     float4 out_sample_data[16];
     for(int sample_i = 0; sample_i < per_texel_sample_num; ++sample_i)
     {

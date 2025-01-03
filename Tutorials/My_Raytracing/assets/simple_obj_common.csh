@@ -13,6 +13,11 @@ cbuffer SimpleObjConstants
     float BakeTexTiling;
     float FlowIntensity;
 
+    float DepthColorGradient;
+    float AttenuationDepth;
+    float DensityBias;
+    float Padding;
+
     float4 bbox_min;
     float4 bbox_max;
 };

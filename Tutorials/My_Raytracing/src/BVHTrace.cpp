@@ -100,7 +100,8 @@ Diligent::ITexture * Diligent::BVHTrace::GetOutputPixelTex()
 
 Diligent::ITexture * Diligent::BVHTrace::GetBakeMesh3DTexture()
 {
-	return m_apBakeMesh3DTexData;
+	//return m_apBakeMesh3DTexData;
+	return m_apTestMesh3DTexData;
 }
 
 void Diligent::BVHTrace::DispatchVertexAOTrace()
@@ -811,6 +812,9 @@ void Diligent::BVHTrace::CreateBakeMesh3DTexBuffer()
 	loadInfo.IsSRGB = false;
 	loadInfo.MipLevels = 0;
 	CreateTextureFromFile("./wildGreen_aged_albedo.jpg", loadInfo, m_pDevice, &m_apBakeMeshDiffTexData);
+
+	loadInfo.GenerateMips = false;
+	CreateTextureFromFile("./raycast_texture_grass_messy.dds", loadInfo, m_pDevice, &m_apTestMesh3DTexData);
 }
 
 void Diligent::BVHTrace::CreateTracePSO()

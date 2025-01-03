@@ -57,6 +57,11 @@ namespace Diligent
 		float BakeTexTiling;
 		float FlowIntensity;
 
+		float DepthColorGradient;
+		float AttenuationDepth;
+		float DensityBias;
+		float Padding;
+
 		float4 bbox_min;
 		float4 bbox_max;
 	};
@@ -214,10 +219,13 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.SetLookAt(float3(0.0f, 0.0f, 0.0f));
 	m_Camera.InvalidUpdate();
 
-	mBakeHeightScale = 1.0f;
-	mBakeTexTiling = 40.0f;
+	mBakeHeightScale = 3.0f;
+	mBakeTexTiling = 300.0f;
 	mTestPlaneOffsetY = 1.0f;
 	mFlowIntensity = 1.0f;
+	mDepthColorGradient = 0.36f;
+	mAttenuationDepth = 0.1f;
+	mDensityBias = 0.262f;
 
 	BakeInitDir = normalize(float3(-0.3f, -1.0f, 0.0f));
 
@@ -299,6 +307,10 @@ void MyRayTracing::Render()
 			CBConstants->BakeTexTiling = mBakeTexTiling;
 			CBConstants->TestPlaneOffsetY = mTestPlaneOffsetY;
 			CBConstants->FlowIntensity = mFlowIntensity;
+
+			CBConstants->AttenuationDepth = mAttenuationDepth;
+			CBConstants->DepthColorGradient = mDepthColorGradient;
+			CBConstants->DensityBias = mDensityBias;
 
 			CBConstants->bbox_min = raster_data.bbox_min;
 			CBConstants->bbox_max = raster_data.bbox_max;
@@ -418,7 +430,10 @@ void MyRayTracing::UpdateUI()
 	ImGui::SliderFloat("TestPlaneOffsetY", &mTestPlaneOffsetY, -10.0f, 10.0f);
 	ImGui::SliderFloat("BakeHeightScale", &mBakeHeightScale, -5.0f, 5.0f);
 	ImGui::SliderFloat("BakeTexTiling", &mBakeTexTiling, 0.01f, 500.0f);
-	ImGui::SliderFloat("FlowIntensity", &mFlowIntensity, 0.0f, 1.0f);
+	ImGui::SliderFloat("FlowIntensity", &mFlowIntensity, 0.0f, 100.0f);
+	ImGui::SliderFloat("AttenuationDepth", &mAttenuationDepth, 0.0f, 10.0f);
+	ImGui::SliderFloat("DepthColorGradient", &mDepthColorGradient, 0.0f, 1.0f);
+	ImGui::SliderFloat("DensityBias", &mDensityBias, 0.0f, 1.0f);
 
 	ImGui::End();
 }

@@ -60,7 +60,7 @@ namespace Diligent
 
 	static const Uint32 VERTEX_AO_RAY_SAMPLE_NUM = 256;
 	static const Uint32 TRIANGLE_SUBDIVISION_NUM = 16;
-	static const Uint32 BAKE_MESH_TEX_XY = 128;
+	static const Uint32 BAKE_MESH_TEX_XY = 64;
 	static const Uint32 BAKE_MESH_TEX_Z  = 32;
 
 	class BVHTrace
@@ -161,6 +161,7 @@ namespace Diligent
 		RefCntAutoPtr<ITexture> m_apBakeMesh3DTexData;
 		RefCntAutoPtr<ITexture> m_apBakeMeshDiffTexData;
 		RefCntAutoPtr<IBuffer> m_apBakeMesh3DTexUniformBuffer;
+		RefCntAutoPtr<ITexture> m_apTestMesh3DTexData;
 
 
 		FirstPersonCamera m_Camera;
