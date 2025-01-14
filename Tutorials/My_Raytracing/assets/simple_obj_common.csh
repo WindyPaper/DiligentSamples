@@ -16,7 +16,15 @@ cbuffer SimpleObjConstants
     float DepthColorGradient;
     float AttenuationDepth;
     float DensityBias;
-    float Padding;
+    float BakeTexUVTiling;
+
+    float BakeTexUVFlowIntensity;
+    float FreqMult;
+    float Gravity;
+    float FlowUVTexTiling;
+
+    float Time;
+    float3 Padding;
 
     float4 bbox_min;
     float4 bbox_max;

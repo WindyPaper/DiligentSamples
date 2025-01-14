@@ -60,7 +60,15 @@ namespace Diligent
 		float DepthColorGradient;
 		float AttenuationDepth;
 		float DensityBias;
-		float Padding;
+		float BakeTexUVTiling;
+
+		float BakeTexUVFlowIntensity;
+		float FreqMult;
+		float Gravity;
+		float FlowUVTexTiling;
+
+		float Time;
+		float3 Padding;
 
 		float4 bbox_min;
 		float4 bbox_max;
@@ -226,6 +234,12 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	mDepthColorGradient = 0.36f;
 	mAttenuationDepth = 0.1f;
 	mDensityBias = 0.262f;
+	mBakeTexUVTiling = 4.0f;
+	mBakeTexUVFlowIntensity = 10.0f;
+	mFreqMult = 300.0f;
+	mGravity = 0.0f;
+	mFlowUVTexTiling = 10.0f;
+	mCurrentTime = 0.0f;
 
 	BakeInitDir = normalize(float3(-0.3f, -1.0f, 0.0f));
 
@@ -311,6 +325,13 @@ void MyRayTracing::Render()
 			CBConstants->AttenuationDepth = mAttenuationDepth;
 			CBConstants->DepthColorGradient = mDepthColorGradient;
 			CBConstants->DensityBias = mDensityBias;
+			CBConstants->BakeTexUVTiling = mBakeTexUVTiling;
+			CBConstants->BakeTexUVFlowIntensity = mBakeTexUVFlowIntensity;
+			CBConstants->FreqMult = mFreqMult;
+			CBConstants->Gravity = mGravity;
+			CBConstants->FlowUVTexTiling = mFlowUVTexTiling;
+
+			CBConstants->Time = mCurrentTime;
 
 			CBConstants->bbox_min = raster_data.bbox_min;
 			CBConstants->bbox_max = raster_data.bbox_max;
@@ -375,6 +396,9 @@ void MyRayTracing::Render()
 
 void MyRayTracing::Update(double CurrTime, double ElapsedTime)
 {
+	int TimeInt = static_cast<int>(std::floor(CurrTime));
+	mCurrentTime = (TimeInt % (2 ^ 8)) + static_cast<float>(CurrTime - TimeInt);
+
     SampleBase::Update(CurrTime, ElapsedTime);
 
 	m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));
@@ -427,13 +451,19 @@ void MyRayTracing::UpdateUI()
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 	}
 
-	ImGui::SliderFloat("TestPlaneOffsetY", &mTestPlaneOffsetY, -10.0f, 10.0f);
+	ImGui::SliderFloat("TestPlaneOffsetY", &mTestPlaneOffsetY, 0.0f, 1.0f);
 	ImGui::SliderFloat("BakeHeightScale", &mBakeHeightScale, -5.0f, 5.0f);
 	ImGui::SliderFloat("BakeTexTiling", &mBakeTexTiling, 0.01f, 500.0f);
-	ImGui::SliderFloat("FlowIntensity", &mFlowIntensity, 0.0f, 100.0f);
+	ImGui::SliderFloat("FlowIntensity", &mFlowIntensity, -10.0f, 10.0f);
 	ImGui::SliderFloat("AttenuationDepth", &mAttenuationDepth, 0.0f, 10.0f);
 	ImGui::SliderFloat("DepthColorGradient", &mDepthColorGradient, 0.0f, 1.0f);
 	ImGui::SliderFloat("DensityBias", &mDensityBias, 0.0f, 1.0f);
+	ImGui::SliderFloat("BakeTexUVTiling", &mBakeTexUVTiling, 0.0f, 20.0f);
+	ImGui::SliderFloat("BakeTexUVFlowIntensity", &mBakeTexUVFlowIntensity, -500.0f, 500.0f);	
+	ImGui::SliderFloat("FreqMult", &mFreqMult, 0.01f, 500.0f);
+	ImGui::SliderFloat("Gravity", &mGravity, 0.0f, 1.0f);
+	ImGui::SliderFloat("FlowUVTexTiling", &mFlowUVTexTiling, 1.0f, 500.0f);
+	
 
 	ImGui::End();
 }

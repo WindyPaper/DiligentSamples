@@ -107,7 +107,13 @@ private:
 	float mDepthColorGradient;
 	float mAttenuationDepth;
 	float mDensityBias;
+	//float mGravity;
+	float mBakeTexUVTiling;
+	float mBakeTexUVFlowIntensity;
+	float mFreqMult;
 	float mGravity;
+	float mFlowUVTexTiling;
+	float mCurrentTime;
 
 	std::vector<RasterMeshData> RasterMeshVec;
 };
