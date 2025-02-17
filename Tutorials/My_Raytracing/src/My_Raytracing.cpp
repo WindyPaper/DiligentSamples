@@ -228,18 +228,19 @@ void MyRayTracing::Initialize(const SampleInitInfo& InitInfo)
 	m_Camera.InvalidUpdate();
 
 	mBakeHeightScale = 3.0f;
-	mBakeTexTiling = 300.0f;
-	mTestPlaneOffsetY = 1.0f;
-	mFlowIntensity = 1.0f;
+	mBakeTexTiling = 120.0f;
+	mTestPlaneOffsetY = 0.5f;
+	mFlowIntensity = 1.5f;
 	mDepthColorGradient = 0.36f;
 	mAttenuationDepth = 0.1f;
-	mDensityBias = 0.262f;
+	mDensityBias = 0.2f;
 	mBakeTexUVTiling = 4.0f;
 	mBakeTexUVFlowIntensity = 10.0f;
-	mFreqMult = 300.0f;
+	mFreqMult = 120.0f;
 	mGravity = 0.0f;
 	mFlowUVTexTiling = 10.0f;
 	mCurrentTime = 0.0f;
+	mPlaneRotationY = 0.0f;
 
 	BakeInitDir = normalize(float3(-0.3f, -1.0f, 0.0f));
 
@@ -311,7 +312,13 @@ void MyRayTracing::Render()
 		{
 			// Map the buffer and write current world-view-projection matrix
 			MapHelper<SimpleObjConstants> CBConstants(m_pImmediateContext, m_VSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
-			CBConstants->g_WorldViewProj = m_Camera.GetViewProjMatrix().Transpose();
+			
+			float4x4 RotationMat = float4x4::Identity();
+			if (raster_data.meshName.find("test_plane") != std::string::npos)
+			{
+				RotationMat = float4x4::RotationY(mPlaneRotationY * 3.14);
+			}
+			CBConstants->g_WorldViewProj = (RotationMat * m_Camera.GetViewProjMatrix()).Transpose();
 			CBConstants->g_ViewProjMatInv = m_Camera.GetViewProjMatrix().Inverse().Transpose();
 			CBConstants->g_CamPos = m_Camera.GetPos();
 			CBConstants->g_CamForward = m_Camera.GetWorldAhead();
@@ -463,7 +470,7 @@ void MyRayTracing::UpdateUI()
 	ImGui::SliderFloat("FreqMult", &mFreqMult, 0.01f, 500.0f);
 	ImGui::SliderFloat("Gravity", &mGravity, 0.0f, 1.0f);
 	ImGui::SliderFloat("FlowUVTexTiling", &mFlowUVTexTiling, 1.0f, 500.0f);
-	
+	ImGui::SliderFloat("PlaneRotationY", &mPlaneRotationY, 0.0f, 1.0f);
 
 	ImGui::End();
 }

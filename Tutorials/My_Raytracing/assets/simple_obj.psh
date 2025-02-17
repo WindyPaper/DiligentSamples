@@ -204,6 +204,11 @@ float3 GetWorldPoint(float2 screenspace_point, float nonlinear_depth)
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {
+    float WindSpeed = 0.0016f;
+    float WindStrength = 0.14f;
+    float FlowUVSpeed = Time % 1024 * WindSpeed;
+    float2 FlowUV0 = (PSIn.UV + float2(FlowUVSpeed, FlowUVSpeed)) * FlowUVTexTiling;
+
     float plane_w = bbox_max.x - bbox_min.x;
     float plane_h = bbox_max.z - bbox_min.z;
 
@@ -211,7 +216,7 @@ void main(in  PSInput  PSIn,
     float3 flow_data = g_NoiseTex.Sample(g_NoiseTex_sampler, PSIn.UV * BakeTexTiling).rgb;
     float2 flow_dir = flow_data.xy * 2.0f - 1.0f;
 
-    float3 b_flow_data = g_NoiseTex.Sample(g_NoiseTex_sampler, PSIn.UV * FlowUVTexTiling).rgb;
+    float3 b_flow_data = g_NoiseTex.Sample(g_NoiseTex_sampler, FlowUV0).rgb;
     float2 b_flow_dir = b_flow_data.xy * 2.0f - 1.0f;
     float2 in_uv = PSIn.UV * BakeTexUVTiling + (0.00024f * BakeTexUVFlowIntensity * b_flow_dir);
 

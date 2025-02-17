@@ -14,8 +14,16 @@ struct PSInput
 struct PSOutput
 { 
     float4 Color : SV_TARGET;
-    float depth : SV_Depth;
+    //float depth : SV_Depth;
 };
+
+float CheckBoard(float2 WorldPlane2D, float Size)
+{
+    //float Size = 100.0;
+    float2 Pos = floor((WorldPlane2D) / Size);
+    float PatternMask = fmod(Pos.x + fmod(Pos.y, 2.0f), 2.0f);
+    return abs(PatternMask);
+}
 
 // Note that if separate shader objects are not supported (this is only the case for old GLES3.0 devices), vertex
 // shader output variable name must match exactly the name of the pixel shader input variable.
@@ -23,8 +31,27 @@ struct PSOutput
 void main(in  PSInput  PSIn,
           out PSOutput PSOut)
 {    
-    float3 show_normal = PSIn.WNormal * 0.5f + float3(0.5f, 0.5f, 0.5f);
-    PSOut.Color = float4(show_normal, 1.0f);
+    // float3 show_normal = PSIn.WNormal * 0.5f + float3(0.5f, 0.5f, 0.5f);    
+    // PSOut.Color = float4(show_normal, 1.0f);
 
-    PSOut.depth = PSIn.Pos.z;
+    float2 WorldXY = PSIn.PixelWPos.xy;
+    float2 WorldXZ = PSIn.PixelWPos.xz;
+    float2 WorldYZ = PSIn.PixelWPos.yz;
+
+    float CheckBoardSize = 0.4f;
+    float ClrXY = CheckBoard(WorldXY, CheckBoardSize);
+    float ClrXZ = CheckBoard(WorldXZ, CheckBoardSize);
+    float ClrYZ = CheckBoard(WorldYZ, CheckBoardSize);
+
+    float3 WorldNormalAbs = abs(PSIn.WNormal);
+    float3 Weights = WorldNormalAbs / (WorldNormalAbs.x + WorldNormalAbs.y + WorldNormalAbs.z);
+
+    ClrXY *= Weights.z;
+    ClrXZ *= Weights.y;
+    ClrYZ *= Weights.x;
+
+    float GrayClr = ClrXY + ClrXZ + ClrYZ;
+    PSOut.Color = float4(float3(GrayClr, GrayClr, GrayClr), 1.0f);
+    //PSOut.Color = float4(PSIn.PixelWPos.xyz, 1.0f);
+    //PSOut.depth = PSIn.Pos.z;
 }

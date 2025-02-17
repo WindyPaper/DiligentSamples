@@ -114,6 +114,7 @@ private:
 	float mGravity;
 	float mFlowUVTexTiling;
 	float mCurrentTime;
+	float mPlaneRotationY;
 
 	std::vector<RasterMeshData> RasterMeshVec;
 };
