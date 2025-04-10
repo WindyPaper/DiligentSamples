@@ -259,20 +259,37 @@ void main(in  PSInput  PSIn,
 		uv_to_fur_0 = float3x3(basis_dir0, basis_dir1, basis_dir2) * freq_mult;	
 	}
 
+    float3x3 uv_to_fur_1;
+	{
+		float rotation_ang = 3.1415f * 1.61f + 0.9f;
+		float2 planar_dir = float2(cos(rotation_ang), sin(rotation_ang));
+        //float2 planar_dir = float2(1.0f, 0.0f);
+		float3 basis_dir0 = float3( planar_dir.x, planar_dir.y, 0.0f);
+		float3 basis_dir1 = float3(-planar_dir.y, planar_dir.x, 0.0f);
+		float3 basis_dir2 = float3(0.0f, 0.0f, 1.0f);
+		
+		uv_to_fur_1 = float3x3(basis_dir0, basis_dir1, basis_dir2) * freq_mult * 1.16f;	
+	}
+
     float density_bias = DensityBias;
     //float2 in_uv = PSIn.UV;
     float3x3 world_to_uv = (Inverse3x3(uv_to_world));
     RaycastResult raycast_res0 = RaycastFur(world_ray_origin, world_ray_dir, in_uv, world_to_uv, uv_to_fur_0, density_bias);
+    RaycastResult raycast_res1 = RaycastFur(world_ray_origin, world_ray_dir, in_uv, world_to_uv, uv_to_fur_1, density_bias);
+
+    bool choose_0 = dot(raycast_res0.world_pos - world_ray_origin, world_ray_dir) < dot(raycast_res1.world_pos - world_ray_origin, world_ray_dir);
+	float3 out_world_pos = choose_0 ? raycast_res0.world_pos : raycast_res1.world_pos;
+	float3 out_world_normal = choose_0 ? raycast_res0.world_normal : raycast_res1.world_normal;
 
     //lighting 
     float3 test_dir_light = normalize(float3(0.5f, 0.5f, 0.5f));
-    float ndotl = saturate(dot(test_dir_light, raycast_res0.world_normal));
+    float ndotl = saturate(dot(test_dir_light, out_world_normal));
     float3 dir_lighting = ndotl * float3(1.0f, 1.0f, 1.0f);
     //float3 dir_lighting = saturate(bake_data.rgb) * float3(1.0f, 1.0f, 1.0f);
     //PSOut.Color = float4(abs(new_depth - PSIn.PixelWPos.z)) + 0.00000001f * float4(dir_lighting, 1.0f);
 
     float3 surface_norm = -normalize(tbn_basis[1]);
-	float fiber_depth = dot(raycast_res0.world_pos - world_ray_origin, surface_norm);
+	float fiber_depth = dot(out_world_pos - world_ray_origin, surface_norm);
 
 	float cosa = -dot(surface_norm, fiber_world_dir.xyz);
 	//fiber_coord = fiber_depth / cosa;
@@ -292,7 +309,7 @@ void main(in  PSInput  PSIn,
     PSOut.Color = attenuation * float4(dir_lighting * GrassColor + subsurface_light + subsurface_color, 1.0f);   
     //PSOut.Color = float4(attenuation, attenuation, attenuation, 1.0f);
 
-    PSOut.depth = Project(raycast_res0.world_pos, GetViewProjectionTransform()).z;
+    PSOut.depth = Project(out_world_pos, GetViewProjectionTransform()).z;
 
     //PSOut.OutDepth = g_Texture.Sample(g_Texture_sampler, float3)
 }
