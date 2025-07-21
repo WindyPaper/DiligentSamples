@@ -71,7 +71,7 @@ PipelineStateDesc IBaseRender::CreatePSODescAndParam(ShaderResourceVariableDesc*
     PipelineStateDesc PSODesc;
 
     // This is a compute pipeline
-    PSODesc.PipelineType = PIPELINE_TYPE_COMPUTE;
+    PSODesc.PipelineType = type;
 
     PSODesc.ResourceLayout.DefaultVariableType = SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC;
 	
@@ -133,3 +133,14 @@ RefCntAutoPtr<IBuffer> IBaseRender::CreateStructureBuffer(const int element_size
     return apStructureBuffer;
 }
 
+std::vector<ShaderResourceVariableDesc> IBaseRender::GenerateCSDynParams(const std::vector<std::string> &ParamNames)
+{
+    std::vector<ShaderResourceVariableDesc> Vars;
+
+    for(int i = 0; i < ParamNames.size(); ++i)
+    {
+        Vars.push_back(ShaderResourceVariableDesc(SHADER_TYPE_COMPUTE, ParamNames[i].c_str(), SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC));
+    }
+
+    return Vars;
+}

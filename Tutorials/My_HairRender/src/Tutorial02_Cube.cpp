@@ -236,7 +236,7 @@ void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
 
     //m_HairRender.CreateHWPSO();
     m_pHairRender = new HairRender(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain);
-    m_pHairRender->CreateHWPSO();
+    m_pHairRender->InitPSO();
 }
 
 // Render a frame
@@ -274,7 +274,13 @@ void Tutorial02_Cube::Render()
     DrawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(DrawAttrs);
 
-    m_pHairRender->Render(m_Camera.GetViewProjMatrix());
+    //m_pHairRender->HWRender(m_Camera.GetViewProjMatrix());
+    m_pHairRender->RunCS();
+
+    //transition depth buffer from SRV to Depth write
+    std::vector<StateTransitionDesc> Barriers;
+    Barriers.emplace_back(pDSV->GetTexture(), RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_DEPTH_WRITE, true);
+    m_pImmediateContext->TransitionResourceStates(static_cast<Uint32>(Barriers.size()), Barriers.data());
 }
 
 void Tutorial02_Cube::Update(double CurrTime, double ElapsedTime)

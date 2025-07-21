@@ -13,6 +13,10 @@ struct IDeviceContext;
 struct ISwapChain;
 struct IShader;
 
+typedef RefCntAutoPtr<IShader> AutoPtrShader;
+typedef RefCntAutoPtr<IBuffer> AutoPtrBuffer;
+typedef RefCntAutoPtr<ITexture> AutoPtrTex;
+
 struct RenderPassNode
 {		
     RenderPassNode(Diligent::IDeviceContext *pDC);
@@ -34,6 +38,7 @@ public:
     
     RefCntAutoPtr<IShader> CreateShader(const std::string &entryPoint, const std::string &csFile, const std::string &descName, const SHADER_TYPE type = SHADER_TYPE_COMPUTE, ShaderMacroHelper *pMacro = nullptr);
     PipelineStateDesc CreatePSODescAndParam(ShaderResourceVariableDesc *params, const int varNum, const std::string &psoName, const PIPELINE_TYPE type = PIPELINE_TYPE_COMPUTE);
+    std::vector<ShaderResourceVariableDesc> GenerateCSDynParams(const std::vector<std::string> &ParamNames);
 
 protected:
     IDeviceContext *m_pDeviceCtx;

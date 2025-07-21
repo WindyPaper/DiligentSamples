@@ -15,6 +15,65 @@ inline int SizeOfType(const std::vector<T, Alloc> & v)
     return int(sizeof(std::vector<T, Alloc>::value_type));
 }
 
+void Diligent::HairRender::InitPSO()
+{
+    //init common gpu data
+    m_HairConstData = CreateConstBuffer(sizeof(HairConstData), nullptr, "Hair const data");
+    
+    CreateHWPSO();
+    CreateDownSampleMapPSO();
+}
+
+void Diligent::HairRender::CreateDownSampleMapPSO()
+{
+    AutoPtrShader ap_downsamplecs = CreateShader("CSMain", "./DownsampledDepthCS.csh", \
+        "Down Sample Depth CS", SHADER_TYPE_COMPUTE);
+
+    ComputePipelineStateCreateInfo PSOCreateInfo;
+    // clang-format off
+    // Shader variables should typically be mutable, which means they are expected
+    // to change on a per-instance basis
+    std::vector<std::string> ParamNames = {"HairConstData", "InputSrcDepthMap", "OutputMipDepthMap"};
+    std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+    // clang-format on
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Down Sample Depth PSO");	
+
+    PSOCreateInfo.pCS = ap_downsamplecs;
+    m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_DownSamleDepthPassCS.PSO);
+
+    //SRB
+    m_DownSamleDepthPassCS.PSO->CreateShaderResourceBinding(&m_DownSamleDepthPassCS.SRB, true);
+
+    //data
+    float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
+    
+    TextureDesc DownSampledTextureDesc;
+    DownSampledTextureDesc.Name = "Down Sampled Texture Desc Texture";
+    DownSampledTextureDesc.Type = RESOURCE_DIM_TEX_2D;
+    DownSampledTextureDesc.Width = Uint32(ceil(PixelSize.x / 16));
+    DownSampledTextureDesc.Height = Uint32(ceil(PixelSize.y / 16));
+    DownSampledTextureDesc.Format = TEX_FORMAT_R32_FLOAT;
+    DownSampledTextureDesc.Usage = USAGE_DYNAMIC;
+    DownSampledTextureDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+    m_pDevice->CreateTexture(DownSampledTextureDesc, nullptr, &m_DownSamleDepthPassCS.DownSampledDepthMap);
+
+    m_DownSamleDepthPassCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputMipDepthMap")->Set(\
+        m_DownSamleDepthPassCS.DownSampledDepthMap->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+    m_DownSamleDepthPassCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(\
+        m_HairConstData);
+
+    ITexture *pDepth = m_pSwapChain->GetDepthTexture();
+    
+    // StateTransitionDesc Barrier{pDepth, RESOURCE_STATE_UNKNOWN, RESOURCE_STATE_DEPTH_READ, true};
+    // m_pDeviceCtx->TransitionResourceStates(1, &Barrier);
+    
+    m_DownSamleDepthPassCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputSrcDepthMap")->Set(\
+        pDepth->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+
+    
+}
+
 void Diligent::HairRender::CreateHWPSO()
 {
     RefCntAutoPtr<IShader> ap_HWRenderShaderVS = CreateShader("main", "./HairHWVS.vsh", \
@@ -96,7 +155,7 @@ void Diligent::HairRender::CreateHWPSO()
     m_apHWRenderSRB->GetVariableByName(SHADER_TYPE_VERTEX, "VertexDataArray")->Set(m_apHairVertexArray->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
 }
 
-void Diligent::HairRender::Render(const float4x4 &WVPMat)
+void Diligent::HairRender::HWRender(const float4x4 &WVPMat)
 {
     {
         // Map the buffer and write current world-view-projection matrix
@@ -116,4 +175,27 @@ void Diligent::HairRender::Render(const float4x4 &WVPMat)
     DrawInstAttr.NumInstances = 1;
     DrawInstAttr.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pDeviceCtx->Draw(DrawInstAttr);
+}
+
+void Diligent::HairRender::RunDownSampledDepthMapCS()
+{
+    m_pDeviceCtx->SetPipelineState(m_DownSamleDepthPassCS.PSO);
+    
+    m_pDeviceCtx->CommitShaderResources(m_DownSamleDepthPassCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    
+    DispatchComputeAttribs attr(m_DownSamleDepthPassCS.DownSampledDepthMap->GetDesc().Width, \
+        m_DownSamleDepthPassCS.DownSampledDepthMap->GetDesc().Height);
+    m_pDeviceCtx->DispatchCompute(attr);
+}
+
+void Diligent::HairRender::RunCS()
+{
+    float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
+    {
+        // Map the buffer and write current world-view-projection matrix
+        MapHelper<HairConstData> CBConstants(m_pDeviceCtx, m_HairConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+        CBConstants->ScreenSize = PixelSize;
+    }
+
+    RunDownSampledDepthMapCS();
 }
