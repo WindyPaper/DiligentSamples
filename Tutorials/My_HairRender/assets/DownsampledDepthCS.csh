@@ -12,7 +12,7 @@ groupshared uint MinValueIn16X16;
 [numthreads(16, 16, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint group_idx : SV_GroupIndex)
 {
-    MinValueIn16X16 = 0xffffffffu;    
+    MinValueIn16X16 = 0u;    
     GroupMemoryBarrier();
 
 	//Get texture size
@@ -24,7 +24,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     
 	uint src_depth = asuint(InputSrcDepthMap.Load(int3(sample_src_x, sample_src_y, 0)).r);
     uint src_value;
-    InterlockedMin(MinValueIn16X16, src_depth, src_value);
+    InterlockedMax(MinValueIn16X16, src_depth, src_value);
     GroupMemoryBarrier();
 	
     if(group_idx == 0u)
