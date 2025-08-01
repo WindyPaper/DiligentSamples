@@ -63,6 +63,6 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     float2 v0 = float2(0.0f, 0.0f);
     float2 v1 = float2(600.0f, 50.0f);
 
-    float bright = lineWu(v0, v1, id.xy);
+    float bright = lineWu(v0, v1, id.xy) * 1.5f;
     OutputTexture[int2(id.xy)] = float4(bright, bright, bright, 1.0f);
 }
