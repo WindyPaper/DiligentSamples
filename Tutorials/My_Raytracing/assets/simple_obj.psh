@@ -13,6 +13,8 @@ struct PSInput
     float4 PixelWPos : TEX_COORD1;
     float3 WNormal : TEX_COORD2;
     float3 PixelViewPos : TEX_COORD3;
+    float4 ClipPos : TEX_COORD4;
+
 };
 
 struct PSOutput
@@ -306,7 +308,24 @@ void main(in  PSInput  PSIn,
     //float DepthColorGradient = 0.36f;
     float3 subsurface_color = lerp(1.0f, attenuation, DepthColorGradient) * flow_data;
 
-    PSOut.Color = attenuation * float4(dir_lighting * GrassColor + subsurface_light + subsurface_color, 1.0f);   
+    float4 ndc_pos = PSIn.ClipPos;
+    ndc_pos.xyz /= ndc_pos.w;
+    // ndc_pos.xyz *= PSIn.PixelViewPos.z;
+    // float4 cal_view_pos = mul(ndc_pos, inverse4x4(g_ProjMat));
+    // cal_view_pos.xyz /= cal_view_pos.w;
+
+    //float reverse_z = g_ProjMat[3].z / ()
+    float4x4 transpose_proj_mat = g_ProjMat;
+    // float z_eye = transpose_proj_mat[3].z/(-ndc_pos.z - transpose_proj_mat[2].z);
+    // float z_eye = g_ProjMat[2].w/(ndc_pos.z - g_ProjMat[2].z);
+    float z_eye = g_ProjMat[3].z/(ndc_pos.z - g_ProjMat[2].z);
+    // float z_eye = -0.1f/(ndc_pos.z - 1.0f);
+
+    //float3 offset_v = abs(PSIn.PixelViewPos.xyz - cal_view_pos.xyz);
+    float offset_eyez = abs(PSIn.PixelViewPos.z - z_eye);
+    float3 offset_v = float3(offset_eyez, offset_eyez, offset_eyez);
+
+    PSOut.Color = attenuation * float4(dir_lighting * GrassColor + subsurface_light + subsurface_color, 1.0f) * float4(offset_v, 1.0f);   
     //PSOut.Color = float4(attenuation, attenuation, attenuation, 1.0f);
 
     PSOut.depth = Project(out_world_pos, GetViewProjectionTransform()).z;

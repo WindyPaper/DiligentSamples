@@ -22,6 +22,7 @@ void Diligent::HairRender::InitPSO()
     
     CreateHWPSO();
     CreateDownSampleMapPSO();
+    CreateDrawLinePSO();
 }
 
 void Diligent::HairRender::CreateDownSampleMapPSO()
@@ -71,6 +72,96 @@ void Diligent::HairRender::CreateDownSampleMapPSO()
     m_DownSamleDepthPassCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "InputSrcDepthMap")->Set(\
         pDepth->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 
+    
+}
+
+void Diligent::HairRender::CreateDrawLinePSO()
+{
+    AutoPtrShader ap_drawline = CreateShader("CSMain", "./DrawLine.csh", \
+        "Draw Line CS", SHADER_TYPE_COMPUTE);
+
+    ComputePipelineStateCreateInfo PSOCreateInfo;
+    // clang-format off
+    // Shader variables should typically be mutable, which means they are expected
+    // to change on a per-instance basis
+    std::vector<std::string> ParamNames = {"OutputTexture"};//{"HairConstData","OutputTexture"};
+    std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+    
+    // clang-format on
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Draw line PSO");	
+
+    PSOCreateInfo.pCS = ap_drawline;
+    m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_DrawLinePassCS.PSO);
+
+    //SRB
+    m_DrawLinePassCS.PSO->CreateShaderResourceBinding(&m_DrawLinePassCS.SRB, true);
+
+    //data
+    float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
+    
+    TextureDesc DrawLineTexDesc;
+    DrawLineTexDesc.Name = "Draw line Texture";
+    DrawLineTexDesc.Type = RESOURCE_DIM_TEX_2D;
+    DrawLineTexDesc.Width = Uint32(PixelSize.x);
+    DrawLineTexDesc.Height = Uint32(PixelSize.y);
+    DrawLineTexDesc.Format = TEX_FORMAT_RGBA8_UNORM;
+    //DrawLineTexDesc.Usage = USAGE_DYNAMIC;
+    DrawLineTexDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+    m_pDevice->CreateTexture(DrawLineTexDesc, nullptr, &m_DrawLinePassCS.DrawLineTex);
+
+    m_DrawLinePassCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(\
+        m_DrawLinePassCS.DrawLineTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+}
+
+void Diligent::HairRender::CreateLineSizeInFrustumVoxelPSO()
+{
+    AutoPtrShader ap_drawline = CreateShader("CSMain", "./LineSizeInFrustumVoxelCS.csh", \
+        "Line size in frustum voxel CS", SHADER_TYPE_COMPUTE);
+
+    ComputePipelineStateCreateInfo PSOCreateInfo;
+    // clang-format off
+    // Shader variables should typically be mutable, which means they are expected
+    // to change on a per-instance basis
+    std::vector<std::string> ParamNames = { \
+        "HairConstData", \
+        "VerticesDatas", \
+        "IdxData", \
+        "DownSampleDepthMap", \
+        "LineAccumulateBuffer" \
+    };
+    std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+    
+    // clang-format on
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Draw line PSO");	
+
+    PSOCreateInfo.pCS = ap_drawline;
+    m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_LineSizeInFrustumVoxelCS.PSO);
+
+    //SRB
+    m_LineSizeInFrustumVoxelCS.PSO->CreateShaderResourceBinding(&m_LineSizeInFrustumVoxelCS.SRB, true);
+
+    m_LineSizeInFrustumVoxelCS.VerticesData = m_apHairVertexArray;
+    m_LineSizeInFrustumVoxelCS.LineIdxData = m_apHairIdxArray;
+
+    uint2 DownSampledDepthMapPixelSize = uint2(m_DownSamleDepthPassCS.DownSampledDepthMap->GetDesc().Width, \
+        m_DownSamleDepthPassCS.DownSampledDepthMap->GetDesc().Height);
+
+    const int VOXEL_SLICE_NUM = 24;
+    m_LineSizeInFrustumVoxelCS.LineSizeBuffer = CreateStructureBuffer(sizeof(int), \
+        DownSampledDepthMapPixelSize.x * DownSampledDepthMapPixelSize.y * VOXEL_SLICE_NUM, \
+        nullptr, \
+        "FrustumVoxelLineSizeBuffer");
+
+    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas")->Set(\
+        m_LineSizeInFrustumVoxelCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData")->Set( \
+        m_LineSizeInFrustumVoxelCS.LineIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DownSampleDepthMap")->Set( \
+        m_DownSamleDepthPassCS.DownSampledDepthMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineAccumulateBuffer")->Set( \
+        m_LineSizeInFrustumVoxelCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set( \
+        m_HairConstData);
     
 }
 
@@ -188,6 +279,34 @@ void Diligent::HairRender::RunDownSampledDepthMapCS()
     m_pDeviceCtx->DispatchCompute(attr);
 }
 
+void Diligent::HairRender::RunDrawLineCS()
+{
+    m_pDeviceCtx->SetPipelineState(m_DrawLinePassCS.PSO);
+
+    // m_DrawLinePassCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputTexture")->Set(\
+    //     m_DrawLinePassCS.DrawLineTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+    
+    m_pDeviceCtx->CommitShaderResources(m_DrawLinePassCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    
+    DispatchComputeAttribs attr(m_DrawLinePassCS.DrawLineTex->GetDesc().Width, m_DrawLinePassCS.DrawLineTex->GetDesc().Height);
+    m_pDeviceCtx->DispatchCompute(attr);
+}
+
+void Diligent::HairRender::RunFrustumVoxelCullLineSizeCS()
+{
+    m_pDeviceCtx->SetPipelineState(m_LineSizeInFrustumVoxelCS.PSO);
+
+    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
+
+    m_pDeviceCtx->CommitShaderResources(m_LineSizeInFrustumVoxelCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    const uint LineSizeCSPerGroupThreadNum = 64;
+    
+    const DispatchComputeAttribs attr((uint)ceil(LineCount / LineSizeCSPerGroupThreadNum), 1, 1);
+    m_pDeviceCtx->DispatchCompute(attr);
+    
+}
+
 void Diligent::HairRender::RunCS()
 {
     float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
@@ -198,4 +317,5 @@ void Diligent::HairRender::RunCS()
     }
 
     RunDownSampledDepthMapCS();
+    RunDrawLineCS();
 }

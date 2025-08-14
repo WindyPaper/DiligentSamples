@@ -13,6 +13,8 @@ struct IDeviceContext;
 
 struct HairConstData
 {
+    float4x4 ViewProj;
+    float4x4 InvViewProj;
     float2 ScreenSize;
     float2 padding;
 };
@@ -28,12 +30,22 @@ struct DepthDownSamplePassDataCS : public PassBaseData
     AutoPtrTex DownSampledDepthMap;
 };
 
-struct CSDrawLinePassDataCS : public PassBaseData
+struct DrawLinePassDataCS : public PassBaseData
 {
     AutoPtrBuffer VerticesData;
     AutoPtrBuffer LineIdxData;
 
     AutoPtrBuffer DrawLineQueue;
+
+    AutoPtrTex DrawLineTex;
+};
+
+struct LineSizeInFrustumVoxelCS : public PassBaseData
+{
+    AutoPtrBuffer VerticesData;
+    AutoPtrBuffer LineIdxData;
+
+    AutoPtrBuffer LineSizeBuffer;
 };
 
 class HairRender : public IBaseRender
@@ -49,10 +61,15 @@ public:
     void CreateHWPSO();
     
     void CreateDownSampleMapPSO();
+    void CreateDrawLinePSO();
+    void CreateLineSizeInFrustumVoxelPSO();
 
     void HWRender(const float4x4 &WVPMat);
 
     void RunDownSampledDepthMapCS();
+    void RunDrawLineCS();
+    void RunFrustumVoxelCullLineSizeCS();
+    
     void RunCS();
 
 private:
@@ -68,8 +85,14 @@ private:
     //common
     AutoPtrBuffer m_HairConstData;
 
+    //--Cull start
     //Downsample DepthMap
     DepthDownSamplePassDataCS m_DownSamleDepthPassCS;
+    DrawLinePassDataCS m_DrawLinePassCS; // for testing draw line algorithm
+    //Calculate line size in frustum voxel
+    LineSizeInFrustumVoxelCS m_LineSizeInFrustumVoxelCS;
+
+    //--Cull end
     
     RefCntAutoPtr<ISwapChain> m_pSwapChain;
 };
