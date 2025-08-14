@@ -112,7 +112,7 @@ RefCntAutoPtr<IBuffer> IBaseRender::CreateStructureBuffer(const int element_size
     BufferDesc buf_desc;
     buf_desc.Name              = desc.c_str();
     buf_desc.Usage             = USAGE_DYNAMIC;
-    buf_desc.BindFlags         = BIND_SHADER_RESOURCE;
+    buf_desc.BindFlags         = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
     buf_desc.Mode              = BUFFER_MODE_STRUCTURED;
     buf_desc.CPUAccessFlags    = CPU_ACCESS_WRITE;
     buf_desc.ElementByteStride = element_size;

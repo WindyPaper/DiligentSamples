@@ -48,6 +48,14 @@ struct LineSizeInFrustumVoxelCS : public PassBaseData
     AutoPtrBuffer LineSizeBuffer;
 };
 
+struct GetLineOffsetCounterCS : public  PassBaseData
+{
+    AutoPtrBuffer LineSizeBuffer;
+    
+    AutoPtrBuffer CounterBuffer;
+    AutoPtrBuffer LineOffsetBuffer;
+};
+
 class HairRender : public IBaseRender
 {
 public:

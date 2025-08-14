@@ -6,12 +6,12 @@
 
 RWTexture2D<float4> OutputTexture;
 
-void swap(inout float x, inout float y)
-{
-    float t = x;
-    x = y;
-    y = t;
-}
+// void swap(inout float x, inout float y)
+// {
+//     float t = x;
+//     x = y;
+//     y = t;
+// }
 
 float lineWu(float2 a, float2 b, float2 c)
 {   

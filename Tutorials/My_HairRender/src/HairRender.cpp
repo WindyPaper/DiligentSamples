@@ -23,6 +23,7 @@ void Diligent::HairRender::InitPSO()
     CreateHWPSO();
     CreateDownSampleMapPSO();
     CreateDrawLinePSO();
+    CreateLineSizeInFrustumVoxelPSO();
 }
 
 void Diligent::HairRender::CreateDownSampleMapPSO()
@@ -318,4 +319,6 @@ void Diligent::HairRender::RunCS()
 
     RunDownSampledDepthMapCS();
     RunDrawLineCS();
+
+    RunFrustumVoxelCullLineSizeCS();
 }

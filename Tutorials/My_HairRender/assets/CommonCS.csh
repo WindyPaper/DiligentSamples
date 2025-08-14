@@ -8,3 +8,10 @@ cbuffer HairConstData
 	float2 ScreenSize;
     float2 DownSampleDepthSize;
 };
+
+void swap(inout float x, inout float y)
+{
+    float t = x;
+    x = y;
+    y = t;
+}

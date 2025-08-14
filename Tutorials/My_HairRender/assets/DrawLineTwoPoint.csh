@@ -6,12 +6,12 @@
 
 RWTexture2D<float4> OutputTexture;
 
-void swap(inout float x, inout float y)
-{
-    float t = x;
-    x = y;
-    y = t;
-}
+// void swap(inout float x, inout float y)
+// {
+//     float t = x;
+//     x = y;
+//     y = t;
+// }
 
 [numthreads(1, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint group_idx : SV_GroupIndex)

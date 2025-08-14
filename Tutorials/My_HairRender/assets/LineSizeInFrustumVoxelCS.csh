@@ -20,7 +20,7 @@ void AddAccumulateBuffer(float px, float py, float max_z, float voxel_z_offset)
 {
     int DownSampleX = int(ceil(px / 16.0f));
     int DownSampleY = int(ceil(py / 16.0f));
-    float OcclusionDepth = DownSampleDepthMap.Load(int2(DownSampleX, DownSampleY)).x;
+    float OcclusionDepth = DownSampleDepthMap.Load(int3(DownSampleX, DownSampleY, 0)).x;
     if(OcclusionDepth > max_z)
     {
         uint SrcVal;
@@ -43,13 +43,13 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
 
     HairVertexData V1 = VerticesDatas[VertexIdx0 + 1];
 
-    float4 VNDC0 = float4(V0.Pos, 1.0f) * ViewProj;
+    float4 VNDC0 = mul(float4(V0.Pos, 1.0f), ViewProj);
     VNDC0.xy /= VNDC0.w;
-    VNDC0.xy = VNDC0.xy * 0.5f + float2(0.5f);
+    VNDC0.xy = VNDC0.xy * 0.5f + float2(0.5f, 0.5f);
     VNDC0.xy = saturate(VNDC0.xy);
-    float4 VNDC1 = float4(V1.Pos, 1.0f) * ViewProj;
+    float4 VNDC1 = mul(float4(V1.Pos, 1.0f), ViewProj);
     VNDC1.xy /= VNDC1.w;
-    VNDC1.xy = VNDC1.xy * 0.5f + float2(0.5f);
+    VNDC1.xy = VNDC1.xy * 0.5f + float2(0.5f, 0.5f);
     VNDC1.xy = saturate(VNDC1.xy);
     if((abs(VNDC1.x - VNDC0.x) < 0.001f) && (abs(VNDC1.y - VNDC0.y) < 0.001f)) //in same pos
     {
@@ -60,7 +60,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
 
     //voxel z offset
-    float LineDistRadio = max(dot((V0.Pos - HairBBoxMin.xyz), HairBBoxSize.xyz), dot((V1.Pos - HairBBoxMin.xyz)));
+    float LineDistRadio = max(dot((V0.Pos - HairBBoxMin.xyz), HairBBoxSize.xyz), dot((V1.Pos - HairBBoxMin.xyz), HairBBoxSize.xyz));
     uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
 
     float2 StartPixelCoord = VNDC0.xy * ScreenSize;
