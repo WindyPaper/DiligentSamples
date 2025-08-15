@@ -33,7 +33,7 @@ void AddAccumulateBuffer(float px, float py, float max_z, float voxel_z_offset)
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint group_idx : SV_GroupIndex)
 {
     uint LineIdx0 = id.x;
-    uint VertexIdx0 = IdxData[LineIdx0];
+    uint VertexIdx0 = IdxData[LineIdx0] & 0x0FFFFFFF;
 
     HairVertexData V0 = VerticesDatas[VertexIdx0];
     if(isnan(V0.Pos.x))
@@ -44,11 +44,11 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     HairVertexData V1 = VerticesDatas[VertexIdx0 + 1];
 
     float4 VNDC0 = mul(float4(V0.Pos, 1.0f), ViewProj);
-    VNDC0.xy /= VNDC0.w;
+    VNDC0.xyz /= VNDC0.w;
     VNDC0.xy = VNDC0.xy * 0.5f + float2(0.5f, 0.5f);
     VNDC0.xy = saturate(VNDC0.xy);
     float4 VNDC1 = mul(float4(V1.Pos, 1.0f), ViewProj);
-    VNDC1.xy /= VNDC1.w;
+    VNDC1.xyz /= VNDC1.w;
     VNDC1.xy = VNDC1.xy * 0.5f + float2(0.5f, 0.5f);
     VNDC1.xy = saturate(VNDC1.xy);
     if((abs(VNDC1.x - VNDC0.x) < 0.001f) && (abs(VNDC1.y - VNDC0.y) < 0.001f)) //in same pos
@@ -60,7 +60,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
 
     //voxel z offset
-    float LineDistRadio = max(dot((V0.Pos - HairBBoxMin.xyz), HairBBoxSize.xyz), dot((V1.Pos - HairBBoxMin.xyz), HairBBoxSize.xyz));
+    float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
     uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
 
     float2 StartPixelCoord = VNDC0.xy * ScreenSize;
