@@ -24,6 +24,8 @@ void Diligent::HairRender::InitPSO()
     CreateDownSampleMapPSO();
     CreateDrawLinePSO();
     CreateLineSizeInFrustumVoxelPSO();
+    CreateGetLineOffsetAndCounterPSO();
+    CreateGetLineVisibilityPSO();
 }
 
 void Diligent::HairRender::CreateDownSampleMapPSO()
@@ -48,12 +50,15 @@ void Diligent::HairRender::CreateDownSampleMapPSO()
 
     //data
     float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
+
+    m_DownSampledDepthSize.x = Uint32(ceil(PixelSize.x / 16));
+    m_DownSampledDepthSize.y = Uint32(ceil(PixelSize.y / 16));
     
     TextureDesc DownSampledTextureDesc;
-    DownSampledTextureDesc.Name = "Down Sampled Texture Desc Texture";
+    DownSampledTextureDesc.Name = "Down Sampled Texture Desc";
     DownSampledTextureDesc.Type = RESOURCE_DIM_TEX_2D;
-    DownSampledTextureDesc.Width = Uint32(ceil(PixelSize.x / 16));
-    DownSampledTextureDesc.Height = Uint32(ceil(PixelSize.y / 16));
+    DownSampledTextureDesc.Width = m_DownSampledDepthSize.x;
+    DownSampledTextureDesc.Height = m_DownSampledDepthSize.y;
     DownSampledTextureDesc.Format = TEX_FORMAT_R32_FLOAT;
     DownSampledTextureDesc.Usage = USAGE_DYNAMIC;
     DownSampledTextureDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
@@ -133,7 +138,7 @@ void Diligent::HairRender::CreateLineSizeInFrustumVoxelPSO()
     std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
     
     // clang-format on
-    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Draw line PSO");	
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Line Accumulate PSO");	
 
     PSOCreateInfo.pCS = ap_drawline;
     m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_LineSizeInFrustumVoxelCS.PSO);
@@ -144,12 +149,9 @@ void Diligent::HairRender::CreateLineSizeInFrustumVoxelPSO()
     m_LineSizeInFrustumVoxelCS.VerticesData = m_apHairVertexArray;
     m_LineSizeInFrustumVoxelCS.LineIdxData = m_apHairIdxArray;
 
-    uint2 DownSampledDepthMapPixelSize = uint2(m_DownSamleDepthPassCS.DownSampledDepthMap->GetDesc().Width, \
-        m_DownSamleDepthPassCS.DownSampledDepthMap->GetDesc().Height);
-
     const int VOXEL_SLICE_NUM = 24;
     m_LineSizeInFrustumVoxelCS.LineSizeBuffer = CreateStructureBuffer(sizeof(int), \
-        DownSampledDepthMapPixelSize.x * DownSampledDepthMapPixelSize.y * VOXEL_SLICE_NUM, \
+        m_DownSampledDepthSize.x * m_DownSampledDepthSize.y * VOXEL_SLICE_NUM, \
         nullptr, \
         "FrustumVoxelLineSizeBuffer");
 
@@ -163,6 +165,59 @@ void Diligent::HairRender::CreateLineSizeInFrustumVoxelPSO()
         m_LineSizeInFrustumVoxelCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
     m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set( \
         m_HairConstData);
+    
+}
+
+void Diligent::HairRender::CreateGetLineOffsetAndCounterPSO()
+{
+    AutoPtrShader ap_drawline = CreateShader("CSMain", "./LineGetOffsetCounterCS.csh", \
+        "Line size to Offset and Counter CS", SHADER_TYPE_COMPUTE);
+
+    ComputePipelineStateCreateInfo PSOCreateInfo;
+    // clang-format off
+    // Shader variables should typically be mutable, which means they are expected
+    // to change on a per-instance basis
+    std::vector<std::string> ParamNames = { \
+        "HairConstData", \
+        "LineAccumulateBuffer", \
+        "OutLineOffsetBuffer", \
+        "OutLineCounterBuffer"
+    };
+    std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+    
+    // clang-format on
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Line offset and counter PSO");	
+
+    PSOCreateInfo.pCS = ap_drawline;
+    m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_GetLineOffsetCounterCS.PSO);
+
+    //SRB
+    m_GetLineOffsetCounterCS.PSO->CreateShaderResourceBinding(&m_GetLineOffsetCounterCS.SRB, true);
+
+    m_GetLineOffsetCounterCS.LineSizeBuffer = m_LineSizeInFrustumVoxelCS.LineSizeBuffer;
+
+    const int VOXEL_SLICE_NUM = 24;
+    m_GetLineOffsetCounterCS.LineOffsetBuffer = CreateStructureBuffer(sizeof(int), \
+        m_DownSampledDepthSize.x * m_DownSampledDepthSize.y * VOXEL_SLICE_NUM, \
+        nullptr, \
+        "Line offset buffer");
+
+    uint4 InitUint4 = uint4(0, 0, 0, 0);
+    m_GetLineOffsetCounterCS.CounterBuffer = CreateStructureBuffer(sizeof(int) * 4, 1, &InitUint4[0], "Counter");
+    m_GetLineOffsetCounterCS.CountStageBuffer = CreateStageStructureBuffer(sizeof(int) * 4, 1, "CounterStage");
+
+    m_GetLineOffsetCounterCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
+    m_GetLineOffsetCounterCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineAccumulateBuffer")->Set( \
+        m_GetLineOffsetCounterCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+    m_GetLineOffsetCounterCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineOffsetBuffer")->Set( \
+        m_GetLineOffsetCounterCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+    m_GetLineOffsetCounterCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineCounterBuffer")->Set( \
+        m_GetLineOffsetCounterCS.CounterBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+}
+
+void Diligent::HairRender::CreateGetLineVisibilityPSO()
+{
+    //uint RenderQueueBufferCount = m_GetLineOffsetCounterCS.CountCPUData[0];
     
 }
 
@@ -308,17 +363,48 @@ void Diligent::HairRender::RunFrustumVoxelCullLineSizeCS()
     
 }
 
-void Diligent::HairRender::RunCS()
+void Diligent::HairRender::RunGetLineOffsetAndCounterCS()
+{
+    m_pDeviceCtx->SetPipelineState(m_GetLineOffsetCounterCS.PSO);
+
+    m_pDeviceCtx->CommitShaderResources(m_GetLineOffsetCounterCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    
+    const DispatchComputeAttribs attr(\
+        (uint)ceil(m_DownSampledDepthSize.x / 8.0f), \
+        (uint)ceil(m_DownSampledDepthSize.y / 8.0f), 1);
+    m_pDeviceCtx->DispatchCompute(attr);
+
+    //read back data to cpu
+    m_pDeviceCtx->CopyBuffer(m_GetLineOffsetCounterCS.CounterBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+        m_GetLineOffsetCounterCS.CountStageBuffer, 0, 4 * sizeof(uint),
+        RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    //sync gpu finish copy operation.
+    m_pDeviceCtx->WaitForIdle();
+
+    MapHelper<uint> counter_stage_map_data(m_pDeviceCtx, m_GetLineOffsetCounterCS.CountStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+	
+    m_GetLineOffsetCounterCS.CountCPUData.resize(4);
+    memcpy(&m_GetLineOffsetCounterCS.CountCPUData[0], counter_stage_map_data, sizeof(uint) * 4);
+}
+
+void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj)
 {
     float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
     {
         // Map the buffer and write current world-view-projection matrix
         MapHelper<HairConstData> CBConstants(m_pDeviceCtx, m_HairConstData, MAP_WRITE, MAP_FLAG_DISCARD);
+        CBConstants->ViewProj = viwe_proj.Transpose();
+        CBConstants->InvViewProj = inv_view_proj.Transpose();
         CBConstants->ScreenSize = PixelSize;
+        CBConstants->DownSampleDepthSize = float2(m_DownSampledDepthSize.x, m_DownSampledDepthSize.y);
+        CBConstants->HairBBoxMin = float4(m_HairRawData.HairBBoxMin, 1.0f);
+        CBConstants->HairBBoxSize = float4(m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin, 1.0f);
     }
 
     RunDownSampledDepthMapCS();
     RunDrawLineCS();
 
     RunFrustumVoxelCullLineSizeCS();
+    RunGetLineOffsetAndCounterCS();
 }

@@ -275,7 +275,7 @@ void Tutorial02_Cube::Render()
     m_pImmediateContext->DrawIndexed(DrawAttrs);
 
     //m_pHairRender->HWRender(m_Camera.GetViewProjMatrix());
-    m_pHairRender->RunCS();
+    m_pHairRender->RunCS(m_Camera.GetViewProjMatrix(), m_Camera.GetViewProjMatrix().Inverse());
 
     //transition depth buffer from SRV to Depth write
     std::vector<StateTransitionDesc> Barriers;

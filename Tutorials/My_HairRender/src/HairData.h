@@ -16,4 +16,7 @@ struct HairData
     
     std::vector<int> HairIdxDataArray;
     std::vector<HairVertexData> HairVertexDataArray;
+
+    Diligent::float3 HairBBoxMin;
+    Diligent::float3 HairBBoxMax;
 };

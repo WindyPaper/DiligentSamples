@@ -15,8 +15,10 @@ struct HairConstData
 {
     float4x4 ViewProj;
     float4x4 InvViewProj;
+    float4 HairBBoxMin;
+    float4 HairBBoxSize;
     float2 ScreenSize;
-    float2 padding;
+    float2 DownSampleDepthSize;
 };
 
 struct PassBaseData
@@ -54,6 +56,16 @@ struct GetLineOffsetCounterCS : public  PassBaseData
     
     AutoPtrBuffer CounterBuffer;
     AutoPtrBuffer LineOffsetBuffer;
+
+    AutoPtrBuffer CountStageBuffer;
+    std::vector<uint> CountCPUData;
+};
+
+struct GetLineVisibilityCS : public PassBaseData
+{
+    AutoPtrBuffer RenderQueueBuffer;
+    AutoPtrBuffer VisibilityBitBuffer;
+    AutoPtrBuffer LineSizeBuffer;
 };
 
 class HairRender : public IBaseRender
@@ -71,14 +83,17 @@ public:
     void CreateDownSampleMapPSO();
     void CreateDrawLinePSO();
     void CreateLineSizeInFrustumVoxelPSO();
+    void CreateGetLineOffsetAndCounterPSO();
+    void CreateGetLineVisibilityPSO();
 
     void HWRender(const float4x4 &WVPMat);
 
     void RunDownSampledDepthMapCS();
     void RunDrawLineCS();
     void RunFrustumVoxelCullLineSizeCS();
+    void RunGetLineOffsetAndCounterCS();
     
-    void RunCS();
+    void RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj);
 
 private:
     HairData m_HairRawData;
@@ -92,6 +107,7 @@ private:
 
     //common
     AutoPtrBuffer m_HairConstData;
+    uint2 m_DownSampledDepthSize;
 
     //--Cull start
     //Downsample DepthMap
@@ -99,6 +115,8 @@ private:
     DrawLinePassDataCS m_DrawLinePassCS; // for testing draw line algorithm
     //Calculate line size in frustum voxel
     LineSizeInFrustumVoxelCS m_LineSizeInFrustumVoxelCS;
+    GetLineOffsetCounterCS m_GetLineOffsetCounterCS;
+    GetLineVisibilityCS m_GetLineVisibilityCS;
 
     //--Cull end
     

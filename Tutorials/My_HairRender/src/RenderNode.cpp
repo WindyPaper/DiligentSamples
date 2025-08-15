@@ -133,6 +133,22 @@ RefCntAutoPtr<IBuffer> IBaseRender::CreateStructureBuffer(const int element_size
     return apStructureBuffer;
 }
 
+RefCntAutoPtr<IBuffer> IBaseRender::CreateStageStructureBuffer(const int element_size, const int count, const std::string& desc)
+{
+    BufferDesc BufferDesc;
+    BufferDesc.Name = desc.c_str();
+    BufferDesc.Usage = USAGE_STAGING;
+    BufferDesc.BindFlags = BIND_NONE;
+    BufferDesc.Mode = BUFFER_MODE_STRUCTURED;
+    BufferDesc.CPUAccessFlags = CPU_ACCESS_READ;
+    BufferDesc.ElementByteStride = element_size;
+    BufferDesc.uiSizeInBytes = element_size * count;
+    RefCntAutoPtr<IBuffer> apStageStructureBuffer;
+    m_pDevice->CreateBuffer(BufferDesc, nullptr, &apStageStructureBuffer);
+
+    return apStageStructureBuffer;
+}
+
 std::vector<ShaderResourceVariableDesc> IBaseRender::GenerateCSDynParams(const std::vector<std::string> &ParamNames)
 {
     std::vector<ShaderResourceVariableDesc> Vars;
