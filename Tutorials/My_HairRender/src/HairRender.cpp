@@ -3,9 +3,14 @@
 #include "MapHelper.hpp"
 
 
+namespace Diligent {
+class DeviceContextD3D12Impl;
+}
+
 Diligent::HairRender::HairRender(IDeviceContext* pDeviceCtx, IRenderDevice* pDevice, IShaderSourceInputStreamFactory* pShaderFactory, ISwapChain *pSwapChain) :
 IBaseRender(pDeviceCtx, pDevice, pShaderFactory),
-m_pSwapChain(pSwapChain)
+m_pSwapChain(pSwapChain),
+m_VisibilityLineCount(0)
 {
 }
 
@@ -204,7 +209,7 @@ void Diligent::HairRender::CreateGetLineOffsetAndCounterPSO()
 
     uint4 InitUint4 = uint4(0, 0, 0, 0);
     m_GetLineOffsetCounterCS.CounterBuffer = CreateStructureBuffer(sizeof(int) * 4, 1, &InitUint4[0], "Counter");
-    m_GetLineOffsetCounterCS.CountStageBuffer = CreateStageStructureBuffer(sizeof(int) * 4, 1, "CounterStage");
+    //m_GetLineOffsetCounterCS.CountStageBuffer = CreateStageStructureBuffer(sizeof(int) * 4, 1, "CounterStage");
 
     m_GetLineOffsetCounterCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
     m_GetLineOffsetCounterCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineAccumulateBuffer")->Set( \
@@ -218,8 +223,73 @@ void Diligent::HairRender::CreateGetLineOffsetAndCounterPSO()
 void Diligent::HairRender::CreateGetLineVisibilityPSO()
 {
     //uint RenderQueueBufferCount = m_GetLineOffsetCounterCS.CountCPUData[0];
+    AutoPtrShader ap_get_line_visibility = CreateShader("CSMain", "./LineGetVisibilityCS.csh", \
+        "Line Get Visibility CS", SHADER_TYPE_COMPUTE);
+
+    ComputePipelineStateCreateInfo PSOCreateInfo;
+    // clang-format off
+    // Shader variables should typically be mutable, which means they are expected
+    // to change on a per-instance basis
+    std::vector<std::string> ParamNames = { \
+        "HairConstData", \
+        "VerticesDatas", \
+        "IdxData", \
+        "LineOffsetBuffer", \
+        "DownSampleDepthMap", \
+        "OutLineAccumulateBuffer", \
+        "OutLineVisibilityBuffer", \
+        "OutLineRenderQueueBuffer"
+    };
+    std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
     
+    // clang-format on
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "get line visibility PSO");	
+
+    PSOCreateInfo.pCS = ap_get_line_visibility;
+    m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_GetLineVisibilityCS.PSO);
+
+    //SRB
+    m_GetLineVisibilityCS.PSO->CreateShaderResourceBinding(&m_GetLineVisibilityCS.SRB, true);
+
+    m_GetLineVisibilityCS.LineSizeBuffer = m_LineSizeInFrustumVoxelCS.LineSizeBuffer;
+    m_GetLineVisibilityCS.LineOffsetBuffer = m_GetLineOffsetCounterCS.LineOffsetBuffer;
+    m_GetLineVisibilityCS.VerticesData = m_apHairVertexArray;
+    m_GetLineVisibilityCS.LineIdxData = m_apHairIdxArray;
+
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas")->Set( \
+        m_GetLineVisibilityCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData")->Set( \
+        m_GetLineVisibilityCS.LineIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineOffsetBuffer")->Set( \
+        m_GetLineVisibilityCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DownSampleDepthMap")->Set( \
+        m_DownSamleDepthPassCS.DownSampledDepthMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineAccumulateBuffer")->Set( \
+        m_GetLineVisibilityCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+
+    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
+    m_GetLineVisibilityCS.VisibilityBitBuffer = CreateStructureBuffer(sizeof(int), ceil(LineCount / 32), nullptr, " visibility bit buffer");
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineVisibilityBuffer")->Set( \
+        m_GetLineVisibilityCS.VisibilityBitBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+    
+    m_GetLineVisibilityCS.RenderQueueBuffer = CreateStructureBuffer(sizeof(int), MAX_HAIR_LINE_NUM, nullptr, " render line queue buffer");
+    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineRenderQueueBuffer")->Set( \
+        m_GetLineVisibilityCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 }
+
+// void Diligent::HairRender::CreateGetLineVisibilityDependencyPSOParams(int visibility_line_count)
+// {
+//     if(m_VisibilityLineCount != visibility_line_count)
+//     {
+//         m_GetLineVisibilityCS.RenderQueueBuffer = CreateStructureBuffer(sizeof(int), visibility_line_count, nullptr, " render line queue buffer");
+//
+//         m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineRenderQueueBuffer")->Set( \
+//             m_GetLineVisibilityCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+//
+//         m_VisibilityLineCount = visibility_line_count;
+//     }
+// }
 
 void Diligent::HairRender::CreateHWPSO()
 {
@@ -368,24 +438,46 @@ void Diligent::HairRender::RunGetLineOffsetAndCounterCS()
     m_pDeviceCtx->SetPipelineState(m_GetLineOffsetCounterCS.PSO);
 
     m_pDeviceCtx->CommitShaderResources(m_GetLineOffsetCounterCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	m_pDeviceCtx->ClearUAVBuffer(m_GetLineOffsetCounterCS.LineOffsetBuffer);
+	m_pDeviceCtx->ClearUAVBuffer(m_GetLineOffsetCounterCS.CounterBuffer);
     
     const DispatchComputeAttribs attr(\
         (uint)ceil(m_DownSampledDepthSize.x / 8.0f), \
         (uint)ceil(m_DownSampledDepthSize.y / 8.0f), 1);
     m_pDeviceCtx->DispatchCompute(attr);
 
+    //uint4 ResetCounter = uint4(0, 0, 0, 0);
+    //m_pDeviceCtx->UpdateBuffer(m_GetLineOffsetCounterCS.CounterBuffer, 0, sizeof(int) * 4, &ResetCounter, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    //DeviceContextD3D12Impl *pDx12Ctx = reinterpret_cast<DeviceContextD3D12Impl*>(m_pDeviceCtx);
+
     //read back data to cpu
-    m_pDeviceCtx->CopyBuffer(m_GetLineOffsetCounterCS.CounterBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
-        m_GetLineOffsetCounterCS.CountStageBuffer, 0, 4 * sizeof(uint),
-        RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    // m_pDeviceCtx->CopyBuffer(m_GetLineOffsetCounterCS.CounterBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+    //     m_GetLineOffsetCounterCS.CountStageBuffer, 0, 4 * sizeof(uint),
+    //     RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    //
+    // //sync gpu finish copy operation.
+    // m_pDeviceCtx->WaitForIdle();
+    //
+    // MapHelper<uint> counter_stage_map_data(m_pDeviceCtx, m_GetLineOffsetCounterCS.CountStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+	   //
+    // m_GetLineOffsetCounterCS.CountCPUData.resize(4);
+    // memcpy(&m_GetLineOffsetCounterCS.CountCPUData[0], counter_stage_map_data, sizeof(uint) * 4);
 
-    //sync gpu finish copy operation.
-    m_pDeviceCtx->WaitForIdle();
+    //CreateGetLineVisibilityDependencyPSOParams(m_GetLineOffsetCounterCS.CountCPUData[0]);
+}
 
-    MapHelper<uint> counter_stage_map_data(m_pDeviceCtx, m_GetLineOffsetCounterCS.CountStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
-	
-    m_GetLineOffsetCounterCS.CountCPUData.resize(4);
-    memcpy(&m_GetLineOffsetCounterCS.CountCPUData[0], counter_stage_map_data, sizeof(uint) * 4);
+void Diligent::HairRender::RunGetLineVisibilityCS()
+{
+    m_pDeviceCtx->SetPipelineState(m_GetLineVisibilityCS.PSO);
+
+    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
+
+    m_pDeviceCtx->CommitShaderResources(m_GetLineVisibilityCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    const uint LineSizeCSPerGroupThreadNum = 64;
+    
+    const DispatchComputeAttribs attr((uint)ceil(LineCount / LineSizeCSPerGroupThreadNum), 1, 1);
+    m_pDeviceCtx->DispatchCompute(attr);
 }
 
 void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj)
@@ -407,4 +499,9 @@ void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_
 
     RunFrustumVoxelCullLineSizeCS();
     RunGetLineOffsetAndCounterCS();
+    RunGetLineVisibilityCS();
+
+    //reset data    
+    //m_pDeviceCtx->ClearUAVBuffer(m_LineSizeInFrustumVoxelCS.LineSizeBuffer);
+    //m_pDeviceCtx->ClearUAVBuffer(m_GetLineOffsetCounterCS.LineOffsetBuffer);
 }

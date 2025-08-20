@@ -11,6 +11,8 @@ struct IShaderSourceInputStreamFactory;
 struct IRenderDevice;
 struct IDeviceContext;
 
+const int MAX_HAIR_LINE_NUM = std::pow(2, 24);
+
 struct HairConstData
 {
     float4x4 ViewProj;
@@ -63,6 +65,11 @@ struct GetLineOffsetCounterCS : public  PassBaseData
 
 struct GetLineVisibilityCS : public PassBaseData
 {
+    AutoPtrBuffer VerticesData;
+    AutoPtrBuffer LineIdxData;
+    
+    AutoPtrBuffer LineOffsetBuffer;
+
     AutoPtrBuffer RenderQueueBuffer;
     AutoPtrBuffer VisibilityBitBuffer;
     AutoPtrBuffer LineSizeBuffer;
@@ -85,6 +92,7 @@ public:
     void CreateLineSizeInFrustumVoxelPSO();
     void CreateGetLineOffsetAndCounterPSO();
     void CreateGetLineVisibilityPSO();
+    //void CreateGetLineVisibilityDependencyPSOParams(int visibility_line_count);
 
     void HWRender(const float4x4 &WVPMat);
 
@@ -92,6 +100,7 @@ public:
     void RunDrawLineCS();
     void RunFrustumVoxelCullLineSizeCS();
     void RunGetLineOffsetAndCounterCS();
+    void RunGetLineVisibilityCS();
     
     void RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj);
 
@@ -117,6 +126,7 @@ private:
     LineSizeInFrustumVoxelCS m_LineSizeInFrustumVoxelCS;
     GetLineOffsetCounterCS m_GetLineOffsetCounterCS;
     GetLineVisibilityCS m_GetLineVisibilityCS;
+    int m_VisibilityLineCount;
 
     //--Cull end
     
