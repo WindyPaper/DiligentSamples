@@ -31,6 +31,7 @@ void Diligent::HairRender::InitPSO()
     CreateLineSizeInFrustumVoxelPSO();
     CreateGetLineOffsetAndCounterPSO();
     CreateGetLineVisibilityPSO();
+    CreateGetWorkQueuePSO();
 }
 
 void Diligent::HairRender::CreateDownSampleMapPSO()
@@ -278,6 +279,56 @@ void Diligent::HairRender::CreateGetLineVisibilityPSO()
         m_GetLineVisibilityCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 }
 
+void Diligent::HairRender::CreateGetWorkQueuePSO()
+{
+    AutoPtrShader ap_cs = CreateShader("CSMain", "./LineGetWorkQueue.csh", \
+        "Get work queue CS", SHADER_TYPE_COMPUTE);
+
+    ComputePipelineStateCreateInfo PSOCreateInfo;
+    // clang-format off
+    // Shader variables should typically be mutable, which means they are expected
+    // to change on a per-instance basis
+    std::vector<std::string> ParamNames = { \
+        "HairConstData", \
+        "LineOffsetBuffer", \
+        "OutWorkQueueBuffer", \
+        "OutWorkQueueCountBuffer"
+    };
+    std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+    
+    // clang-format on
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Line Get Work Queue PSO");	
+
+    PSOCreateInfo.pCS = ap_cs;
+    m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_GetWorkQueueCS.PSO);
+
+    //SRB
+    m_GetWorkQueueCS.PSO->CreateShaderResourceBinding(&m_GetWorkQueueCS.SRB, true);
+
+    m_GetWorkQueueCS.LineOffsetBuffer = m_GetLineOffsetCounterCS.LineOffsetBuffer;
+    
+    m_GetWorkQueueCS.WorkQueueBuffer = CreateStructureBuffer(sizeof(int), \
+        m_DownSampledDepthSize.x * m_DownSampledDepthSize.y, \
+        nullptr, \
+        "Work Queue buffer");
+
+    m_GetWorkQueueCS.WorkQueueCountBuffer = CreateStructureBuffer(sizeof(int), \
+        4, \
+        nullptr, \
+        "Work Queue Count buffer");
+    
+    m_GetWorkQueueCS.CountStageBuffer = CreateStageStructureBuffer(sizeof(int), \
+        4, "Work Queue Counter Stage Buffer");
+
+    m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
+    m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineOffsetBuffer")->Set( \
+        m_GetWorkQueueCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutWorkQueueBuffer")->Set( \
+        m_GetWorkQueueCS.WorkQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+    m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutWorkQueueCountBuffer")->Set( \
+        m_GetWorkQueueCS.WorkQueueCountBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+}
+
 // void Diligent::HairRender::CreateGetLineVisibilityDependencyPSOParams(int visibility_line_count)
 // {
 //     if(m_VisibilityLineCount != visibility_line_count)
@@ -480,6 +531,20 @@ void Diligent::HairRender::RunGetLineVisibilityCS()
     m_pDeviceCtx->DispatchCompute(attr);
 }
 
+void Diligent::HairRender::RunGetWorkQueueCS()
+{
+    m_pDeviceCtx->SetPipelineState(m_GetWorkQueueCS.PSO);
+
+    m_pDeviceCtx->CommitShaderResources(m_GetWorkQueueCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    m_pDeviceCtx->ClearUAVBuffer(m_GetWorkQueueCS.WorkQueueCountBuffer);
+    
+    const DispatchComputeAttribs attr(\
+        (uint)ceil(m_DownSampledDepthSize.x / 8.0f), \
+        (uint)ceil(m_DownSampledDepthSize.y / 8.0f), \
+        1);
+    m_pDeviceCtx->DispatchCompute(attr);
+}
+
 void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj)
 {
     float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
@@ -500,8 +565,5 @@ void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_
     RunFrustumVoxelCullLineSizeCS();
     RunGetLineOffsetAndCounterCS();
     RunGetLineVisibilityCS();
-
-    //reset data    
-    //m_pDeviceCtx->ClearUAVBuffer(m_LineSizeInFrustumVoxelCS.LineSizeBuffer);
-    //m_pDeviceCtx->ClearUAVBuffer(m_GetLineOffsetCounterCS.LineOffsetBuffer);
+    RunGetWorkQueueCS();
 }

@@ -75,6 +75,16 @@ struct GetLineVisibilityCS : public PassBaseData
     AutoPtrBuffer LineSizeBuffer;
 };
 
+struct GetWorkQueueCS : public PassBaseData
+{
+    AutoPtrBuffer LineOffsetBuffer;
+    AutoPtrBuffer WorkQueueBuffer;
+    AutoPtrBuffer WorkQueueCountBuffer;
+
+    AutoPtrBuffer CountStageBuffer;
+    std::vector<uint> CountCPUData;
+};
+
 class HairRender : public IBaseRender
 {
 public:
@@ -92,6 +102,7 @@ public:
     void CreateLineSizeInFrustumVoxelPSO();
     void CreateGetLineOffsetAndCounterPSO();
     void CreateGetLineVisibilityPSO();
+    void CreateGetWorkQueuePSO();
     //void CreateGetLineVisibilityDependencyPSOParams(int visibility_line_count);
 
     void HWRender(const float4x4 &WVPMat);
@@ -101,6 +112,7 @@ public:
     void RunFrustumVoxelCullLineSizeCS();
     void RunGetLineOffsetAndCounterCS();
     void RunGetLineVisibilityCS();
+    void RunGetWorkQueueCS();
     
     void RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj);
 
@@ -127,6 +139,7 @@ private:
     GetLineOffsetCounterCS m_GetLineOffsetCounterCS;
     GetLineVisibilityCS m_GetLineVisibilityCS;
     int m_VisibilityLineCount;
+    GetWorkQueueCS m_GetWorkQueueCS;
 
     //--Cull end
     
