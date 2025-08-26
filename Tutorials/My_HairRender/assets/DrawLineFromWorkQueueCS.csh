@@ -26,21 +26,32 @@ groupshared float GroupDepthCache[256];
 groupshared uint GroupPixelVisibilityBit[8];
 
 
-void AddAccumulateBuffer(int px, int py, float max_z, float voxel_z_offset)
+bool AddAccumulateBuffer(int px, int py, float pixel_d)
 {
     int tile_x = px % 16;
     int tile_y = py % 16; 
     float OcclusionDepth = GroupDepthCache[tile_y * 16 + tile_x];
-    if(OcclusionDepth > max_z)
-    {
 
-        // uint SrcVal;
-        // uint AccumuBufIdx = (DownSampleY * DownSampleDepthSize.x + DownSampleX) * VOXEL_SLICE_NUM + voxel_z_offset;
-        //InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, SrcVal);
+    bool success = false;
+    if(OcclusionDepth > pixel_d)
+    {
+        success = true;
+    }
+
+    return success;
+}
+
+void WriteLine(int px, int py, float bright, float depth)
+{
+    bool success = AddAccumulateBuffer(px, py, depth);
+
+    if(success)
+    {
+        OutHairRenderTex[uint2(px, py)] = float4(bright, bright, bright, 1.0f);
     }
 }
 
-void DrawSoftLine(HairVertexData V0, HairVertexData V1)
+void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
 {
     if(!isnan(V0.Pos.x))
     {
@@ -59,90 +70,119 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1)
         }
         else
         {
-            float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
-            float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
+            // float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
+            // float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
 
             //voxel z offset
-            float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
-            uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
+            // float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
+            // uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
 
             float2 StartPixelCoord = VNDC0.xy * ScreenSize;
             float2 EndPixelCoord = VNDC1.xy * ScreenSize;
 
-            bool steep = abs(EndPixelCoord.y - StartPixelCoord.y) > abs(EndPixelCoord.x - StartPixelCoord.x);
+            int2 StartPixelCoordInTile = int2(StartPixelCoord) - TilePixelPos;
+            int2 EndPixelCoordInTile = int2(EndPixelCoord) - TilePixelPos;
 
-            if(steep)
+            int MinXInTile = min(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
+            int MinYinTile = min(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
+            int MaxXInTile = max(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
+            int MaxYinTile = max(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
+
+            bool IsPixelInTile = (MinXInTile > -1) && (MinYinTile > -1) && (MaxXInTile < 16) && (MaxYinTile < 16);
+
+            if(IsPixelInTile)
             {
-                swap(StartPixelCoord.x, StartPixelCoord.y);
-                swap(EndPixelCoord.x, EndPixelCoord.y);        
-            }
-            if(StartPixelCoord.x > EndPixelCoord.x)
-            {
-                swap(StartPixelCoord.x, EndPixelCoord.x);
-                swap(StartPixelCoord.y, EndPixelCoord.y);
-            }
+                float StartPixelZ = VNDC0.z;
+                float EndPixelZ = VNDC1.z;
 
-            //compute the slope
-            float dx = EndPixelCoord.x - StartPixelCoord.x;
-            float dy = EndPixelCoord.y - StartPixelCoord.y;
+                bool steep = abs(EndPixelCoord.y - StartPixelCoord.y) > abs(EndPixelCoord.x - StartPixelCoord.x);
 
-            float gradient = 1.0f;
-            if(dx > 0.0f)
-            {
-                gradient = dy / dx;
-            }
-
-            int s_x = StartPixelCoord.x;
-            int e_x = EndPixelCoord.x;
-            float intersect_y = StartPixelCoord.y;
-
-            if(steep)
-            {
-                for(int i = s_x; i <= e_x; ++i)
+                if(steep)
                 {
-                    int w_x = int(intersect_y);
-                    int w_y = i;
-                    float bright = 1.0f - frac(intersect_y);
+                    swap(StartPixelCoord.x, StartPixelCoord.y);
+                    swap(EndPixelCoord.x, EndPixelCoord.y);
 
-                    if(bright > 0.0f)
-                    {
-                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
-                    OutHairRenderTex[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
-
-                    w_x = w_x + 1;
-                    bright = frac(intersect_y);
-                    OutHairRenderTex[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
-                    if(bright > 0.0f)
-                    {
-                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
-
-                    intersect_y += gradient;
+                    swap_uint(StartPixelCoordInTile.x, StartPixelCoordInTile.y);
+                    swap_uint(EndPixelCoordInTile.x, EndPixelCoordInTile.y);
                 }
-            }
-            else
-            {
-                for(int i = s_x; i <= e_x; ++i)
+                if(StartPixelCoord.x > EndPixelCoord.x)
                 {
-                    int w_x = i;
-                    int w_y = int(intersect_y);
-                    float bright = 1.0f - frac(intersect_y);
-                    if(bright > 0.0f)
-                    {
-                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
-                    OutHairRenderTex[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
+                    swap(StartPixelCoord.x, EndPixelCoord.x);
+                    swap(StartPixelCoord.y, EndPixelCoord.y);
 
-                    w_y = w_y + 1;
-                    bright = frac(intersect_y);
-                    if(bright > 0.0f)
-                    {
-                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
-                    OutHairRenderTex[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
+                    swap_uint(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
+                    swap_uint(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
 
-                    intersect_y += gradient;
+                    swap(StartPixelZ, EndPixelZ);
+                }
+
+                //compute the slope
+                float dx = EndPixelCoord.x - StartPixelCoord.x;
+                float dy = EndPixelCoord.y - StartPixelCoord.y;
+
+                float gradient = 1.0f;
+                if(dx > 0.0f)
+                {
+                    gradient = dy / dx;
+                }
+
+                int s_x = StartPixelCoord.x;
+                int e_x = EndPixelCoord.x;
+                float intersect_y = StartPixelCoord.y;
+
+                float lerp_factor = 1.0f / (EndPixelCoordInTile.x - StartPixelCoordInTile.x);
+                float lerp_value = 0.0f;
+
+                if(steep)
+                {
+                    for(int i = s_x; i <= e_x; ++i)
+                    {
+                        int w_x = int(intersect_y);
+                        int w_y = i;
+                        float bright = 1.0f - frac(intersect_y);
+
+                        if(bright > 0.0f)
+                        {
+                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                            WriteLine(w_x, w_y, bright, curr_depth);
+                        }                        
+
+                        w_x = w_x + 1;
+                        bright = frac(intersect_y);                        
+                        if(bright > 0.0f)
+                        {
+                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                            WriteLine(w_x, w_y, bright, curr_depth);
+                        }
+
+                        intersect_y += gradient;
+                        lerp_value += lerp_factor;
+                    }
+                }
+                else
+                {
+                    for(int i = s_x; i <= e_x; ++i)
+                    {
+                        int w_x = i;
+                        int w_y = int(intersect_y);
+                        float bright = 1.0f - frac(intersect_y);
+                        if(bright > 0.0f)
+                        {
+                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                            WriteLine(w_x, w_y, bright, curr_depth);
+                        }                        
+
+                        w_y = w_y + 1;
+                        bright = frac(intersect_y);
+                        if(bright > 0.0f)
+                        {
+                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                            WriteLine(w_x, w_y, bright, curr_depth);
+                        }
+
+                        intersect_y += gradient;
+                        lerp_value += lerp_factor;
+                    }
                 }
             }
         }        
@@ -162,7 +202,9 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     uint valid_offset_buf_idx = work_queue_value >> 24u;
 
     // uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;
-    uint2 screen_pixel_pos = uint2(tile_x * 16 + local_thread_id.x, tile_y * 16 + local_thread_id.y);
+    uint tile_x_in_pixel = tile_x * 16;
+    uint tile_y_in_pixel = tile_y * 16;
+    uint2 screen_pixel_pos = uint2(tile_x_in_pixel + local_thread_id.x, tile_y_in_pixel + local_thread_id.y);
 
     GroupDepthCache[local_thread_id.y * 16 + local_thread_id.x] = FullDepthMap.Load(int3(screen_pixel_pos, 0)).x;
 
@@ -181,14 +223,15 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         if(offset_idx > 0)
         {
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer[voxel_data_idx]; curr_line_idx += 16 * 16)
-            {                        
-                uint VertexIdx0 = RenderQueueBuffer[offset_idx + curr_line_idx];
+            {
+                uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];
+                uint VertexIdx0 = IdxData[line_idx];
                 uint VertexIdx1 = VertexIdx0 + 1;
 
                 HairVertexData V0 = VerticesDatas[VertexIdx0];
                 HairVertexData V1 = VerticesDatas[VertexIdx1];
 
-                DrawSoftLine(V0, V1);            
+                DrawSoftLine(V0, V1, uint2(tile_x_in_pixel, tile_y_in_pixel));            
             }
         }
     }

@@ -15,3 +15,10 @@ void swap(inout float x, inout float y)
     x = y;
     y = t;
 }
+
+void swap_uint(inout uint x, inout uint y)
+{
+    uint t = x;
+    x = y;
+    y = t;
+}
