@@ -18,8 +18,8 @@ RWStructuredBuffer<uint> OutLineAccumulateBuffer;
 
 void AddAccumulateBuffer(float px, float py, float max_z, float voxel_z_offset)
 {
-    int DownSampleX = int(ceil(px / 16.0f));
-    int DownSampleY = int(ceil(py / 16.0f));
+    int DownSampleX = int((px / 16.0f));
+    int DownSampleY = int((py / 16.0f));
     float OcclusionDepth = DownSampleDepthMap.Load(int3(DownSampleX, DownSampleY, 0)).x;
     if(OcclusionDepth > max_z)
     {
