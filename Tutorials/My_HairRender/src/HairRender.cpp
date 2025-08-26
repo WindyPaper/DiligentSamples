@@ -32,6 +32,7 @@ void Diligent::HairRender::InitPSO()
     CreateGetLineOffsetAndCounterPSO();
     CreateGetLineVisibilityPSO();
     CreateGetWorkQueuePSO();
+    CreateDrawLineFromWorkQueueCS();
 }
 
 void Diligent::HairRender::CreateDownSampleMapPSO()
@@ -139,7 +140,7 @@ void Diligent::HairRender::CreateLineSizeInFrustumVoxelPSO()
         "VerticesDatas", \
         "IdxData", \
         "DownSampleDepthMap", \
-        "LineAccumulateBuffer" \
+        "OutLineAccumulateBuffer" \
     };
     std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
     
@@ -327,6 +328,79 @@ void Diligent::HairRender::CreateGetWorkQueuePSO()
         m_GetWorkQueueCS.WorkQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
     m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutWorkQueueCountBuffer")->Set( \
         m_GetWorkQueueCS.WorkQueueCountBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
+}
+
+void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
+{
+    AutoPtrShader ap_cs = CreateShader("CSMain", "./DrawLineFromWorkQueueCS.csh", \
+        "draw line from work queue CS", SHADER_TYPE_COMPUTE);
+
+    ComputePipelineStateCreateInfo PSOCreateInfo;
+    // clang-format off
+    // Shader variables should typically be mutable, which means they are expected
+    // to change on a per-instance basis
+    std::vector<std::string> ParamNames = { \
+        "HairConstData", \
+        "VerticesDatas", \
+        "IdxData", \
+        "WorkQueueBuffer", \
+        "LineSizeBuffer", \
+        "LineOffsetBuffer", \
+        "RenderQueueBuffer", \
+        "FullDepthMap", \
+        "OutHairRenderTex"
+    };
+    std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+    
+    // clang-format on
+    PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Draw line From Work Queue PSO");	
+
+    PSOCreateInfo.pCS = ap_cs;
+    m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_DrawLineFromWorkQueueCS.PSO);
+
+    //SRB
+    m_DrawLineFromWorkQueueCS.PSO->CreateShaderResourceBinding(&m_DrawLineFromWorkQueueCS.SRB, true);
+
+    m_DrawLineFromWorkQueueCS.LineOffsetBuffer = m_GetLineOffsetCounterCS.LineOffsetBuffer;
+    m_DrawLineFromWorkQueueCS.WorkQueueBuffer = m_GetWorkQueueCS.WorkQueueBuffer;
+
+    m_DrawLineFromWorkQueueCS.VerticesData = m_apHairVertexArray;
+    m_DrawLineFromWorkQueueCS.LineIdxData = m_apHairIdxArray;
+    
+    m_DrawLineFromWorkQueueCS.LineSizeBuffer = m_LineSizeInFrustumVoxelCS.LineSizeBuffer;
+    m_DrawLineFromWorkQueueCS.RenderQueueBuffer = m_GetLineVisibilityCS.RenderQueueBuffer;
+
+    //create result buffer
+    float2 ScrPixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
+    TextureDesc HairResultTextureDesc;
+    HairResultTextureDesc.Name = "HairResult Texture Desc";
+    HairResultTextureDesc.Type = RESOURCE_DIM_TEX_2D;
+    HairResultTextureDesc.Width = ScrPixelSize.x;
+    HairResultTextureDesc.Height = ScrPixelSize.y;
+    HairResultTextureDesc.Format = TEX_FORMAT_R11G11B10_FLOAT;
+    HairResultTextureDesc.Usage = USAGE_DYNAMIC;
+    HairResultTextureDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+    m_pDevice->CreateTexture(HairResultTextureDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutHairRenderTex);
+
+    ITexture *pDepth = m_pSwapChain->GetDepthTexture();
+    
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas")->Set( \
+        m_DrawLineFromWorkQueueCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData")->Set( \
+        m_DrawLineFromWorkQueueCS.LineIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "WorkQueueBuffer")->Set( \
+        m_DrawLineFromWorkQueueCS.WorkQueueBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineSizeBuffer")->Set( \
+        m_DrawLineFromWorkQueueCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineOffsetBuffer")->Set( \
+        m_DrawLineFromWorkQueueCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "RenderQueueBuffer")->Set( \
+        m_DrawLineFromWorkQueueCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "FullDepthMap")->Set( \
+        pDepth->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutHairRenderTex")->Set( \
+        m_DrawLineFromWorkQueueCS.OutHairRenderTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 }
 
 // void Diligent::HairRender::CreateGetLineVisibilityDependencyPSOParams(int visibility_line_count)
@@ -545,6 +619,32 @@ void Diligent::HairRender::RunGetWorkQueueCS()
     m_pDeviceCtx->DispatchCompute(attr);
 }
 
+void Diligent::HairRender::RunDrawLineFromWorkQueueCS()
+{
+    //read back data to cpu
+    m_pDeviceCtx->CopyBuffer(m_GetWorkQueueCS.WorkQueueCountBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION,
+        m_GetWorkQueueCS.CountStageBuffer, 0, 4 * sizeof(uint),
+        RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    
+    //sync gpu finish copy operation.
+    m_pDeviceCtx->WaitForIdle();
+    
+    MapHelper<uint> counter_stage_map_data(m_pDeviceCtx, m_GetWorkQueueCS.CountStageBuffer, MAP_READ, MAP_FLAG_DO_NOT_WAIT);
+    
+    uint WorkQueueCount = 0;
+    memcpy(&WorkQueueCount, counter_stage_map_data, sizeof(uint));
+
+    if(WorkQueueCount > 0)
+    {
+        m_pDeviceCtx->SetPipelineState(m_DrawLineFromWorkQueueCS.PSO);
+
+        m_pDeviceCtx->CommitShaderResources(m_DrawLineFromWorkQueueCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    
+        const DispatchComputeAttribs attr(WorkQueueCount, 1, 1);
+        m_pDeviceCtx->DispatchCompute(attr);
+    }
+}
+
 void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj)
 {
     float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
@@ -566,4 +666,5 @@ void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_
     RunGetLineOffsetAndCounterCS();
     RunGetLineVisibilityCS();
     RunGetWorkQueueCS();
+    RunDrawLineFromWorkQueueCS();
 }

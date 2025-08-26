@@ -81,8 +81,23 @@ struct GetWorkQueueCS : public PassBaseData
     AutoPtrBuffer WorkQueueBuffer;
     AutoPtrBuffer WorkQueueCountBuffer;
 
+    AutoPtrBuffer RenderQueueBuffer;
+
     AutoPtrBuffer CountStageBuffer;
     std::vector<uint> CountCPUData;
+};
+
+struct DrawLineFromWorkQueueCS : public PassBaseData
+{
+    AutoPtrBuffer VerticesData;
+    AutoPtrBuffer LineIdxData;
+    
+    AutoPtrBuffer LineOffsetBuffer;
+    AutoPtrBuffer WorkQueueBuffer;
+    AutoPtrBuffer LineSizeBuffer;
+    AutoPtrBuffer RenderQueueBuffer;
+    
+    AutoPtrTex OutHairRenderTex;
 };
 
 class HairRender : public IBaseRender
@@ -103,6 +118,7 @@ public:
     void CreateGetLineOffsetAndCounterPSO();
     void CreateGetLineVisibilityPSO();
     void CreateGetWorkQueuePSO();
+    void CreateDrawLineFromWorkQueueCS();
     //void CreateGetLineVisibilityDependencyPSOParams(int visibility_line_count);
 
     void HWRender(const float4x4 &WVPMat);
@@ -113,6 +129,7 @@ public:
     void RunGetLineOffsetAndCounterCS();
     void RunGetLineVisibilityCS();
     void RunGetWorkQueueCS();
+    void RunDrawLineFromWorkQueueCS();
     
     void RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj);
 
@@ -140,6 +157,7 @@ private:
     GetLineVisibilityCS m_GetLineVisibilityCS;
     int m_VisibilityLineCount;
     GetWorkQueueCS m_GetWorkQueueCS;
+    DrawLineFromWorkQueueCS m_DrawLineFromWorkQueueCS;
 
     //--Cull end
     
