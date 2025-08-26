@@ -80,15 +80,15 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
             float2 StartPixelCoord = VNDC0.xy * ScreenSize;
             float2 EndPixelCoord = VNDC1.xy * ScreenSize;
 
-            int2 StartPixelCoordInTile = int2(StartPixelCoord) - TilePixelPos;
-            int2 EndPixelCoordInTile = int2(EndPixelCoord) - TilePixelPos;
+            float2 StartPixelCoordInTile = (StartPixelCoord) - TilePixelPos;
+            float2 EndPixelCoordInTile = (EndPixelCoord) - TilePixelPos;
 
-            int MinXInTile = min(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
-            int MinYinTile = min(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
-            int MaxXInTile = max(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
-            int MaxYinTile = max(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
+            float MinXInTile = min(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
+            float MinYinTile = min(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
+            float MaxXInTile = max(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
+            float MaxYinTile = max(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
 
-            bool IsPixelInTile = (MinXInTile > -1) && (MinYinTile > -1) && (MaxXInTile < 16) && (MaxYinTile < 16);
+            bool IsPixelInTile = (MinXInTile > -1.0f) && (MinYinTile > -1.0f) && (MaxXInTile < 16.0f) && (MaxYinTile < 16.0f);
 
             if(IsPixelInTile)
             {
@@ -225,7 +225,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer[voxel_data_idx]; curr_line_idx += 16 * 16)
             {
                 uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];
-                uint VertexIdx0 = IdxData[line_idx];
+                uint VertexIdx0 = IdxData[line_idx] & 0x0FFFFFFF;
                 uint VertexIdx1 = VertexIdx0 + 1;
 
                 HairVertexData V0 = VerticesDatas[VertexIdx0];
