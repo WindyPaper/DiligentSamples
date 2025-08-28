@@ -59,6 +59,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
     float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
 
+    bool IsOutScreen = (LineBBoxMax.x < 0.0f || LineBBoxMax.y < 0.0f || LineBBoxMin.x > 1.0f || LineBBoxMin.y > 1.0f);
+    if(IsOutScreen)
+    {
+        return;
+    }
+
     //voxel z offset
     float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
     uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);

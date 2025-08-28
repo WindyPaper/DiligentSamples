@@ -33,7 +33,7 @@ bool AddAccumulateBuffer(int px, int py, float pixel_d)
     float OcclusionDepth = GroupDepthCache[tile_y * 16 + tile_x];
 
     bool success = false;
-    if(OcclusionDepth > pixel_d)
+    if(OcclusionDepth > (pixel_d))
     {
         success = true;
     }
@@ -88,8 +88,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
             float MaxXInTile = max(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
             float MaxYinTile = max(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
 
-            bool IsPixelInTile = (MinXInTile > -1.0f) && (MinYinTile > -1.0f) && (MaxXInTile < 16.0f) && (MaxYinTile < 16.0f);
-
+            bool IsPixelInTile = (MaxXInTile > -1.0f) && (MaxYinTile > -1.0f) && (MinXInTile < 16.0f) && (MinYinTile < 16.0f);
+   
             if(IsPixelInTile)
             {
                 float StartPixelZ = VNDC0.z;

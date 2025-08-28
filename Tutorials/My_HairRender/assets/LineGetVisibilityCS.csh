@@ -74,83 +74,88 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
             float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
 
-            //voxel z offset
-            float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
-            uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
-
-            float2 StartPixelCoord = VNDC0.xy * ScreenSize;
-            float2 EndPixelCoord = VNDC1.xy * ScreenSize;
-
-            bool steep = abs(EndPixelCoord.y - StartPixelCoord.y) > abs(EndPixelCoord.x - StartPixelCoord.x);
-
-            if(steep)
+            bool IsOutScreen = (LineBBoxMax.x < 0.0f || LineBBoxMax.y < 0.0f || LineBBoxMin.x > 1.0f || LineBBoxMin.y > 1.0f);
+    
+            if(!IsOutScreen)
             {
-                swap(StartPixelCoord.x, StartPixelCoord.y);
-                swap(EndPixelCoord.x, EndPixelCoord.y);        
-            }
-            if(StartPixelCoord.x > EndPixelCoord.x)
-            {
-                swap(StartPixelCoord.x, EndPixelCoord.x);
-                swap(StartPixelCoord.y, EndPixelCoord.y);
-            }
+                //voxel z offset
+                float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
+                uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
 
-            //compute the slope
-            float dx = EndPixelCoord.x - StartPixelCoord.x;
-            float dy = EndPixelCoord.y - StartPixelCoord.y;
+                float2 StartPixelCoord = VNDC0.xy * ScreenSize;
+                float2 EndPixelCoord = VNDC1.xy * ScreenSize;
 
-            float gradient = 1.0f;
-            if(dx > 0.0f)
-            {
-                gradient = dy / dx;
-            }
+                bool steep = abs(EndPixelCoord.y - StartPixelCoord.y) > abs(EndPixelCoord.x - StartPixelCoord.x);
 
-            int s_x = StartPixelCoord.x;
-            int e_x = EndPixelCoord.x;
-            float intersect_y = StartPixelCoord.y;
-
-            if(steep)
-            {
-                for(int i = s_x; i <= e_x; ++i)
+                if(steep)
                 {
-                    int w_x = int(intersect_y);
-                    int w_y = i;
-                    float bright = 1.0f - frac(intersect_y);
-
-                    if(bright > 0.0f)
-                    {
-                        AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
-
-                    w_x = w_x + 1;
-                    bright = frac(intersect_y);
-                    if(bright > 0.0f)
-                    {
-                        AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
-
-                    intersect_y += gradient;
+                    swap(StartPixelCoord.x, StartPixelCoord.y);
+                    swap(EndPixelCoord.x, EndPixelCoord.y);        
                 }
-            }
-            else
-            {
-                for(int i = s_x; i <= e_x; ++i)
+                if(StartPixelCoord.x > EndPixelCoord.x)
                 {
-                    int w_x = i;
-                    int w_y = int(intersect_y);
-                    float bright = 1.0f - frac(intersect_y);
-                    if(bright > 0.0f)
-                    {
-                        AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
+                    swap(StartPixelCoord.x, EndPixelCoord.x);
+                    swap(StartPixelCoord.y, EndPixelCoord.y);
+                }
 
-                    w_y = w_y + 1;
-                    bright = frac(intersect_y);
-                    if(bright > 0.0f)
-                    {
-                        AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
-                    }
+                //compute the slope
+                float dx = EndPixelCoord.x - StartPixelCoord.x;
+                float dy = EndPixelCoord.y - StartPixelCoord.y;
 
-                    intersect_y += gradient;
+                float gradient = 1.0f;
+                if(dx > 0.0f)
+                {
+                    gradient = dy / dx;
+                }
+
+                int s_x = StartPixelCoord.x;
+                int e_x = EndPixelCoord.x;
+                float intersect_y = StartPixelCoord.y;
+
+                if(steep)
+                {
+                    for(int i = s_x; i <= e_x; ++i)
+                    {
+                        int w_x = int(intersect_y);
+                        int w_y = i;
+                        float bright = 1.0f - frac(intersect_y);
+
+                        if(bright > 0.0f)
+                        {
+                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                        }
+
+                        w_x = w_x + 1;
+                        bright = frac(intersect_y);
+                        if(bright > 0.0f)
+                        {
+                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                        }
+
+                        intersect_y += gradient;
+                    }
+                }
+                else
+                {
+                    for(int i = s_x; i <= e_x; ++i)
+                    {
+                        int w_x = i;
+                        int w_y = int(intersect_y);
+                        float bright = 1.0f - frac(intersect_y);
+                        if(bright > 0.0f)
+                        {
+                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                        }
+
+                        w_y = w_y + 1;
+                        bright = frac(intersect_y);
+                        if(bright > 0.0f)
+                        {
+                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                        }
+
+                        intersect_y += gradient;
+                    }
                 }
             }
         }
