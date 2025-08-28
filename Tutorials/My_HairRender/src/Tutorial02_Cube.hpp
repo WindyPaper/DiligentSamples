@@ -49,9 +49,12 @@ public:
     virtual const Char* GetSampleName() const override final { return "Tutorial02: Cube"; }
 
 private:
+    void CreateRenderTargetPSO();
+    
     void CreatePipelineState();
     void CreateVertexBuffer();
     void CreateIndexBuffer();
+    void CreateOfflineRT();
 
     RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
 
@@ -61,7 +64,10 @@ private:
     RefCntAutoPtr<IBuffer>                m_CubeIndexBuffer;
     RefCntAutoPtr<IBuffer>                m_VSConstants;
     float4x4                              m_WorldViewProjMatrix;
-
+    RefCntAutoPtr<ITexture> m_pColorRT;
+    RefCntAutoPtr<IPipelineState>         m_pRTPSO;
+    RefCntAutoPtr<IShaderResourceBinding> m_pRTSRB;
+    
     FirstPersonCamera m_Camera;
     HairRender *m_pHairRender;
     

@@ -129,9 +129,9 @@ public:
     void RunGetLineOffsetAndCounterCS();
     void RunGetLineVisibilityCS();
     void RunGetWorkQueueCS();
-    void RunDrawLineFromWorkQueueCS();
+    void RunDrawLineFromWorkQueueCS(ITexture *pRTView);
     
-    void RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj);
+    void RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj, ITexture *pRTView);
 
 private:
     HairData m_HairRawData;
