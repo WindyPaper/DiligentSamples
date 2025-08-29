@@ -41,14 +41,20 @@ bool AddAccumulateBuffer(int px, int py, float pixel_d)
     return success;
 }
 
-void WriteLine(int px, int py, float bright, float depth)
+void WriteLine(int px, int py, float bright)
 {
-    bool success = AddAccumulateBuffer(px, py, depth);
+    bright = saturate(bright);
+    OutHairRenderTex[uint2(px, py)] = float4(bright, bright, bright, 1.0f);
+}
 
-    if(success)
-    {
-        OutHairRenderTex[uint2(px, py)] = float4(bright, bright, bright, 1.0f);
-    }
+bool IsDrawLineValidPixel(int w_x, int w_y, float curr_depth)
+{
+    bool valid_depth = curr_depth < 1.0f && curr_depth > 0.0f;
+    float occlusion_depth = GroupDepthCache[w_y * 16 + w_x];
+    bool valid_area = w_x >= 0 && w_x < 16 && w_y >= 0 && w_y < 16;
+    bool is_depth_pass = curr_depth < occlusion_depth;
+
+    return valid_depth && valid_area && is_depth_pass;
 }
 
 void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
@@ -80,8 +86,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
             float2 StartPixelCoord = VNDC0.xy * ScreenSize;
             float2 EndPixelCoord = VNDC1.xy * ScreenSize;
 
-            float2 StartPixelCoordInTile = (StartPixelCoord) - TilePixelPos;
-            float2 EndPixelCoordInTile = (EndPixelCoord) - TilePixelPos;
+            float2 StartPixelCoordInTile = floor(StartPixelCoord) - TilePixelPos;
+            float2 EndPixelCoordInTile = ceil(EndPixelCoord) - TilePixelPos;
 
             float MinXInTile = min(StartPixelCoordInTile.x, EndPixelCoordInTile.x);
             float MinYinTile = min(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
@@ -117,43 +123,66 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
                 }
 
                 //compute the slope
-                float dx = EndPixelCoord.x - StartPixelCoord.x;
-                float dy = EndPixelCoord.y - StartPixelCoord.y;
+                float dx = EndPixelCoordInTile.x - StartPixelCoordInTile.x;
+                float dy = EndPixelCoordInTile.y - StartPixelCoordInTile.y;
 
                 float gradient = 1.0f;
-                if(dx > 0.0f)
+                if(dx != 0.0f)                
                 {
                     gradient = dy / dx;
                 }
 
-                int s_x = StartPixelCoord.x;
-                int e_x = EndPixelCoord.x;
-                float intersect_y = StartPixelCoord.y;
+                //int s_x = StartPixelCoord.x;
+                //int e_x = EndPixelCoord.x;
+                //float intersect_y = StartPixelCoord.y;
 
                 float lerp_factor = 1.0f / (EndPixelCoordInTile.x - StartPixelCoordInTile.x);
                 float lerp_value = 0.0f;
 
+                int s_x_in_tile = StartPixelCoordInTile.x;
+                int e_x_in_tile = EndPixelCoordInTile.x;
+                float intersect_y = StartPixelCoordInTile.y;
+
+                if(s_x_in_tile < 0)
+                {
+                    for(int i = s_x_in_tile; i < 0; ++i)
+                    {
+                        lerp_value += lerp_factor;
+                        intersect_y += gradient;
+                    }
+
+                    s_x_in_tile = 0;
+                }
+                e_x_in_tile = min(16, e_x_in_tile);
+
+
                 if(steep)
                 {
-                    for(int i = s_x; i <= e_x; ++i)
+                    for(int i = s_x_in_tile; i < e_x_in_tile; ++i)
                     {
                         int w_x = int(intersect_y);
-                        int w_y = i;
-                        float bright = 1.0f - frac(intersect_y);
-
-                        if(bright > 0.0f)
+                        int w_y = i;                        
+                        float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                        bool is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
+                        if(is_valid_pixel)
                         {
-                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
-                            WriteLine(w_x, w_y, bright, curr_depth);
+                            float bright = 1.0f - frac(intersect_y);
+                            // if(bright > 0.0f)
+                            {                            
+                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            }
                         }                        
 
                         w_x = w_x + 1;
-                        bright = frac(intersect_y);                        
-                        if(bright > 0.0f)
+                        is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
+                        if(is_valid_pixel)
                         {
-                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
-                            WriteLine(w_x, w_y, bright, curr_depth);
-                        }
+                            float bright = frac(intersect_y);                        
+                            // if(bright > 0.0f)
+                            {                                
+                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            }
+                        }                        
 
                         intersect_y += gradient;
                         lerp_value += lerp_factor;
@@ -161,24 +190,31 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
                 }
                 else
                 {
-                    for(int i = s_x; i <= e_x; ++i)
+                    for(int i = s_x_in_tile; i < e_x_in_tile; ++i)
                     {
                         int w_x = i;
                         int w_y = int(intersect_y);
-                        float bright = 1.0f - frac(intersect_y);
-                        if(bright > 0.0f)
+                        float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                        bool is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
+                        if(is_valid_pixel)
                         {
-                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
-                            WriteLine(w_x, w_y, bright, curr_depth);
+                            float bright = 1.0f - frac(intersect_y);
+                            // if(bright > 0.0f)
+                            {
+                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            }
                         }                        
 
                         w_y = w_y + 1;
-                        bright = frac(intersect_y);
-                        if(bright > 0.0f)
+                        is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
+                        if(is_valid_pixel)
                         {
-                            float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
-                            WriteLine(w_x, w_y, bright, curr_depth);
-                        }
+                            float bright = frac(intersect_y);
+                            // if(bright > 0.0f)
+                            {
+                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            }
+                        }                        
 
                         intersect_y += gradient;
                         lerp_value += lerp_factor;
