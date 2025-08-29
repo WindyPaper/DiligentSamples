@@ -3,6 +3,7 @@
 #include "CommonCS.csh"
 
 #define VOXEL_SLICE_NUM 24
+#define OIT_LAYER_COUNT 8
 
 struct HairVertexData
 {
@@ -24,7 +25,17 @@ StructuredBuffer<uint> RenderQueueBuffer;
 
 groupshared float GroupDepthCache[256];
 groupshared uint GroupPixelVisibilityBit[8];
+groupshared uint64_t GroupMLABLayer[2048]; //16bit depth + 16bit opacity + 32bit(r11g11b10float)
 
+uint GLPackHalf2x16(float2 value)
+{
+    uint2 Packed = f32tof16(value);
+    return Packed.x | (Packed.y << 16);
+}
+float2 GLUnpackHalf2x16(uint value)
+{
+    return f16tof32(uint2(value & 0xffff, value >> 16));
+}
 
 bool AddAccumulateBuffer(int px, int py, float pixel_d)
 {
@@ -57,6 +68,30 @@ bool IsDrawLineValidPixel(int w_x, int w_y, float curr_depth)
     return valid_depth && valid_area && is_depth_pass;
 }
 
+float4 GetMLABFragmentColor(uint64_t v)
+{
+    uint pack_rgb = uint(v)
+    float2 pr = GLUnpackHalf2x16((pack_rgb << 4u) & 32752u);
+    float r = pr.x;
+    float2 pg = GLUnpackHalf2x16((pack_rgb >> 7u) & 32752u);
+    float g = pg.x;
+    float2 pb = GLUnpackHalf2x16((pack_rgb >> 22u) << 5u);
+    float b = pb.x;
+    uint pack_depth_opacify = uint(v >> 32u);
+    float2 p_da = GLUnpackHalf2x16(pack_depth_opacify & 65535u);
+    float alpha = p_da.x;
+
+    return float4(r, g, b, a);
+}
+
+uint64_t SetupMLABFragment(float4 rgba, float depth)
+{
+    uint color_int = ((GLPackHalf2x16(float2(rgba.r, 0.0)) << 7u) & 4192256u) | (((GLPackHalf2x16(float2(rgba.g, 0.0)) >> 4u) & 2047u)) | (((GLPackHalf2x16(float2(rgba.b, 0.0)) >> 5u) << 22u)))
+    uint64_t depth_opacity_int = ((uint64_t(GLPackHalf2x16(float2(depth * 65535.0, 0.0))) << 16u) | (uint64_t(GLPackHalf2x16(float2(1.0 - rgba.a, 0.0))))) << 32u;
+
+    return depth_opacity_int | color_int;
+}
+
 void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
 {
     if(!isnan(V0.Pos.x))
@@ -71,18 +106,10 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
         VNDC1.xy = saturate(VNDC1.xy);
         if((abs(VNDC1.x - VNDC0.x) < 0.001f) && (abs(VNDC1.y - VNDC0.y) < 0.001f)) //in same pos
         {
-            //return;
             //empty
         }
         else
         {
-            // float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
-            // float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
-
-            //voxel z offset
-            // float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
-            // uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
-
             float2 StartPixelCoord = VNDC0.xy * ScreenSize;
             float2 EndPixelCoord = VNDC1.xy * ScreenSize;
 
@@ -236,6 +263,15 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     uint tile_x = work_queue_value & 4095u;
     uint tile_y = (work_queue_value >> 12u) & 4095u;
     uint valid_offset_buf_idx = work_queue_value >> 24u;
+
+    //init MLAB Layer
+    uint64_t pack_init_mlab_data = uint64_t(GLPackHalf2x16(float2(1.0f, 1.0f)));
+    uint64_t init_mlab_data = pack_init_mlab_data << 32u;
+    for(int i = 0; i < OIT_LAYER_COUNT; ++i)
+    {
+        uint init_layer_idx = (tile_x + tile_y * 16) * OIT_LAYER_COUNT + i;
+        GroupMLABLayer[init_layer_idx] = init_mlab_data;
+    }
 
     // uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;
     uint tile_x_in_pixel = tile_x * 16;
