@@ -12,7 +12,7 @@ struct HairVertexData
 StructuredBuffer<HairVertexData> VerticesDatas;
 StructuredBuffer<uint> IdxData;
 
-StructuredBuffer<uint> LineOffsetBuffer;
+ByteAddressBuffer LineOffsetBuffer;
 
 Texture2D<float4> DownSampleDepthMap;
 
@@ -35,7 +35,7 @@ void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, floa
         OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx, 1, CurrLineIdxInOffsetBuf);
 
         //get offset addr
-        uint OffsetBufAddr = LineOffsetBuffer[AccumuBufIdx];
+        uint OffsetBufAddr = LineOffsetBuffer.Load(AccumuBufIdx);
         OutLineRenderQueueBuffer[OffsetBufAddr + CurrLineIdxInOffsetBuf] =  line_idx;
 
         //add visibility bit flag

@@ -4,11 +4,11 @@
 
 #define VOXEL_SLICE_NUM 24
 
-StructuredBuffer<uint> LineOffsetBuffer;
+ByteAddressBuffer LineOffsetBuffer;
 
 RWStructuredBuffer<uint> OutWorkQueueBuffer;
 
-RWStructuredBuffer<uint> OutWorkQueueCountBuffer;
+RWByteAddressBuffer OutWorkQueueCountBuffer;
 
 groupshared uint GroupNumAccum;
 
@@ -29,7 +29,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
         for(uint slice_idx = 0; slice_idx < VOXEL_SLICE_NUM; ++slice_idx)
         {
             uint OffsetIdx = (id.y * DownSampleDepthSize.x + id.x) * VOXEL_SLICE_NUM + slice_idx;
-            uint CurrOffsetNum = LineOffsetBuffer[OffsetIdx];
+            uint CurrOffsetNum = LineOffsetBuffer.Load(OffsetIdx);
 
             if(CurrOffsetNum != 0)
             {
@@ -45,7 +45,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     
     if(group_thread_idx == 0)
     {
-        InterlockedAdd(OutWorkQueueCountBuffer[0], GroupNumAccum, GroupNumAccum);
+        //InterlockedAdd(OutWorkQueueCountBuffer[0], GroupNumAccum, GroupNumAccum);
+        OutWorkQueueCountBuffer.InterlockedAdd(0, GroupNumAccum, GroupNumAccum);
     }
 
     GroupMemoryBarrierWithGroupSync();

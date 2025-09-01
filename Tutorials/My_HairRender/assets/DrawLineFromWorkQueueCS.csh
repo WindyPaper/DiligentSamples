@@ -20,7 +20,7 @@ RWTexture2D<float4> OutHairRenderTex;
 
 StructuredBuffer<uint> WorkQueueBuffer;
 ByteAddressBuffer LineSizeBuffer;
-StructuredBuffer<uint> LineOffsetBuffer;
+ByteAddressBuffer LineOffsetBuffer;
 StructuredBuffer<uint> RenderQueueBuffer;
 
 groupshared float GroupDepthCache[256];
@@ -291,7 +291,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     for(uint curr_slice_num = valid_offset_buf_idx; curr_slice_num < VOXEL_SLICE_NUM; ++ curr_slice_num)
     {
         uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + curr_slice_num;
-        uint offset_idx = LineOffsetBuffer[voxel_data_idx];
+        uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx);
         if(offset_idx > 0)
         {
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer.Load(voxel_data_idx); curr_line_idx += 16 * 16)

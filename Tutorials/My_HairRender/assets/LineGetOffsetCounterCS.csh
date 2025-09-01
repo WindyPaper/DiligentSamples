@@ -6,7 +6,7 @@
 
 RWByteAddressBuffer LineAccumulateBuffer;
 
-RWStructuredBuffer<uint> OutLineOffsetBuffer;
+RWByteAddressBuffer OutLineOffsetBuffer;
 RWByteAddressBuffer OutLineCounterBuffer;
 
 
@@ -27,7 +27,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 //InterlockedAdd(OutLineCounterBuffer[0], LineSizeInVoxel, SrcAddVal);
                 OutLineCounterBuffer.InterlockedAdd(0, LineSizeInVoxel, SrcAddVal);
 
-                OutLineOffsetBuffer[LineAccuIdx] = SrcAddVal;
+                OutLineOffsetBuffer.Store(LineAccuIdx, SrcAddVal);
 
                 //reset
                 LineAccumulateBuffer.Store(LineAccuIdx, 0);
