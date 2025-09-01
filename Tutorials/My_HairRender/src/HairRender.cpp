@@ -204,7 +204,7 @@ void Diligent::HairRender::CreateGetLineOffsetAndCounterPSO()
     m_GetLineOffsetCounterCS.LineSizeBuffer = m_LineSizeInFrustumVoxelCS.LineSizeBuffer;
 
     const int VOXEL_SLICE_NUM = 24;
-    m_GetLineOffsetCounterCS.LineOffsetBuffer = CreateStructureBuffer(sizeof(int), \
+    m_GetLineOffsetCounterCS.LineOffsetBuffer = CreateRawBuffer(sizeof(int) * \
         m_DownSampledDepthSize.x * m_DownSampledDepthSize.y * VOXEL_SLICE_NUM, \
         nullptr, \
         "Line offset buffer");
@@ -313,7 +313,7 @@ void Diligent::HairRender::CreateGetWorkQueuePSO()
         nullptr, \
         "Work Queue buffer");
 
-    m_GetWorkQueueCS.WorkQueueCountBuffer = CreateStructureBuffer(sizeof(int), \
+    m_GetWorkQueueCS.WorkQueueCountBuffer = CreateRawBuffer(sizeof(int) * \
         4, \
         nullptr, \
         "Work Queue Count buffer");
