@@ -43,6 +43,7 @@ RefCntAutoPtr<IShader> IBaseRender::CreateShader(const std::string& entryPoint, 
     ShaderCI.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL;
     // OpenGL backend requires emulated combined HLSL texture samplers (g_Texture + g_Texture_sampler combination)
     ShaderCI.UseCombinedTextureSamplers = true;
+    ShaderCI.ShaderCompiler = SHADER_COMPILER_DXC;
 
     /*ShaderMacroHelper Macros;
     Macros.AddShaderMacro("PCG_TILE_MAP_NUM", 8);
@@ -147,6 +148,53 @@ RefCntAutoPtr<IBuffer> IBaseRender::CreateStageStructureBuffer(const int element
     m_pDevice->CreateBuffer(BufferDesc, nullptr, &apStageStructureBuffer);
 
     return apStageStructureBuffer;
+}
+
+RefCntAutoPtr<IBuffer> IBaseRender::CreateRawBuffer(const int raw_size, void* pInitialData, const std::string& desc)
+{
+    BufferDesc BuffDesc;
+    BuffDesc.Name          = desc.c_str();
+    BuffDesc.Usage         = USAGE_DEFAULT;
+    BuffDesc.BindFlags     = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+    BuffDesc.Mode          = BUFFER_MODE_RAW;
+    BuffDesc.uiSizeInBytes = raw_size;
+
+    BufferData InitialData;
+    if(pInitialData)
+    {
+        BuffDesc.CPUAccessFlags = CPU_ACCESS_NONE;
+        BuffDesc.Usage         = USAGE_IMMUTABLE;
+        InitialData.pData    = pInitialData;
+        InitialData.DataSize = BuffDesc.uiSizeInBytes;
+    }
+
+    RefCntAutoPtr<IBuffer> apRawBuffer;
+    m_pDevice->CreateBuffer(BuffDesc, pInitialData ? &InitialData : nullptr, &apRawBuffer);
+
+    return apRawBuffer;
+}
+
+RefCntAutoPtr<IBuffer> IBaseRender::CreateUndefinedBuffer(const int buffer_size, void* pInitialData, const std::string& desc)
+{
+    BufferDesc BuffDesc;
+    BuffDesc.Name          = desc.c_str();
+    BuffDesc.Usage         = USAGE_DEFAULT;
+    BuffDesc.BindFlags     = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
+    BuffDesc.uiSizeInBytes = buffer_size;
+
+    BufferData InitialData;
+    if(pInitialData)
+    {
+        BuffDesc.CPUAccessFlags = CPU_ACCESS_NONE;
+        BuffDesc.Usage         = USAGE_IMMUTABLE;
+        InitialData.pData    = pInitialData;
+        InitialData.DataSize = BuffDesc.uiSizeInBytes;
+    }
+
+    RefCntAutoPtr<IBuffer> apRawBuffer;
+    m_pDevice->CreateBuffer(BuffDesc, pInitialData ? &InitialData : nullptr, &apRawBuffer);
+
+    return apRawBuffer;
 }
 
 std::vector<ShaderResourceVariableDesc> IBaseRender::GenerateCSDynParams(const std::vector<std::string> &ParamNames)

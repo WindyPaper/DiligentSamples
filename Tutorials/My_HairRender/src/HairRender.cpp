@@ -157,7 +157,7 @@ void Diligent::HairRender::CreateLineSizeInFrustumVoxelPSO()
     m_LineSizeInFrustumVoxelCS.LineIdxData = m_apHairIdxArray;
 
     const int VOXEL_SLICE_NUM = 24;
-    m_LineSizeInFrustumVoxelCS.LineSizeBuffer = CreateStructureBuffer(sizeof(int), \
+    m_LineSizeInFrustumVoxelCS.LineSizeBuffer = CreateRawBuffer(sizeof(int) * \
         m_DownSampledDepthSize.x * m_DownSampledDepthSize.y * VOXEL_SLICE_NUM, \
         nullptr, \
         "FrustumVoxelLineSizeBuffer");
@@ -210,7 +210,7 @@ void Diligent::HairRender::CreateGetLineOffsetAndCounterPSO()
         "Line offset buffer");
 
     uint4 InitUint4 = uint4(0, 0, 0, 0);
-    m_GetLineOffsetCounterCS.CounterBuffer = CreateStructureBuffer(sizeof(int) * 4, 1, &InitUint4[0], "Counter");
+    m_GetLineOffsetCounterCS.CounterBuffer = CreateRawBuffer(sizeof(int) * 4, &InitUint4[0], "Counter");
     //m_GetLineOffsetCounterCS.CountStageBuffer = CreateStageStructureBuffer(sizeof(int) * 4, 1, "CounterStage");
 
     m_GetLineOffsetCounterCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
