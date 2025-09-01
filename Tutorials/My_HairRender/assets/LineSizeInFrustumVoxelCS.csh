@@ -14,7 +14,7 @@ StructuredBuffer<uint> IdxData;
 
 Texture2D<float4> DownSampleDepthMap;
 
-RWStructuredBuffer<uint> OutLineAccumulateBuffer;
+RWByteAddressBuffer OutLineAccumulateBuffer;
 
 void AddAccumulateBuffer(float px, float py, float max_z, float voxel_z_offset)
 {
@@ -25,7 +25,8 @@ void AddAccumulateBuffer(float px, float py, float max_z, float voxel_z_offset)
     {
         uint SrcVal;
         uint AccumuBufIdx = (DownSampleY * DownSampleDepthSize.x + DownSampleX) * VOXEL_SLICE_NUM + voxel_z_offset;
-        InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, SrcVal);
+        //InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, SrcVal);
+        OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx, 1, SrcVal);
     }
 }
 

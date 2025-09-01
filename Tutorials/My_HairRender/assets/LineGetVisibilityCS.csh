@@ -16,7 +16,7 @@ StructuredBuffer<uint> LineOffsetBuffer;
 
 Texture2D<float4> DownSampleDepthMap;
 
-RWStructuredBuffer<uint> OutLineAccumulateBuffer;
+RWByteAddressBuffer OutLineAccumulateBuffer;
 RWStructuredBuffer<uint> OutLineVisibilityBuffer;
 RWStructuredBuffer<uint> OutLineRenderQueueBuffer;
 
@@ -31,7 +31,8 @@ void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, floa
     {
         uint CurrLineIdxInOffsetBuf;
         uint AccumuBufIdx = (DownSampleY * DownSampleDepthSize.x + DownSampleX) * VOXEL_SLICE_NUM + voxel_z_offset;
-        InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, CurrLineIdxInOffsetBuf);
+        //InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, CurrLineIdxInOffsetBuf);
+        OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx, 1, CurrLineIdxInOffsetBuf);
 
         //get offset addr
         uint OffsetBufAddr = LineOffsetBuffer[AccumuBufIdx];
@@ -40,7 +41,7 @@ void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, floa
         //add visibility bit flag
         uint BitsIdx = grp_idx >> 5;
         uint BitsValue = grp_idx & 31;
-        InterlockedOr(VisibilityBits[BitsIdx], 1 << BitsValue);
+        InterlockedOr(VisibilityBits[BitsIdx], 1u << BitsValue);
     }
 }
 

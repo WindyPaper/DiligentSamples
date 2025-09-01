@@ -4,10 +4,10 @@
 
 #define VOXEL_SLICE_NUM 24
 
-RWStructuredBuffer<uint> LineAccumulateBuffer;
+RWByteAddressBuffer LineAccumulateBuffer;
 
 RWStructuredBuffer<uint> OutLineOffsetBuffer;
-RWStructuredBuffer<uint4> OutLineCounterBuffer;
+RWByteAddressBuffer OutLineCounterBuffer;
 
 
 [numthreads(8, 8, 4)]
@@ -19,17 +19,18 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
         for(; curr_z < VOXEL_SLICE_NUM; curr_z += 4)
         {
             uint LineAccuIdx = (id.y * DownSampleDepthSize.x + id.x) * VOXEL_SLICE_NUM + curr_z;
-            uint LineSizeInVoxel = LineAccumulateBuffer[LineAccuIdx];
+            uint LineSizeInVoxel = LineAccumulateBuffer.Load(LineAccuIdx);
             uint SrcAddVal = 0;
 
             if(LineSizeInVoxel != 0)
             {
-                InterlockedAdd(OutLineCounterBuffer[0].x, LineSizeInVoxel, SrcAddVal);
+                //InterlockedAdd(OutLineCounterBuffer[0], LineSizeInVoxel, SrcAddVal);
+                OutLineCounterBuffer.InterlockedAdd(0, LineSizeInVoxel, SrcAddVal);
 
                 OutLineOffsetBuffer[LineAccuIdx] = SrcAddVal;
 
                 //reset
-                LineAccumulateBuffer[LineAccuIdx] = 0;
+                LineAccumulateBuffer.Store(LineAccuIdx, 0);
             }            
         }
     }

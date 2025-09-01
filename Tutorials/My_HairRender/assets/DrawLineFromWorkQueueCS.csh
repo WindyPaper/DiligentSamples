@@ -19,7 +19,7 @@ RWTexture2D<float4> OutHairRenderTex;
 //RWStructuredBuffer<uint> OutLineAccumulateBuffer;
 
 StructuredBuffer<uint> WorkQueueBuffer;
-StructuredBuffer<uint> LineSizeBuffer;
+ByteAddressBuffer LineSizeBuffer;
 StructuredBuffer<uint> LineOffsetBuffer;
 StructuredBuffer<uint> RenderQueueBuffer;
 
@@ -70,7 +70,7 @@ bool IsDrawLineValidPixel(int w_x, int w_y, float curr_depth)
 
 float4 GetMLABFragmentColor(uint64_t v)
 {
-    uint pack_rgb = uint(v)
+    uint pack_rgb = uint(v);
     float2 pr = GLUnpackHalf2x16((pack_rgb << 4u) & 32752u);
     float r = pr.x;
     float2 pg = GLUnpackHalf2x16((pack_rgb >> 7u) & 32752u);
@@ -81,12 +81,12 @@ float4 GetMLABFragmentColor(uint64_t v)
     float2 p_da = GLUnpackHalf2x16(pack_depth_opacify & 65535u);
     float alpha = p_da.x;
 
-    return float4(r, g, b, a);
+    return float4(r, g, b, alpha);
 }
 
 uint64_t SetupMLABFragment(float4 rgba, float depth)
 {
-    uint color_int = ((GLPackHalf2x16(float2(rgba.r, 0.0)) << 7u) & 4192256u) | (((GLPackHalf2x16(float2(rgba.g, 0.0)) >> 4u) & 2047u)) | (((GLPackHalf2x16(float2(rgba.b, 0.0)) >> 5u) << 22u)))
+    uint color_int = ((GLPackHalf2x16(float2(rgba.r, 0.0)) << 7u) & 4192256u) | (((GLPackHalf2x16(float2(rgba.g, 0.0)) >> 4u) & 2047u)) | (((GLPackHalf2x16(float2(rgba.b, 0.0)) >> 5u) << 22u));
     uint64_t depth_opacity_int = ((uint64_t(GLPackHalf2x16(float2(depth * 65535.0, 0.0))) << 16u) | (uint64_t(GLPackHalf2x16(float2(1.0 - rgba.a, 0.0))))) << 32u;
 
     return depth_opacity_int | color_int;
@@ -294,7 +294,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         uint offset_idx = LineOffsetBuffer[voxel_data_idx];
         if(offset_idx > 0)
         {
-            for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer[voxel_data_idx]; curr_line_idx += 16 * 16)
+            for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer.Load(voxel_data_idx); curr_line_idx += 16 * 16)
             {
                 uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];
                 uint VertexIdx0 = IdxData[line_idx] & 0x0FFFFFFF;
