@@ -276,7 +276,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     // uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;
     uint tile_x_in_pixel = tile_x * 16;
     uint tile_y_in_pixel = tile_y * 16;
-    uint2 screen_pixel_pos = uint2(tile_x_in_pixel + local_thread_id.x, tile_y_in_pixel + local_thread_id.y);
+    uint2 screen_pixel_pos = uint2(tile_x_in_pixel + local_thread_id.x, tile_y_in_pixel + local_thread_id.y);    
 
     GroupDepthCache[local_thread_id.y * 16 + local_thread_id.x] = FullDepthMap.Load(int3(screen_pixel_pos, 0)).x;
 
@@ -294,6 +294,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx);
         if(offset_idx > 0)
         {
+            // OutHairRenderTex[screen_pixel_pos.xy] = float4(work_queue_idx, offset_idx, thread_group_idx, 1.0f);
+
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer.Load(voxel_data_idx); curr_line_idx += 16 * 16)
             {
                 uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];

@@ -11,7 +11,7 @@ struct IShaderSourceInputStreamFactory;
 struct IRenderDevice;
 struct IDeviceContext;
 
-const int MAX_HAIR_LINE_NUM = std::pow(2, 24);
+const int MAX_HAIR_LINE_NUM = std::pow(2, 26);
 
 struct HairConstData
 {

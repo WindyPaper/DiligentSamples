@@ -104,7 +104,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 float dy = EndPixelCoord.y - StartPixelCoord.y;
 
                 float gradient = 1.0f;
-                if(dx > 0.0f)
+                if(dx != 0.0f)                
                 {
                     gradient = dy / dx;
                 }
