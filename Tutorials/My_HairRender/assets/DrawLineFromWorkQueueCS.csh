@@ -37,6 +37,11 @@ float2 GLUnpackHalf2x16(uint value)
     return f16tof32(uint2(value & 0xffff, value >> 16));
 }
 
+uint GetDefaultInitDepthAndAlphaPackVal()
+{
+    return GLPackHalf2x16(float2(1.0f, 65504.0f));
+}
+
 bool AddAccumulateBuffer(int px, int py, float pixel_d)
 {
     int tile_x = px % 16;
@@ -68,6 +73,24 @@ bool IsDrawLineValidPixel(int w_x, int w_y, float curr_depth)
     return valid_depth && valid_area && is_depth_pass;
 }
 
+// float4 GetMLABFragmentColorAndDepthInt(uint64_t v, out uint depth_uint)
+// {
+//     uint pack_rgb = uint(v);
+//     float2 pr = GLUnpackHalf2x16((pack_rgb << 4u) & 32752u);
+//     float r = pr.x;
+//     float2 pg = GLUnpackHalf2x16((pack_rgb >> 7u) & 32752u);
+//     float g = pg.x;
+//     float2 pb = GLUnpackHalf2x16((pack_rgb >> 22u) << 5u);
+//     float b = pb.x;
+//     uint pack_depth_opacify = uint(v >> 32u);
+//     float2 p_da = GLUnpackHalf2x16(pack_depth_opacify & 65535u);
+//     float alpha = p_da.x;
+
+//     depth_uint = pack_depth_opacify >> 16u;
+
+//     return float4(r, g, b, alpha);
+// }
+
 float4 GetMLABFragmentColor(uint64_t v)
 {
     uint pack_rgb = uint(v);
@@ -84,12 +107,80 @@ float4 GetMLABFragmentColor(uint64_t v)
     return float4(r, g, b, alpha);
 }
 
-uint64_t SetupMLABFragment(float4 rgba, float depth)
+float2 GetMLABFragmentDepthAndAlpha(uint64_t v)
 {
-    uint color_int = ((GLPackHalf2x16(float2(rgba.r, 0.0)) << 7u) & 4192256u) | (((GLPackHalf2x16(float2(rgba.g, 0.0)) >> 4u) & 2047u)) | (((GLPackHalf2x16(float2(rgba.b, 0.0)) >> 5u) << 22u));
-    uint64_t depth_opacity_int = ((uint64_t(GLPackHalf2x16(float2(depth * 65535.0, 0.0))) << 16u) | (uint64_t(GLPackHalf2x16(float2(1.0 - rgba.a, 0.0))))) << 32u;
+    return GLUnpackHalf2x16(uint(v >> 32u) & 65535u);
+}
+
+uint64_t SetupMLABFragment(float3 rgb, float alpha, float depth)
+{
+    uint color_int = ((GLPackHalf2x16(float2(rgb.r, 0.0)) << 7u) & 4192256u) | (((GLPackHalf2x16(float2(rgb.g, 0.0)) >> 4u) & 2047u)) | (((GLPackHalf2x16(float2(rgb.b, 0.0)) >> 5u) << 22u));
+    uint64_t depth_opacity_int = ((uint64_t(GLPackHalf2x16(float2(depth * 65535.0, 0.0))) << 16u) | (uint64_t(GLPackHalf2x16(float2(alpha, 0.0))))) << 32u;
 
     return depth_opacity_int | color_int;
+}
+
+uint64_t SetupMLABFragmentFromDepthInt(float3 rgb, float alpha, uint depth_uint)
+{
+    uint color_int = ((GLPackHalf2x16(float2(rgb.r, 0.0)) << 7u) & 4192256u) | (((GLPackHalf2x16(float2(rgb.g, 0.0)) >> 4u) & 2047u)) | (((GLPackHalf2x16(float2(rgb.b, 0.0)) >> 5u) << 22u));
+    uint64_t depth_opacity_int = ((uint64_t(depth_uint) << 16u) | (uint64_t(GLPackHalf2x16(float2(alpha, 0.0))))) << 32u;
+
+    return depth_opacity_int | color_int;
+}
+
+void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float depth)
+{
+    uint init_depth_alpha = GetDefaultInitDepthAndAlphaPackVal();
+    //uint curr_depth_alpha = GLPackHalf2x16(float2(alpha, depth));
+    uint64_t curr_fragment_pack = SetupMLABFragment(rgb, 1.0f - alpha, depth);
+    uint64_t blend_layer_pack_val = curr_fragment_pack;
+    for(int i = 0; i < OIT_LAYER_COUNT; ++i)
+    {
+        uint64_t src_val;
+
+        //top layer to low sort
+        InterlockedMin(GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + i], blend_layer_pack_val, src_val);
+
+        if(src_val > blend_layer_pack_val)
+        {
+            blend_layer_pack_val = src_val;
+        }
+    }
+
+    uint compare_layer_depth_alpha = uint(blend_layer_pack_val >> 32u);
+    if(compare_layer_depth_alpha != init_depth_alpha)
+    {
+        //blend to last layer        
+        float4 blend_color = GetMLABFragmentColor(blend_layer_pack_val);
+
+        for(int i = 0; i < 128;)
+        {
+            uint64_t last_layer_pack = GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + OIT_LAYER_COUNT - 1];            
+            float4 last_layer_color = GetMLABFragmentColor(last_layer_pack);
+            uint last_layer_depth_uint = uint(last_layer_pack >> 48u);
+
+            float3 merge_color = last_layer_color.rgb + blend_color.rgb * last_layer_color.a;
+            float merge_color_alpha = last_layer_color.a * blend_color.a;
+
+            uint64_t merge_color_pack = SetupMLABFragmentFromDepthInt(merge_color, merge_color_alpha, last_layer_depth_uint);
+
+            uint64_t src_layer_pack_val;
+            InterlockedCompareExchange(GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + OIT_LAYER_COUNT - 1], 
+                last_layer_pack,
+                merge_color_pack,
+                src_layer_pack_val
+            );
+
+            if(src_layer_pack_val == last_layer_pack)
+            {
+                //successful, break
+                i += 255;
+            }
+
+            ++i;
+        }
+
+    }
 }
 
 void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
@@ -182,6 +273,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
                 }
                 e_x_in_tile = min(16, e_x_in_tile);
 
+                float3 test_white_color = float3(1.0f, 1.0f, 1.0f);
 
                 if(steep)
                 {
@@ -195,9 +287,10 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
                         {
                             float bright = 1.0f - frac(intersect_y);
                             // if(bright > 0.0f)
-                            {                            
-                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
-                            }
+                            // {                            
+                            //     WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         w_x = w_x + 1;
@@ -206,9 +299,10 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
                         {
                             float bright = frac(intersect_y);                        
                             // if(bright > 0.0f)
-                            {                                
-                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
-                            }
+                            // {                                
+                            //     WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         intersect_y += gradient;
@@ -227,9 +321,10 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
                         {
                             float bright = 1.0f - frac(intersect_y);
                             // if(bright > 0.0f)
-                            {
-                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
-                            }
+                            // {
+                            //     WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         w_y = w_y + 1;
@@ -238,9 +333,10 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
                         {
                             float bright = frac(intersect_y);
                             // if(bright > 0.0f)
-                            {
-                                WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
-                            }
+                            // {
+                            //     WriteLine(w_x + TilePixelPos.x, w_y + TilePixelPos.y, bright);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         intersect_y += gradient;
@@ -250,6 +346,43 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos)
             }
         }        
     }
+}
+
+void BlendMLABToOutput(uint local_x, uint local_y, uint2 screen_pixel_pos)
+{
+    uint64_t local_layer_pack_vals[OIT_LAYER_COUNT];
+
+    for(int i = 0; i < OIT_LAYER_COUNT; ++i)
+    {
+        local_layer_pack_vals[i] = GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + i];
+    }
+
+    float4 output_color = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    uint init_depth_alpha = GetDefaultInitDepthAndAlphaPackVal();
+    if((local_layer_pack_vals[0] >> 32u) != init_depth_alpha)
+    {
+        float3 accumu_color = float3(0.0f, 0.0f, 0.0f);
+        float blend_alpha = 1.0f;
+        for(int i = 0; i < OIT_LAYER_COUNT; ++i)
+        {            
+            float4 layer_color = GetMLABFragmentColor(local_layer_pack_vals[i]) * blend_alpha;            
+
+            accumu_color += layer_color.rgb;
+            blend_alpha = layer_color.a;
+
+            if(i + 1 < OIT_LAYER_COUNT)
+            {
+                if((local_layer_pack_vals[i + 1] >> 32u) == init_depth_alpha)
+                {
+                    break;
+                }
+            }
+        }
+
+        output_color = float4(accumu_color, blend_alpha);
+    }
+
+    OutHairRenderTex[screen_pixel_pos] = output_color;
 }
 
 //16X16 pixel per tile
@@ -265,11 +398,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     uint valid_offset_buf_idx = work_queue_value >> 24u;
 
     //init MLAB Layer
-    uint64_t pack_init_mlab_data = uint64_t(GLPackHalf2x16(float2(1.0f, 1.0f)));
+    //max fp16 value: 65504
+    uint64_t pack_init_mlab_data = uint64_t(GetDefaultInitDepthAndAlphaPackVal());
     uint64_t init_mlab_data = pack_init_mlab_data << 32u;
     for(int i = 0; i < OIT_LAYER_COUNT; ++i)
     {
-        uint init_layer_idx = (tile_x + tile_y * 16) * OIT_LAYER_COUNT + i;
+        uint init_layer_idx = (local_thread_id.x + local_thread_id.y * 16) * OIT_LAYER_COUNT + i;
         GroupMLABLayer[init_layer_idx] = init_mlab_data;
     }
 
@@ -285,7 +419,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         GroupPixelVisibilityBit[thread_group_idx] = 0u;
     }
 
-    GroupMemoryBarrier();
+    GroupMemoryBarrierWithGroupSync();
 
     // for slice iterator
     for(uint curr_slice_num = valid_offset_buf_idx; curr_slice_num < VOXEL_SLICE_NUM; ++ curr_slice_num)
@@ -305,8 +439,16 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
                 HairVertexData V0 = VerticesDatas[VertexIdx0];
                 HairVertexData V1 = VerticesDatas[VertexIdx1];
 
-                DrawSoftLine(V0, V1, uint2(tile_x_in_pixel, tile_y_in_pixel));            
+                DrawSoftLine(V0, V1, uint2(tile_x_in_pixel, tile_y_in_pixel));
             }
+
+            //blend 
+            GroupMemoryBarrierWithGroupSync();
+
+            BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
         }
     }
+    
+
+
 }
