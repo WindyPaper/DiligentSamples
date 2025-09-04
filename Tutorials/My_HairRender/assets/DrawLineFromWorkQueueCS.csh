@@ -68,7 +68,7 @@ bool IsDrawLineValidPixel(int w_x, int w_y, float curr_depth)
 {
     bool valid_depth = curr_depth < 1.0f && curr_depth > 0.0f;
     float occlusion_depth = GroupDepthCache[w_y * 16 + w_x];
-    bool valid_area = true;//w_x >= 0 && w_x < 16 && w_y >= 0 && w_y < 16;
+    bool valid_area = w_x >= 0 && w_x < 16 && w_y >= 0 && w_y < 16;
     bool is_depth_pass = curr_depth < occlusion_depth;
 
     return valid_depth && valid_area && is_depth_pass;
@@ -202,8 +202,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
         }
         else
         {
-            float2 StartPixelCoord = round(VNDC0.xy * ScreenSize);
-            float2 EndPixelCoord = round(VNDC1.xy * ScreenSize);
+            float2 StartPixelCoord = (VNDC0.xy * ScreenSize);
+            float2 EndPixelCoord = (VNDC1.xy * ScreenSize);
 
             float2 StartPixelCoordInTile = (StartPixelCoord) - TilePixelPos;
             float2 EndPixelCoordInTile = (EndPixelCoord) - TilePixelPos;
@@ -260,9 +260,12 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                 float lerp_factor = 1.0f / (EndPixelCoordInTile.x - StartPixelCoordInTile.x);
                 float lerp_value = 0.0f;
 
-                int s_x_in_tile = (StartPixelCoordInTile.x);
-                int e_x_in_tile = (EndPixelCoordInTile.x);
-                float intersect_y = (StartPixelCoordInTile.y);
+                float round_start_tile_x = (StartPixelCoordInTile.x);
+                float round_end_tile_x = (EndPixelCoordInTile.x);
+
+                int s_x_in_tile = round_start_tile_x;//(StartPixelCoordInTile.x);
+                int e_x_in_tile = round_end_tile_x;//(EndPixelCoordInTile.x);
+                float intersect_y = (StartPixelCoordInTile.y);// +  gradient * (round_start_tile_x - StartPixelCoordInTile.x);
                 
                 uint loop_num = 0;
                 while(s_x_in_tile < 0 && intersect_y < 0.0f)
@@ -273,10 +276,10 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                     ++s_x_in_tile;
                     ++loop_num;
 
-                    if(loop_num > 2000)
-                    {
-                        break;
-                    }
+                    // if(loop_num > 200000)
+                    // {
+                    //     break;
+                    // }
                 }
                 e_x_in_tile = min(16, e_x_in_tile);
 
@@ -286,18 +289,18 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                 {
                     for(int i = s_x_in_tile; i < e_x_in_tile; ++i)
                     {
-                        int w_x = int(intersect_y);
+                        int w_x = floor(intersect_y);
                         int w_y = i;                        
                         float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
                         bool is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
                         if(is_valid_pixel)
                         {
                             float bright = 1.0f - frac(intersect_y);
-                            if(bright > 0.0f)
-                            {                                                            
-                                OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
-                            }
-                            //AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            // if(bright > 0.0f)
+                            // {                                                            
+                            //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         w_x = w_x + 1;
@@ -305,11 +308,11 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                         if(is_valid_pixel)
                         {
                             float bright = frac(intersect_y);                        
-                            if(bright > 0.0f)
-                            {
-                                OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
-                            }
-                            //AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            // if(bright > 0.0f)
+                            // {
+                            //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         intersect_y += gradient;
@@ -321,17 +324,17 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                     for(int i = s_x_in_tile; i < e_x_in_tile; ++i)
                     {
                         int w_x = i;
-                        int w_y = int(intersect_y);
+                        int w_y = floor(intersect_y);
                         float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
                         bool is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
                         if(is_valid_pixel)
                         {
                             float bright = 1.0f - frac(intersect_y);
-                            if(bright > 0.0f)
-                            {
-                                OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
-                            }
-                            //AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            // if(bright > 0.0f)
+                            // {
+                            //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         w_y = w_y + 1;
@@ -339,11 +342,11 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                         if(is_valid_pixel)
                         {
                             float bright = frac(intersect_y);
-                            if(bright > 0.0f)
-                            {
-                                OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
-                            }
-                            //AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            // if(bright > 0.0f)
+                            // {
+                            //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
+                            // }
+                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
                         }                        
 
                         intersect_y += gradient;
@@ -352,52 +355,52 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                 }
 
                 //test
-                if(steep)
-                {                    
-                    for(int i = s_x; i < e_x; ++i)
-                    {
-                        int w_x = int(intersect_y_not_in_tile);
-                        int w_y = i;                                                                        
-                        float bright = 1.0f - frac(intersect_y_not_in_tile);
-                        if(bright > 0.0f)
-                        {                            
-                            OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, i - s_x, test_accu_gradient, TileId);
-                        }                                                                      
+                // if(steep)
+                // {                    
+                //     for(int i = s_x; i < e_x; ++i)
+                //     {
+                //         int w_x = int(intersect_y_not_in_tile);
+                //         int w_y = i;                                                                        
+                //         float bright = 1.0f - frac(intersect_y_not_in_tile);
+                //         if(bright > 0.0f)
+                //         {                            
+                //             OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, i - s_x, test_accu_gradient, TileId);
+                //         }                                                                      
 
-                        w_x = w_x + 1;                        
-                        bright = frac(intersect_y_not_in_tile);                        
-                        if(bright > 0.0f)
-                        {                                
-                            OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, i - s_x, test_accu_gradient, TileId);
-                        }                                                                                            
+                //         w_x = w_x + 1;                        
+                //         bright = frac(intersect_y_not_in_tile);                        
+                //         if(bright > 0.0f)
+                //         {                                
+                //             OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, i - s_x, test_accu_gradient, TileId);
+                //         }                                                                                            
 
-                        intersect_y_not_in_tile += gradient;   
-                        test_accu_gradient += gradient;                     
-                    }
-                }
-                else
-                {
-                    for(int i = s_x_in_tile; i < e_x_in_tile; ++i)
-                    {
-                        int w_x = i;
-                        int w_y = int(intersect_y_not_in_tile);                        
-                        float bright = 1.0f - frac(intersect_y_not_in_tile);
-                        if(bright > 0.0f)
-                        {
-                            OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, bright, test_accu_gradient, TileId);
-                        }                        
+                //         intersect_y_not_in_tile += gradient;   
+                //         test_accu_gradient += gradient;                     
+                //     }
+                // }
+                // else
+                // {
+                //     for(int i = s_x_in_tile; i < e_x_in_tile; ++i)
+                //     {
+                //         int w_x = i;
+                //         int w_y = int(intersect_y_not_in_tile);                        
+                //         float bright = 1.0f - frac(intersect_y_not_in_tile);
+                //         if(bright > 0.0f)
+                //         {
+                //             OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, bright, test_accu_gradient, TileId);
+                //         }                        
 
-                        w_y = w_y + 1;                        
-                        bright = frac(intersect_y_not_in_tile);
-                        if(bright > 0.0f)
-                        {
-                            OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, bright, test_accu_gradient, TileId);
-                        }
+                //         w_y = w_y + 1;                        
+                //         bright = frac(intersect_y_not_in_tile);
+                //         if(bright > 0.0f)
+                //         {
+                //             OutDebugLayerTex[uint2(w_x, w_y)] = float4(bright, bright, test_accu_gradient, TileId);
+                //         }
 
-                        intersect_y_not_in_tile += gradient;
-                        test_accu_gradient += gradient;
-                    }
-                }
+                //         intersect_y_not_in_tile += gradient;
+                //         test_accu_gradient += gradient;
+                //     }
+                // }
             }
         }        
     }
@@ -454,13 +457,13 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
 
     //init MLAB Layer
     //max fp16 value: 65504
-    // uint64_t pack_init_mlab_data = uint64_t(GetDefaultInitDepthAndAlphaPackVal());
-    // uint64_t init_mlab_data = pack_init_mlab_data << 32u;
-    // for(int i = 0; i < OIT_LAYER_COUNT; ++i)
-    // {
-    //     uint init_layer_idx = (local_thread_id.x + local_thread_id.y * 16) * OIT_LAYER_COUNT + i;
-    //     GroupMLABLayer[init_layer_idx] = init_mlab_data;
-    // }
+    uint64_t pack_init_mlab_data = uint64_t(GetDefaultInitDepthAndAlphaPackVal());
+    uint64_t init_mlab_data = pack_init_mlab_data << 32u;
+    for(int i = 0; i < OIT_LAYER_COUNT; ++i)
+    {
+        uint init_layer_idx = (local_thread_id.x + local_thread_id.y * 16) * OIT_LAYER_COUNT + i;
+        GroupMLABLayer[init_layer_idx] = init_mlab_data;
+    }
 
     // uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;
     uint tile_x_in_pixel = tile_x * 16;
@@ -483,7 +486,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx);
         if(offset_idx > 0)
         {
-            OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y);            
+            // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y);            
 
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer.Load(voxel_data_idx); curr_line_idx += 16 * 16)
             {
@@ -498,9 +501,9 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
             }
 
             //blend 
-            //GroupMemoryBarrierWithGroupSync();
+            GroupMemoryBarrierWithGroupSync();
 
-            //BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
+            BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
         }
     }
     
