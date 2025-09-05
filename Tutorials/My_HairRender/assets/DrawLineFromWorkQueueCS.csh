@@ -480,23 +480,26 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     }
 
     OutDebugLayerTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    uint test_val = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;
+    OutDebugLayerTex[screen_pixel_pos.xy].z = test_val;
 
     GroupMemoryBarrierWithGroupSync();
 
     // for slice iterator
-    for(uint curr_slice_num = valid_offset_buf_idx; curr_slice_num < VOXEL_SLICE_NUM; ++ curr_slice_num)
+    for(uint curr_slice_num = valid_offset_buf_idx; curr_slice_num < VOXEL_SLICE_NUM; ++curr_slice_num)
     {
         uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + curr_slice_num;
         uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx);
         uint line_size = LineSizeBuffer.Load(voxel_data_idx);
 
-        OutDebugLayerTex[screen_pixel_pos.xy] = float4(voxel_data_idx, offset_idx, line_size, 0.0f);
+        OutDebugLayerTex[screen_pixel_pos.xy].xy = float2(voxel_data_idx, curr_slice_num - valid_offset_buf_idx);
+
+        ++OutDebugLayerTex[screen_pixel_pos.xy].w;
         if(line_size > 0)
         {
-            // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y);
-            //OutDebugLayerTex[screen_pixel_pos.xy].z = LineSizeBuffer.Load(voxel_data_idx);
+            // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y);            
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < line_size; curr_line_idx += 16 * 16)
-            {
+            {                
                 uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];
                 uint VertexIdx0 = IdxData[line_idx] & 0x0FFFFFFF;
                 uint VertexIdx1 = VertexIdx0 + 1;
