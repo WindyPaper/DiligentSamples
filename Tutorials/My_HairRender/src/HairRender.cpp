@@ -270,7 +270,7 @@ void Diligent::HairRender::CreateGetLineVisibilityPSO()
     m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineAccumulateBuffer")->Set( \
         m_GetLineVisibilityCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 
-    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
+    float LineCount = 1;//(float)m_HairRawData.HairIdxDataArray.size();
     m_GetLineVisibilityCS.VisibilityBitBuffer = CreateStructureBuffer(sizeof(int), ceil(LineCount / 32.0f), nullptr, " visibility bit buffer");
     m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineVisibilityBuffer")->Set( \
         m_GetLineVisibilityCS.VisibilityBitBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
@@ -377,10 +377,10 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
     HairResultTextureDesc.Type = RESOURCE_DIM_TEX_2D;
     HairResultTextureDesc.Width = ScrPixelSize.x;
     HairResultTextureDesc.Height = ScrPixelSize.y;
-    HairResultTextureDesc.Format = TEX_FORMAT_R11G11B10_FLOAT;
+    HairResultTextureDesc.Format = m_pSwapChain->GetDesc().ColorBufferFormat;
     HairResultTextureDesc.Usage = USAGE_DYNAMIC;
-    HairResultTextureDesc.BindFlags = BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE;
-    m_pDevice->CreateTexture(HairResultTextureDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutHairRenderTex);
+    HairResultTextureDesc.BindFlags = BIND_UNORDERED_ACCESS;
+    m_pDevice->CreateTexture(HairResultTextureDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutDebugLayerTex);
 
     ITexture *pDepth = m_pSwapChain->GetDepthTexture();
     
@@ -400,6 +400,9 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
     auto pDepthMapParam = m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "FullDepthMap");
     if(pDepthMapParam)
         pDepthMapParam->Set(pDepth->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+    auto pDebugLayerTexParam = m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutDebugLayerTex");
+    if(pDebugLayerTexParam)
+        pDebugLayerTexParam->Set(m_DrawLineFromWorkQueueCS.OutDebugLayerTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
     // m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutHairRenderTex")->Set( \
     //     m_DrawLineFromWorkQueueCS.OutHairRenderTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 }
@@ -540,7 +543,8 @@ void Diligent::HairRender::RunDrawLineCS()
     
     m_pDeviceCtx->CommitShaderResources(m_DrawLinePassCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     
-    DispatchComputeAttribs attr(m_DrawLinePassCS.DrawLineTex->GetDesc().Width, m_DrawLinePassCS.DrawLineTex->GetDesc().Height);
+    //DispatchComputeAttribs attr(m_DrawLinePassCS.DrawLineTex->GetDesc().Width, m_DrawLinePassCS.DrawLineTex->GetDesc().Height);
+    DispatchComputeAttribs attr(1, 1, 1);
     m_pDeviceCtx->DispatchCompute(attr);
 }
 
@@ -548,7 +552,7 @@ void Diligent::HairRender::RunFrustumVoxelCullLineSizeCS()
 {
     m_pDeviceCtx->SetPipelineState(m_LineSizeInFrustumVoxelCS.PSO);
 
-    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
+    float LineCount = 1;//(float)m_HairRawData.HairIdxDataArray.size();
 
     m_pDeviceCtx->CommitShaderResources(m_LineSizeInFrustumVoxelCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     m_pDeviceCtx->ClearUAVBuffer(m_LineSizeInFrustumVoxelCS.LineSizeBuffer);
@@ -597,7 +601,7 @@ void Diligent::HairRender::RunGetLineVisibilityCS()
 {
     m_pDeviceCtx->SetPipelineState(m_GetLineVisibilityCS.PSO);
 
-    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
+    float LineCount = 1;//(float)m_HairRawData.HairIdxDataArray.size();
 
     m_pDeviceCtx->CommitShaderResources(m_GetLineVisibilityCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 

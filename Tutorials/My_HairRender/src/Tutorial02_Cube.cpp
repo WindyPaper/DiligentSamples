@@ -349,9 +349,9 @@ void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
     m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
         m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
     m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
-    m_Camera.SetPos(float3(0.0f, 20.0f, 70.0f));
+    m_Camera.SetPos(float3(8.53029823, -10.3290195, -28.675705));
     m_Camera.SetMoveSpeed(10.0f);
-    m_Camera.SetLookAt(float3(0.0f, 0.0f, 0.0f));
+    m_Camera.SetLookAt(float3(0.834758162, -0.444662303, 0.32473737));
     m_Camera.InvalidUpdate();
 
     //m_HairRender.CreateHWPSO();
@@ -429,6 +429,8 @@ void Tutorial02_Cube::Update(double CurrTime, double ElapsedTime)
     SampleBase::Update(CurrTime, ElapsedTime);
 
     m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));
+
+    //float3 CamForward = m_Camera.GetWorldAhead();
 
     // Apply rotation
     float4x4 CubeModelTransform = float4x4::RotationY(static_cast<float>(CurrTime) * 1.0f) * float4x4::RotationX(-PI_F * 0.1f);

@@ -11,7 +11,7 @@ struct IShaderSourceInputStreamFactory;
 struct IRenderDevice;
 struct IDeviceContext;
 
-const int MAX_HAIR_LINE_NUM = std::pow(2, 26);
+const int MAX_HAIR_LINE_NUM = std::pow(2, 25);
 
 struct HairConstData
 {
@@ -97,7 +97,8 @@ struct DrawLineFromWorkQueueCS : public PassBaseData
     AutoPtrBuffer LineSizeBuffer;
     AutoPtrBuffer RenderQueueBuffer;
     
-    AutoPtrTex OutHairRenderTex;
+    //AutoPtrTex OutHairRenderTex;
+    AutoPtrTex OutDebugLayerTex;
 };
 
 class HairRender : public IBaseRender
