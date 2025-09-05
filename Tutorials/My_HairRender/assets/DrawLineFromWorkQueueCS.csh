@@ -133,7 +133,7 @@ void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float d
 {
     uint init_depth_alpha = GetDefaultInitDepthAndAlphaPackVal();
     //uint curr_depth_alpha = GLPackHalf2x16(float2(alpha, depth));
-    uint64_t curr_fragment_pack = SetupMLABFragment(rgb, 1.0f - alpha, depth);
+    uint64_t curr_fragment_pack = SetupMLABFragment(rgb * alpha, 1.0f - alpha, depth);
     uint64_t blend_layer_pack_val = curr_fragment_pack;
     for(int i = 0; i < OIT_LAYER_COUNT; ++i)
     {
@@ -149,39 +149,39 @@ void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float d
     }
 
     uint compare_layer_depth_alpha = uint(blend_layer_pack_val >> 32u);
-    if(compare_layer_depth_alpha != init_depth_alpha)
-    {
-        //blend to last layer        
-        float4 blend_color = GetMLABFragmentColor(blend_layer_pack_val);
+    // if(compare_layer_depth_alpha != init_depth_alpha)
+    // {
+    //     //blend to last layer        
+    //     float4 blend_color = GetMLABFragmentColor(blend_layer_pack_val);
 
-        for(int i = 0; i < 128;)
-        {
-            uint64_t last_layer_pack = GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + OIT_LAYER_COUNT - 1];            
-            float4 last_layer_color = GetMLABFragmentColor(last_layer_pack);
-            uint last_layer_depth_uint = uint(last_layer_pack >> 48u);
+    //     for(int i = 0; i < 128;)
+    //     {
+    //         uint64_t last_layer_pack = GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + OIT_LAYER_COUNT - 1];            
+    //         float4 last_layer_color = GetMLABFragmentColor(last_layer_pack);
+    //         uint last_layer_depth_uint = uint(last_layer_pack >> 48u);
 
-            float3 merge_color = last_layer_color.rgb + blend_color.rgb * last_layer_color.a;
-            float merge_color_alpha = last_layer_color.a * blend_color.a;
+    //         float3 merge_color = last_layer_color.rgb + blend_color.rgb * last_layer_color.a;
+    //         float merge_color_alpha = last_layer_color.a * blend_color.a;
 
-            uint64_t merge_color_pack = SetupMLABFragmentFromDepthInt(merge_color, merge_color_alpha, last_layer_depth_uint);
+    //         uint64_t merge_color_pack = SetupMLABFragmentFromDepthInt(merge_color, merge_color_alpha, last_layer_depth_uint);
 
-            uint64_t src_layer_pack_val;
-            InterlockedCompareExchange(GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + OIT_LAYER_COUNT - 1], 
-                last_layer_pack,
-                merge_color_pack,
-                src_layer_pack_val
-            );
+    //         uint64_t src_layer_pack_val;
+    //         InterlockedCompareExchange(GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + OIT_LAYER_COUNT - 1], 
+    //             last_layer_pack,
+    //             merge_color_pack,
+    //             src_layer_pack_val
+    //         );
 
-            if(src_layer_pack_val == last_layer_pack)
-            {
-                //successful, break
-                i += 255;
-            }
+    //         if(src_layer_pack_val == last_layer_pack)
+    //         {
+    //             //successful, break
+    //             i += 255;
+    //         }
 
-            ++i;
-        }
+    //         ++i;
+    //     }
 
-    }
+    // }
 }
 
 void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint TileId)
@@ -426,7 +426,9 @@ void BlendMLABToOutput(uint local_x, uint local_y, uint2 screen_pixel_pos)
             float4 layer_color = GetMLABFragmentColor(local_layer_pack_vals[i]) * blend_alpha;            
 
             accumu_color += layer_color.rgb;
-            blend_alpha = layer_color.a;
+            blend_alpha += layer_color.a;
+
+            // break;
 
             if(i + 1 < OIT_LAYER_COUNT)
             {
@@ -477,6 +479,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         GroupPixelVisibilityBit[thread_group_idx] = 0u;
     }
 
+    OutDebugLayerTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
     GroupMemoryBarrierWithGroupSync();
 
     // for slice iterator
@@ -484,11 +488,14 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     {
         uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + curr_slice_num;
         uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx);
-        if(offset_idx > 0)
-        {
-            // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y);            
+        uint line_size = LineSizeBuffer.Load(voxel_data_idx);
 
-            for(uint curr_line_idx = thread_group_idx; curr_line_idx < LineSizeBuffer.Load(voxel_data_idx); curr_line_idx += 16 * 16)
+        OutDebugLayerTex[screen_pixel_pos.xy] = float4(voxel_data_idx, offset_idx, line_size, 0.0f);
+        if(line_size > 0)
+        {
+            // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y);
+            //OutDebugLayerTex[screen_pixel_pos.xy].z = LineSizeBuffer.Load(voxel_data_idx);
+            for(uint curr_line_idx = thread_group_idx; curr_line_idx < line_size; curr_line_idx += 16 * 16)
             {
                 uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];
                 uint VertexIdx0 = IdxData[line_idx] & 0x0FFFFFFF;

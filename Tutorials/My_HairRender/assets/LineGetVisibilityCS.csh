@@ -22,30 +22,36 @@ RWStructuredBuffer<uint> OutLineRenderQueueBuffer;
 
 groupshared uint VisibilityBits[2];
 
-void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, float max_z, float voxel_z_offset)
+void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, float max_z, float voxel_z_offset, inout int curr_select_tile_id)
 {
     int DownSampleX = int((px / 16.0f));
     int DownSampleY = int((py / 16.0f));
-    float OcclusionDepth = DownSampleDepthMap.Load(int3(DownSampleX, DownSampleY, 0)).x;
-    if(OcclusionDepth > max_z)
+    int TileID = DownSampleY * DownSampleDepthSize.x + DownSampleX;
+    if(TileID != curr_select_tile_id)
     {
-        uint CurrLineIdxInOffsetBuf;
-        uint AccumuBufIdx = (DownSampleY * DownSampleDepthSize.x + DownSampleX) * VOXEL_SLICE_NUM + voxel_z_offset;
-        //InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, CurrLineIdxInOffsetBuf);
-        OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx, 1, CurrLineIdxInOffsetBuf);
+        float OcclusionDepth = DownSampleDepthMap.Load(int3(DownSampleX, DownSampleY, 0)).x;
+        if(OcclusionDepth > max_z)
+        {
+            uint CurrLineIdxInOffsetBuf;
+            uint AccumuBufIdx = TileID * VOXEL_SLICE_NUM + voxel_z_offset;
+            //InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, CurrLineIdxInOffsetBuf);
+            OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx, 1, CurrLineIdxInOffsetBuf);
 
-        //get offset addr
-        uint OffsetBufAddr = LineOffsetBuffer.Load(AccumuBufIdx);
-        OutLineRenderQueueBuffer[OffsetBufAddr + CurrLineIdxInOffsetBuf] =  line_idx;
+            //get offset addr
+            uint OffsetBufAddr = LineOffsetBuffer.Load(AccumuBufIdx);
+            OutLineRenderQueueBuffer[OffsetBufAddr + CurrLineIdxInOffsetBuf] =  line_idx;
 
-        //add visibility bit flag
-        uint BitsIdx = grp_idx >> 5;
-        uint BitsValue = grp_idx & 31;
-        InterlockedOr(VisibilityBits[BitsIdx], 1u << BitsValue);
+            //add visibility bit flag
+            uint BitsIdx = grp_idx >> 5;
+            uint BitsValue = grp_idx & 31;
+            InterlockedOr(VisibilityBits[BitsIdx], 1u << BitsValue);
+
+            curr_select_tile_id = TileID;
+        }
     }
 }
 
-[numthreads(64, 1, 1)]
+[numthreads(1, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint group_idx : SV_GroupIndex)
 {
     if(group_idx < 2)
@@ -113,24 +119,30 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 int e_x = EndPixelCoord.x;
                 float intersect_y = StartPixelCoord.y;
 
+                int curr_select_tile_id = -1;
                 if(steep)
                 {
                     for(int i = s_x; i <= e_x; ++i)
                     {
-                        int w_x = int(intersect_y);
+                        int w_x = floor(intersect_y);
                         int w_y = i;
                         float bright = 1.0f - frac(intersect_y);
-
-                        if(bright > 0.0f)
-                        {
-                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                        if(w_x > -1 && w_y < ScreenSize.y)
+                        {                            
+                            if(bright > 0.0f)
+                            {
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                            }
                         }
 
                         w_x = w_x + 1;
-                        bright = frac(intersect_y);
-                        if(bright > 0.0f)
+                        if(w_x > -1 && w_y < ScreenSize.y)
                         {
-                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                            bright = frac(intersect_y);
+                            if(bright > 0.0f)
+                            {
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                            }
                         }
 
                         intersect_y += gradient;
@@ -141,18 +153,24 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                     for(int i = s_x; i <= e_x; ++i)
                     {
                         int w_x = i;
-                        int w_y = int(intersect_y);
+                        int w_y = floor(intersect_y);
                         float bright = 1.0f - frac(intersect_y);
-                        if(bright > 0.0f)
-                        {
-                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                        if(w_x > -1 && w_y < ScreenSize.y)
+                        {                            
+                            if(bright > 0.0f)
+                            {
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                            }
                         }
 
                         w_y = w_y + 1;
-                        bright = frac(intersect_y);
-                        if(bright > 0.0f)
+                        if(w_x > -1 && w_y < ScreenSize.y)
                         {
-                            AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset);
+                            bright = frac(intersect_y);
+                            if(bright > 0.0f)
+                            {
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                            }
                         }
 
                         intersect_y += gradient;

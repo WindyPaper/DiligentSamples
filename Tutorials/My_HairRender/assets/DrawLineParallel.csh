@@ -60,8 +60,8 @@ float lineWu(float2 a, float2 b, float2 c)
 [numthreads(1, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint group_idx : SV_GroupIndex)
 {
-    float2 v0 = float2(0.0f, 0.0f);
-    float2 v1 = float2(600.0f, 50.0f);
+    float2 v0 = float2(282.685852, 873.709656);
+    float2 v1 = float2(96.2875061, 840.406616);
 
     float bright = lineWu(v0, v1, id.xy) * 1.5f;
     OutputTexture[int2(id.xy)] = float4(bright, bright, bright, 1.0f);
