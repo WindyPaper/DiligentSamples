@@ -291,7 +291,7 @@ void Diligent::HairRender::CreateGetWorkQueuePSO()
     // to change on a per-instance basis
     std::vector<std::string> ParamNames = { \
         "HairConstData", \
-        "LineOffsetBuffer", \
+        "LineSizeBuffer", \
         "OutWorkQueueBuffer", \
         "OutWorkQueueCountBuffer"
     };
@@ -306,7 +306,7 @@ void Diligent::HairRender::CreateGetWorkQueuePSO()
     //SRB
     m_GetWorkQueueCS.PSO->CreateShaderResourceBinding(&m_GetWorkQueueCS.SRB, true);
 
-    m_GetWorkQueueCS.LineOffsetBuffer = m_GetLineOffsetCounterCS.LineOffsetBuffer;
+    m_GetWorkQueueCS.LineSizeBuffer = m_GetLineVisibilityCS.LineSizeBuffer;
     
     m_GetWorkQueueCS.WorkQueueBuffer = CreateStructureBuffer(sizeof(int), \
         m_DownSampledDepthSize.x * m_DownSampledDepthSize.y, \
@@ -322,8 +322,8 @@ void Diligent::HairRender::CreateGetWorkQueuePSO()
         4, "Work Queue Counter Stage Buffer");
 
     m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
-    m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineOffsetBuffer")->Set( \
-        m_GetWorkQueueCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineSizeBuffer")->Set( \
+        m_GetWorkQueueCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
     m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutWorkQueueBuffer")->Set( \
         m_GetWorkQueueCS.WorkQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
     m_GetWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutWorkQueueCountBuffer")->Set( \
@@ -377,7 +377,8 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
     HairResultTextureDesc.Type = RESOURCE_DIM_TEX_2D;
     HairResultTextureDesc.Width = ScrPixelSize.x;
     HairResultTextureDesc.Height = ScrPixelSize.y;
-    HairResultTextureDesc.Format = m_pSwapChain->GetDesc().ColorBufferFormat;
+    HairResultTextureDesc.Format = TEX_FORMAT_RGBA32_UINT;
+    //m_pSwapChain->GetDesc().ColorBufferFormat;
     HairResultTextureDesc.Usage = USAGE_DYNAMIC;
     HairResultTextureDesc.BindFlags = BIND_UNORDERED_ACCESS;
     m_pDevice->CreateTexture(HairResultTextureDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutDebugLayerTex);

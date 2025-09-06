@@ -77,7 +77,7 @@ struct GetLineVisibilityCS : public PassBaseData
 
 struct GetWorkQueueCS : public PassBaseData
 {
-    AutoPtrBuffer LineOffsetBuffer;
+    AutoPtrBuffer LineSizeBuffer;
     AutoPtrBuffer WorkQueueBuffer;
     AutoPtrBuffer WorkQueueCountBuffer;
 
