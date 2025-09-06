@@ -15,7 +15,7 @@ StructuredBuffer<uint> IdxData;
 
 Texture2D<float4> FullDepthMap;
 RWTexture2D<float4> OutHairRenderTex;
-RWTexture2D<float4> OutDebugLayerTex;
+RWTexture2D<uint4> OutDebugLayerTex;
 
 //RWStructuredBuffer<uint> OutLineAccumulateBuffer;
 
@@ -479,25 +479,27 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         GroupPixelVisibilityBit[thread_group_idx] = 0u;
     }
 
-    OutDebugLayerTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    uint test_val = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;
-    OutDebugLayerTex[screen_pixel_pos.xy].z = test_val;
+    OutDebugLayerTex[screen_pixel_pos.xy] = uint4(0, 0, 0, 0);//(0.0f, 0.0f, 0.0f, 0.0f);
+    uint test_val = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;    
 
     GroupMemoryBarrierWithGroupSync();
+
+    OutDebugLayerTex[screen_pixel_pos.xy].z = 10086;
 
     // for slice iterator
     for(uint curr_slice_num = valid_offset_buf_idx; curr_slice_num < VOXEL_SLICE_NUM; ++curr_slice_num)
     {
         uint voxel_data_idx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + curr_slice_num;
-        uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx);
-        uint line_size = LineSizeBuffer.Load(voxel_data_idx);
+        uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx * 4);
+        uint line_size = LineSizeBuffer.Load(voxel_data_idx * 4);
 
-        OutDebugLayerTex[screen_pixel_pos.xy].xy = float2(voxel_data_idx, curr_slice_num - valid_offset_buf_idx);
-
-        ++OutDebugLayerTex[screen_pixel_pos.xy].w;
+        OutDebugLayerTex[screen_pixel_pos.xy].xy = uint2(voxel_data_idx, test_val); 
+        
         if(line_size > 0)
         {
-            // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y);            
+            // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y); 
+            OutDebugLayerTex[screen_pixel_pos.xy].z = voxel_data_idx;
+            ++OutDebugLayerTex[screen_pixel_pos.xy].w;
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < line_size; curr_line_idx += 16 * 16)
             {                
                 uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];

@@ -29,7 +29,7 @@ void AddAccumulateBuffer(int w_x, int w_y, float max_z, float voxel_z_offset, in
             uint SrcVal;
             uint AccumuBufIdx = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + voxel_z_offset;
             //InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, SrcVal);
-            OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx, 1, SrcVal);
+            OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx * 4, 1, SrcVal);
 
             curr_select_tile_id = tile_id;
         }
@@ -108,7 +108,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     int e_x = EndPixelCoord.x;
     float intersect_y = StartPixelCoord.y;
 
-    int curr_select_tile_id = -1;
+    int curr_select_tile_id0 = -1;
+    int curr_select_tile_id1 = -1;
     if(steep)
     {
         for(int i = s_x; i <= e_x; ++i)
@@ -121,19 +122,19 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             {                
                 if(bright > 0.0f)
                 {
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id0);
                 }
             }
             //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
-
+            
+            w_x = w_x + 1;
             if(w_x > -1 && w_y < ScreenSize.y)
-            {
-                w_x = w_x + 1;
+            {                
                 bright = frac(intersect_y);
                 //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
                 if(bright > 0.0f)
                 {
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id1);
                 }
             }
 
@@ -151,7 +152,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             {                
                 if(bright > 0.0f)
                 {
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id0);
                 }
             }
             //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
@@ -162,7 +163,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 bright = frac(intersect_y);
                 if(bright > 0.0f)
                 {
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id1);
                 }
             }
             //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);

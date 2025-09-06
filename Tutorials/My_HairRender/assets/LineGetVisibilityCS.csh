@@ -35,10 +35,10 @@ void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, floa
             uint CurrLineIdxInOffsetBuf;
             uint AccumuBufIdx = TileID * VOXEL_SLICE_NUM + voxel_z_offset;
             //InterlockedAdd(OutLineAccumulateBuffer[AccumuBufIdx], 1, CurrLineIdxInOffsetBuf);
-            OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx, 1, CurrLineIdxInOffsetBuf);
+            OutLineAccumulateBuffer.InterlockedAdd(AccumuBufIdx * 4, 1, CurrLineIdxInOffsetBuf);
 
             //get offset addr
-            uint OffsetBufAddr = LineOffsetBuffer.Load(AccumuBufIdx);
+            uint OffsetBufAddr = LineOffsetBuffer.Load(AccumuBufIdx * 4);
             OutLineRenderQueueBuffer[OffsetBufAddr + CurrLineIdxInOffsetBuf] =  line_idx;
 
             //add visibility bit flag
@@ -119,7 +119,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 int e_x = EndPixelCoord.x;
                 float intersect_y = StartPixelCoord.y;
 
-                int curr_select_tile_id = -1;
+                int curr_select_tile_id0 = -1;
+                int curr_select_tile_id1 = -1;
                 if(steep)
                 {
                     for(int i = s_x; i <= e_x; ++i)
@@ -131,7 +132,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         {                            
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id0);
                             }
                         }
 
@@ -141,7 +142,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                             bright = frac(intersect_y);
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id1);
                             }
                         }
 
@@ -159,7 +160,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         {                            
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id0);
                             }
                         }
 
@@ -169,7 +170,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                             bright = frac(intersect_y);
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id1);
                             }
                         }
 

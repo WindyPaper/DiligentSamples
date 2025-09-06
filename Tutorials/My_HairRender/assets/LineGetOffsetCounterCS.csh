@@ -19,18 +19,21 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
         for(; curr_z < VOXEL_SLICE_NUM; curr_z += 4)
         {
             uint LineAccuIdx = (id.y * DownSampleDepthSize.x + id.x) * VOXEL_SLICE_NUM + curr_z;
-            uint LineSizeInVoxel = LineAccumulateBuffer.Load(LineAccuIdx);
+            uint LineSizeInVoxel = LineAccumulateBuffer.Load(LineAccuIdx * 4);
             uint SrcAddVal = 0;
 
             if(LineSizeInVoxel != 0)
             {
                 //InterlockedAdd(OutLineCounterBuffer[0], LineSizeInVoxel, SrcAddVal);
                 OutLineCounterBuffer.InterlockedAdd(0, LineSizeInVoxel, SrcAddVal);
+                OutLineCounterBuffer.InterlockedAdd(4, LineSizeInVoxel, SrcAddVal);
 
-                OutLineOffsetBuffer.Store(LineAccuIdx, SrcAddVal);
+                OutLineCounterBuffer.Store((SrcAddVal + 2) * 4, LineAccuIdx);
+
+                OutLineOffsetBuffer.Store(LineAccuIdx * 4, SrcAddVal);
 
                 //reset
-                LineAccumulateBuffer.Store(LineAccuIdx, 0);
+                LineAccumulateBuffer.Store(LineAccuIdx * 4, 0);
             }            
         }
     }

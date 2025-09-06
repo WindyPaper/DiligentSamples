@@ -4,7 +4,7 @@
 
 #define VOXEL_SLICE_NUM 24
 
-ByteAddressBuffer LineOffsetBuffer;
+ByteAddressBuffer LineSizeBuffer;
 
 RWStructuredBuffer<uint> OutWorkQueueBuffer;
 
@@ -29,9 +29,9 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
         for(uint slice_idx = 0; slice_idx < VOXEL_SLICE_NUM; ++slice_idx)
         {
             uint OffsetIdx = (id.y * DownSampleDepthSize.x + id.x) * VOXEL_SLICE_NUM + slice_idx;
-            uint CurrOffsetNum = LineOffsetBuffer.Load(OffsetIdx);
+            uint CurrSizeNum = LineSizeBuffer.Load(OffsetIdx * 4);
 
-            if(CurrOffsetNum != 0)
+            if(CurrSizeNum != 0)
             {
                 InterlockedAdd(GroupNumAccum, 1, LocalOffsetNum);
                 // FstOffsetValIdx = slice_idx;
