@@ -191,11 +191,11 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
         float4 VNDC0 = mul(float4(V0.Pos, 1.0f), ViewProj);
         VNDC0.xyz /= VNDC0.w;
         VNDC0.xy = VNDC0.xy * 0.5f + float2(0.5f, 0.5f);
-        VNDC0.xy = saturate(VNDC0.xy);
+        //VNDC0.xy = saturate(VNDC0.xy);
         float4 VNDC1 = mul(float4(V1.Pos, 1.0f), ViewProj);
         VNDC1.xyz /= VNDC1.w;
         VNDC1.xy = VNDC1.xy * 0.5f + float2(0.5f, 0.5f);
-        VNDC1.xy = saturate(VNDC1.xy);
+        //VNDC1.xy = saturate(VNDC1.xy);
         if((abs(VNDC1.x - VNDC0.x) < 0.001f) && (abs(VNDC1.y - VNDC0.y) < 0.001f)) //in same pos
         {
             //empty
@@ -426,7 +426,7 @@ void BlendMLABToOutput(uint local_x, uint local_y, uint2 screen_pixel_pos)
             float4 layer_color = GetMLABFragmentColor(local_layer_pack_vals[i]) * blend_alpha;            
 
             accumu_color += layer_color.rgb;
-            blend_alpha += layer_color.a;
+            blend_alpha = layer_color.a;
 
             // break;
 
