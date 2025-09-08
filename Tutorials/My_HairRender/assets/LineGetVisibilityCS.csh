@@ -121,8 +121,6 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 int e_x = EndPixelCoord.x;
                 float intersect_y = StartPixelCoord.y;
 
-                int curr_select_tile_id0 = -1;
-                int curr_select_tile_id1 = -1;
                 int last_three_tile_id[3];
                 last_three_tile_id[0] = -1;
                 last_three_tile_id[1] = -1;

@@ -260,26 +260,21 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                 float lerp_factor = 1.0f / (EndPixelCoordInTile.x - StartPixelCoordInTile.x);
                 float lerp_value = 0.0f;
 
-                float round_start_tile_x = (StartPixelCoordInTile.x);
-                float round_end_tile_x = (EndPixelCoordInTile.x);
+                float round_start_tile_x = round(StartPixelCoordInTile.x);
+                float round_end_tile_x = round(EndPixelCoordInTile.x);
 
                 int s_x_in_tile = round_start_tile_x;//(StartPixelCoordInTile.x);
                 int e_x_in_tile = round_end_tile_x;//(EndPixelCoordInTile.x);
                 float intersect_y = (StartPixelCoordInTile.y);// +  gradient * (round_start_tile_x - StartPixelCoordInTile.x);
                 
-                uint loop_num = 0;
+                // uint loop_num = 0;
                 while(s_x_in_tile < 0 && intersect_y < 0.0f)
                 {
                     lerp_value += lerp_factor;
                     intersect_y += gradient;
                     
                     ++s_x_in_tile;
-                    ++loop_num;
-
-                    // if(loop_num > 200000)
-                    // {
-                    //     break;
-                    // }
+                    // ++loop_num;
                 }
                 e_x_in_tile = min(16, e_x_in_tile);
 
