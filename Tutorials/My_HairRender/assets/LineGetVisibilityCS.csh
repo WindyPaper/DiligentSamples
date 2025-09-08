@@ -78,7 +78,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
         VNDC1.xyz /= VNDC1.w;
         VNDC1.xy = VNDC1.xy * 0.5f + float2(0.5f, 0.5f);
         VNDC1.xy = saturate(VNDC1.xy);
-        if((abs(VNDC1.x - VNDC0.x) > 0.001f) && (abs(VNDC1.y - VNDC0.y) > 0.001f)) //not in same pos
+        if((abs(VNDC1.x - VNDC0.x) >= 0.001f) || (abs(VNDC1.y - VNDC0.y) >= 0.001f)) //not in same pos
         {            
             float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
             float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
