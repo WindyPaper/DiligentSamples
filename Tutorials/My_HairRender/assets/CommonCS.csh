@@ -22,3 +22,14 @@ void swap_uint(inout uint x, inout uint y)
     x = y;
     y = t;
 }
+
+bool IsValidPixel(int w_x, int w_y)
+{
+    bool ret = false;
+    if(w_x > -1 && w_x < ScreenSize.x && w_y > -1 && w_y < ScreenSize.y)
+    {
+        ret = true;
+    }
+
+    return ret;
+}

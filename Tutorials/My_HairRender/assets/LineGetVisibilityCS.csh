@@ -95,11 +95,13 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 float2 EndPixelCoord = VNDC1.xy * ScreenSize;
 
                 bool steep = abs(EndPixelCoord.y - StartPixelCoord.y) > abs(EndPixelCoord.x - StartPixelCoord.x);
-
+                
+                float MinDrawEndPixel = ScreenSize.x;
                 if(steep)
                 {
                     swap(StartPixelCoord.x, StartPixelCoord.y);
-                    swap(EndPixelCoord.x, EndPixelCoord.y);        
+                    swap(EndPixelCoord.x, EndPixelCoord.y); 
+                    MinDrawEndPixel = ScreenSize.y;       
                 }
                 if(StartPixelCoord.x > EndPixelCoord.x)
                 {
@@ -118,8 +120,14 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                 }
 
                 int s_x = StartPixelCoord.x;
-                int e_x = EndPixelCoord.x;
+                int e_x = min(MinDrawEndPixel, EndPixelCoord.x);
                 float intersect_y = StartPixelCoord.y;
+
+                while(s_x < 0 && intersect_y < 0.0f)
+                {
+                    intersect_y += gradient;        
+                    ++s_x;        
+                }
 
                 int last_three_tile_id[3];
                 last_three_tile_id[0] = -1;
@@ -133,7 +141,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         int w_x = floor(intersect_y);
                         int w_y = i;
                         float bright = 1.0f - frac(intersect_y);
-                        if(w_x > -1 && w_y < ScreenSize.y)
+                        if(IsValidPixel(w_x, w_y))
                         {                            
                             if(bright > 0.0f)
                             {
@@ -142,7 +150,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         }
 
                         w_x = w_x + 1;
-                        if(w_x > -1 && w_y < ScreenSize.y)
+                        if(IsValidPixel(w_x, w_y))
                         {
                             bright = frac(intersect_y);
                             if(bright > 0.0f)
@@ -161,7 +169,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         int w_x = i;
                         int w_y = floor(intersect_y);
                         float bright = 1.0f - frac(intersect_y);
-                        if(w_x > -1 && w_y < ScreenSize.y)
+                        if(IsValidPixel(w_x, w_y))
                         {                            
                             if(bright > 0.0f)
                             {
@@ -170,7 +178,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         }
 
                         w_y = w_y + 1;
-                        if(w_x > -1 && w_y < ScreenSize.y)
+                        if(IsValidPixel(w_x, w_y))
                         {
                             bright = frac(intersect_y);
                             if(bright > 0.0f)
