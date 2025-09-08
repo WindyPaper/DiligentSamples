@@ -131,25 +131,25 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             int w_x = floor(intersect_y);
             int w_y = i;
 
-            float bright = 1.0f - frac(intersect_y);
+            //float bright = 1.0f - frac(intersect_y);
             if(IsValidPixel(w_x, w_y))
             {                
-                if(bright > 0.0f)
-                {
+                //if(bright > 0.0f)
+                //{
                     AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                }
+                //}
             }
             //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
             
             w_x = w_x + 1;
             if(IsValidPixel(w_x, w_y))
             {                
-                bright = frac(intersect_y);
+                //bright = frac(intersect_y);
                 //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
-                if(bright > 0.0f)
-                {
+                //if(bright > 0.0f)
+                //{
                     AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                }
+                //}
             }
 
             intersect_y += gradient;
@@ -161,24 +161,24 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
         {
             int w_x = i;
             int w_y = floor(intersect_y);
-            float bright = 1.0f - frac(intersect_y);
+            //float bright = 1.0f - frac(intersect_y);
             if(IsValidPixel(w_x, w_y))
             {                
-                if(bright > 0.0f)
-                {
+                //if(bright > 0.0f)
+                //{
                     AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                }
+                //}
             }
             //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
 
             w_y = w_y + 1;
             if(IsValidPixel(w_x, w_y))
             {
-                bright = frac(intersect_y);
-                if(bright > 0.0f)
-                {
+                //bright = frac(intersect_y);
+                //if(bright > 0.0f)
+                //{
                     AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                }
+                //}
             }
             //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
 
