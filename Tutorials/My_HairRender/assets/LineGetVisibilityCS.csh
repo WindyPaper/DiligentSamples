@@ -22,12 +22,12 @@ RWStructuredBuffer<uint> OutLineRenderQueueBuffer;
 
 groupshared uint VisibilityBits[2];
 
-void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, float max_z, float voxel_z_offset, inout int curr_select_tile_id)
+void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, float max_z, float voxel_z_offset, inout int curr_select_tile_ids[3], inout int curr_replace_tile_id)
 {
     int DownSampleX = int((px / 16.0f));
     int DownSampleY = int((py / 16.0f));
     int TileID = DownSampleY * DownSampleDepthSize.x + DownSampleX;
-    if(TileID != curr_select_tile_id)
+    if(TileID != curr_select_tile_ids[0] && TileID != curr_select_tile_ids[1] && TileID != curr_select_tile_ids[2])
     {
         float OcclusionDepth = DownSampleDepthMap.Load(int3(DownSampleX, DownSampleY, 0)).x;
         if(OcclusionDepth > max_z)
@@ -46,7 +46,9 @@ void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, floa
             uint BitsValue = grp_idx & 31;
             InterlockedOr(VisibilityBits[BitsIdx], 1u << BitsValue);
 
-            curr_select_tile_id = TileID;
+            //curr_select_tile_id = TileID;
+            curr_select_tile_ids[curr_replace_tile_id] = TileID;
+            curr_replace_tile_id = (curr_replace_tile_id + 1) % 3;
         }
     }
 }
@@ -121,6 +123,11 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
 
                 int curr_select_tile_id0 = -1;
                 int curr_select_tile_id1 = -1;
+                int last_three_tile_id[3];
+                last_three_tile_id[0] = -1;
+                last_three_tile_id[1] = -1;
+                last_three_tile_id[2] = -1;
+                int curr_replace_tile_id = 0;
                 if(steep)
                 {
                     for(int i = s_x; i <= e_x; ++i)
@@ -132,7 +139,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         {                            
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id0);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
                             }
                         }
 
@@ -142,7 +149,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                             bright = frac(intersect_y);
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id1);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
                             }
                         }
 
@@ -160,7 +167,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                         {                            
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id0);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
                             }
                         }
 
@@ -170,7 +177,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
                             bright = frac(intersect_y);
                             if(bright > 0.0f)
                             {
-                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, curr_select_tile_id1);
+                                AddToVisibilityBuffer(LineIdx0, group_idx, w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
                             }
                         }
 
