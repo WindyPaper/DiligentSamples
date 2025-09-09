@@ -74,10 +74,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
         VNDC0.xyz /= VNDC0.w;
         VNDC0.xy = VNDC0.xy * 0.5f + float2(0.5f, 0.5f);
         // VNDC0.xy = saturate(VNDC0.xy);
+        VNDC0.xy = clamp(VNDC0.xy, float2(-0.1f, -0.1f), float2(1.1f, 1.1f));
         float4 VNDC1 = mul(float4(V1.Pos, 1.0f), ViewProj);
         VNDC1.xyz /= VNDC1.w;
         VNDC1.xy = VNDC1.xy * 0.5f + float2(0.5f, 0.5f);
         // VNDC1.xy = saturate(VNDC1.xy);
+        VNDC1.xy = clamp(VNDC1.xy, float2(-0.1f, -0.1f), float2(1.1f, 1.1f));
         if((abs(VNDC1.x - VNDC0.x) >= 0.001f) || (abs(VNDC1.y - VNDC0.y) >= 0.001f)) //not in same pos
         {            
             float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
