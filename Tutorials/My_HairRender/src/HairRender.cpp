@@ -162,17 +162,20 @@ void Diligent::HairRender::CreateLineSizeInFrustumVoxelPSO()
         nullptr, \
         "FrustumVoxelLineSizeBuffer");
 
-    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas")->Set(\
+    SET_SHADER_PARAM_SAFE(m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas"), \
         m_LineSizeInFrustumVoxelCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
-    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData")->Set( \
+    SET_SHADER_PARAM_SAFE(m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData"), \
         m_LineSizeInFrustumVoxelCS.LineIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
-    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DownSampleDepthMap")->Set( \
+    auto pDownSampleDepthMap = m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DownSampleDepthMap");
+    if(pDownSampleDepthMap)
+    {
+        pDownSampleDepthMap->Set( \
         m_DownSamleDepthPassCS.DownSampledDepthMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineAccumulateBuffer")->Set( \
+    }
+    SET_SHADER_PARAM_SAFE(m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineAccumulateBuffer"), \
         m_LineSizeInFrustumVoxelCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
-    m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set( \
+    SET_SHADER_PARAM_SAFE(m_LineSizeInFrustumVoxelCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData"), \
         m_HairConstData);
-    
 }
 
 void Diligent::HairRender::CreateGetLineOffsetAndCounterPSO()
@@ -258,25 +261,29 @@ void Diligent::HairRender::CreateGetLineVisibilityPSO()
     m_GetLineVisibilityCS.VerticesData = m_apHairVertexArray;
     m_GetLineVisibilityCS.LineIdxData = m_apHairIdxArray;
 
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas")->Set( \
+    SET_SHADER_PARAM_SAFE(m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData"), m_HairConstData);
+    SET_SHADER_PARAM_SAFE(m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas"), \
         m_GetLineVisibilityCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData")->Set( \
+    SET_SHADER_PARAM_SAFE(m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData"), \
         m_GetLineVisibilityCS.LineIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineOffsetBuffer")->Set( \
+    SET_SHADER_PARAM_SAFE(m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineOffsetBuffer"), \
         m_GetLineVisibilityCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DownSampleDepthMap")->Set( \
+    auto pDownSampleDepthMap = m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DownSampleDepthMap");
+    if(pDownSampleDepthMap)
+    {
+        pDownSampleDepthMap->Set( \
         m_DownSamleDepthPassCS.DownSampledDepthMap->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineAccumulateBuffer")->Set( \
+    }
+    SET_SHADER_PARAM_SAFE(m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineAccumulateBuffer"), \
         m_GetLineVisibilityCS.LineSizeBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 
-    float LineCount = 1;//(float)m_HairRawData.HairIdxDataArray.size();
+    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
     m_GetLineVisibilityCS.VisibilityBitBuffer = CreateStructureBuffer(sizeof(int), ceil(LineCount / 32.0f), nullptr, " visibility bit buffer");
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineVisibilityBuffer")->Set( \
+    SET_SHADER_PARAM_SAFE(m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineVisibilityBuffer"), \
         m_GetLineVisibilityCS.VisibilityBitBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
     
     m_GetLineVisibilityCS.RenderQueueBuffer = CreateStructureBuffer(sizeof(int), MAX_HAIR_LINE_NUM, nullptr, " render line queue buffer");
-    m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineRenderQueueBuffer")->Set( \
+    SET_SHADER_PARAM_SAFE(m_GetLineVisibilityCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutLineRenderQueueBuffer"), \
         m_GetLineVisibilityCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 }
 
@@ -553,7 +560,7 @@ void Diligent::HairRender::RunFrustumVoxelCullLineSizeCS()
 {
     m_pDeviceCtx->SetPipelineState(m_LineSizeInFrustumVoxelCS.PSO);
 
-    float LineCount = 1;//(float)m_HairRawData.HairIdxDataArray.size();
+    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
 
     m_pDeviceCtx->CommitShaderResources(m_LineSizeInFrustumVoxelCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
     m_pDeviceCtx->ClearUAVBuffer(m_LineSizeInFrustumVoxelCS.LineSizeBuffer);
@@ -602,7 +609,7 @@ void Diligent::HairRender::RunGetLineVisibilityCS()
 {
     m_pDeviceCtx->SetPipelineState(m_GetLineVisibilityCS.PSO);
 
-    float LineCount = 1;//(float)m_HairRawData.HairIdxDataArray.size();
+    float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
 
     m_pDeviceCtx->CommitShaderResources(m_GetLineVisibilityCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 

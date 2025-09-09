@@ -13,6 +13,10 @@ struct IDeviceContext;
 
 const int MAX_HAIR_LINE_NUM = std::pow(2, 25);
 
+#define SET_SHADER_PARAM_SAFE(P, V) \
+    if(P) \
+        P->Set(V); \
+
 struct HairConstData
 {
     float4x4 ViewProj;
