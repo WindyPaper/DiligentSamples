@@ -53,7 +53,7 @@ void AddToVisibilityBuffer(uint line_idx, uint grp_idx, float px, float py, floa
     }
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint group_idx : SV_GroupIndex)
 {
     if(group_idx < 2)

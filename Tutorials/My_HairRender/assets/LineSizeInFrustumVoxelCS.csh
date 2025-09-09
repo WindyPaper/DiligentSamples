@@ -39,7 +39,7 @@ void AddAccumulateBuffer(int w_x, int w_y, float max_z, float voxel_z_offset, in
     }
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint group_idx : SV_GroupIndex)
 {
     uint LineIdx0 = id.x;
