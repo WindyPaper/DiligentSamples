@@ -69,7 +69,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     float3 LineBBoxMin = float3(min(VNDC0.x, VNDC1.x), min(VNDC0.y, VNDC1.y), min(VNDC0.z, VNDC1.z));
     float3 LineBBoxMax = float3(max(VNDC0.x, VNDC1.x), max(VNDC0.y, VNDC1.y), max(VNDC0.z, VNDC1.z));
 
-    bool IsOutScreen = (LineBBoxMax.x < 0.0f || LineBBoxMax.y < 0.0f || LineBBoxMin.x > 1.0f || LineBBoxMin.y > 1.0f);
+    bool IsOutScreen = (LineBBoxMax.x < 0.0f || LineBBoxMax.y < 0.0f || LineBBoxMin.x > 1.0f || LineBBoxMin.y > 1.0f || LineBBoxMax.z < 0.0f || LineBBoxMin.z > 1.0f);
     if(IsOutScreen)
     {
         return;
@@ -124,65 +124,68 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
     last_three_tile_id[1] = -1;
     last_three_tile_id[2] = -1;
     int curr_replace_tile_id = 0;
-    if(steep)
+    if(s_x < e_x)
     {
-        for(int i = s_x; i <= e_x; ++i)
+        if(steep)
         {
-            int w_x = floor(intersect_y);
-            int w_y = i;
-
-            //float bright = 1.0f - frac(intersect_y);
-            if(IsValidPixel(w_x, w_y))
-            {                
-                //if(bright > 0.0f)
-                //{
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                //}
-            }
-            //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
-            
-            w_x = w_x + 1;
-            if(IsValidPixel(w_x, w_y))
-            {                
-                //bright = frac(intersect_y);
-                //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
-                //if(bright > 0.0f)
-                //{
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                //}
-            }
-
-            intersect_y += gradient;
-        }
-    }
-    else
-    {
-        for(int i = s_x; i <= e_x; ++i)
-        {
-            int w_x = i;
-            int w_y = floor(intersect_y);
-            //float bright = 1.0f - frac(intersect_y);
-            if(IsValidPixel(w_x, w_y))
-            {                
-                //if(bright > 0.0f)
-                //{
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                //}
-            }
-            //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
-
-            w_y = w_y + 1;
-            if(IsValidPixel(w_x, w_y))
+            for(int i = s_x; i <= e_x; ++i)
             {
-                //bright = frac(intersect_y);
-                //if(bright > 0.0f)
-                //{
-                    AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
-                //}
-            }
-            //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
+                int w_x = floor(intersect_y);
+                int w_y = i;
 
-            intersect_y += gradient;
+                //float bright = 1.0f - frac(intersect_y);
+                if(IsValidPixel(w_x, w_y))
+                {                
+                    //if(bright > 0.0f)
+                    //{
+                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
+                    //}
+                }
+                //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
+                
+                w_x = w_x + 1;
+                if(IsValidPixel(w_x, w_y))
+                {                
+                    //bright = frac(intersect_y);
+                    //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
+                    //if(bright > 0.0f)
+                    //{
+                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
+                    //}
+                }
+
+                intersect_y += gradient;
+            }
+        }
+        else
+        {
+            for(int i = s_x; i <= e_x; ++i)
+            {
+                int w_x = i;
+                int w_y = floor(intersect_y);
+                //float bright = 1.0f - frac(intersect_y);
+                if(IsValidPixel(w_x, w_y))
+                {                
+                    //if(bright > 0.0f)
+                    //{
+                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
+                    //}
+                }
+                //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
+
+                w_y = w_y + 1;
+                if(IsValidPixel(w_x, w_y))
+                {
+                    //bright = frac(intersect_y);
+                    //if(bright > 0.0f)
+                    //{
+                        AddAccumulateBuffer(w_x, w_y, LineBBoxMax.z, VoxelZOffset, last_three_tile_id, curr_replace_tile_id);
+                    //}
+                }
+                //OutputTexture[int2(w_x, w_y)] = float4(bright, bright, bright, 1.0f);
+
+                intersect_y += gradient;
+            }
         }
     }
 }
