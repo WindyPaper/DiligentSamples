@@ -23,6 +23,7 @@ StructuredBuffer<uint> WorkQueueBuffer;
 ByteAddressBuffer LineSizeBuffer;
 ByteAddressBuffer LineOffsetBuffer;
 StructuredBuffer<uint> RenderQueueBuffer;
+StructuredBuffer<uint> HairVertexShadeData;
 
 groupshared float GroupDepthCache[256];
 groupshared uint GroupPixelVisibilityBit[8];
@@ -184,7 +185,7 @@ void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float d
     // }
 }
 
-void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint TileId)
+void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float3 HairColor1, uint2 TilePixelPos, uint TileId)
 {
     if(!isnan(V0.Pos.x))
     {
@@ -278,7 +279,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                 }
                 e_x_in_tile = min(16, e_x_in_tile);
 
-                float3 test_white_color = float3(1.0f, 1.0f, 1.0f);
+                //float3 test_white_color = float3(1.0f, 1.0f, 1.0f);
 
                 if(steep)
                 {
@@ -295,7 +296,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                             // {                                                            
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
-                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
                         }                        
 
                         w_x = w_x + 1;
@@ -307,7 +309,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                             // {
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
-                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
                         }                        
 
                         intersect_y += gradient;
@@ -329,7 +332,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                             // {
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
-                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
                         }                        
 
                         w_y = w_y + 1;
@@ -341,7 +345,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, uint2 TilePixelPos, uint
                             // {
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
-                            AddToMLABLayer(w_x, w_y, test_white_color, bright, curr_depth);
+                            float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
                         }                        
 
                         intersect_y += gradient;
@@ -504,7 +509,20 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
                 HairVertexData V0 = VerticesDatas[VertexIdx0];
                 HairVertexData V1 = VerticesDatas[VertexIdx1];
 
-                DrawSoftLine(V0, V1, uint2(tile_x_in_pixel, tile_y_in_pixel), tile_y * 16 + tile_x);
+                uint HairPackC0 = HairVertexShadeData[VertexIdx0];
+                uint HairPackC1 = HairVertexShadeData[VertexIdx1];
+
+                float3 HairColor0;
+                HairColor0.x = GLUnpackHalf2x16((HairPackC0 << 4u) & 32752u).x;
+                HairColor0.y = GLUnpackHalf2x16((HairPackC0 >> 7u) & 32752u).x;
+                HairColor0.z = GLUnpackHalf2x16((HairPackC0 >> 22u) << 5u).x;
+
+                float3 HairColor1;
+                HairColor1.x = GLUnpackHalf2x16((HairPackC1 << 4u) & 32752u).x;
+                HairColor1.y = GLUnpackHalf2x16((HairPackC1 >> 7u) & 32752u).x;
+                HairColor1.z = GLUnpackHalf2x16((HairPackC1 >> 22u) << 5u).x;
+
+                DrawSoftLine(V0, V1, HairColor0, HairColor1, uint2(tile_x_in_pixel, tile_y_in_pixel), tile_y * 16 + tile_x);
             }
 
             //blend 

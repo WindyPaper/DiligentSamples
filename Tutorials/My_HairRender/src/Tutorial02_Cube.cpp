@@ -349,7 +349,7 @@ void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
     m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
         m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
     m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
-    m_Camera.SetPos(float3(8.53029823, -10.3290195, -28.675705));
+    m_Camera.SetPos(float3(-5.07728338, -23.9018879, -67.6912384));
     m_Camera.SetMoveSpeed(10.0f);
     m_Camera.SetLookAt(float3(0.834758162, -0.444662303, 0.32473737));
     m_Camera.InvalidUpdate();

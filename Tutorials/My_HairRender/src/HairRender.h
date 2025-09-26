@@ -100,6 +100,7 @@ struct DrawLineFromWorkQueueCS : public PassBaseData
     AutoPtrBuffer WorkQueueBuffer;
     AutoPtrBuffer LineSizeBuffer;
     AutoPtrBuffer RenderQueueBuffer;
+    AutoPtrBuffer HairVertexShadeData;
     
     //AutoPtrTex OutHairRenderTex;
     AutoPtrTex OutDebugLayerTex;

@@ -377,6 +377,15 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
     m_DrawLineFromWorkQueueCS.LineSizeBuffer = m_LineSizeInFrustumVoxelCS.LineSizeBuffer;
     m_DrawLineFromWorkQueueCS.RenderQueueBuffer = m_GetLineVisibilityCS.RenderQueueBuffer;
 
+    //read test hair shade data
+    std::vector<uint> HairVertexShadeVec;
+    ReadFile("./hair_shade_result.bin", HairVertexShadeVec);
+    m_DrawLineFromWorkQueueCS.HairVertexShadeData = CreateStructureBuffer(sizeof(uint), \
+        HairVertexShadeVec.size(), \
+        &HairVertexShadeVec[0], \
+        "Hair shade buffer");
+    
+
     //create result buffer
     float2 ScrPixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
     TextureDesc HairResultTextureDesc;
@@ -405,6 +414,8 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
         m_DrawLineFromWorkQueueCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
     m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "RenderQueueBuffer")->Set( \
         m_DrawLineFromWorkQueueCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairVertexShadeData")->Set( \
+        m_DrawLineFromWorkQueueCS.HairVertexShadeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
     auto pDepthMapParam = m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "FullDepthMap");
     if(pDepthMapParam)
         pDepthMapParam->Set(pDepth->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
