@@ -104,6 +104,10 @@ struct DrawLineFromWorkQueueCS : public PassBaseData
     
     //AutoPtrTex OutHairRenderTex;
     AutoPtrTex OutDebugLayerTex;
+    AutoPtrTex OutDebugLayerInfoTex0;
+    AutoPtrTex OutDebugLayerInfoTex1;
+    AutoPtrTex OutDebugLayerInfoTex2;
+    AutoPtrTex OutDebugLayerInfoTex3;
 };
 
 class HairRender : public IBaseRender

@@ -343,7 +343,7 @@ void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
     CreateOfflineRT();
     CreateRenderTargetPSO();
 
-    float NearPlane = 0.1f;
+    float NearPlane = 10.0f;
     float FarPlane = 10000.f;
     float AspectRatio = static_cast<float>(m_pSwapChain->GetDesc().Width) / static_cast<float>(m_pSwapChain->GetDesc().Height);
     m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,

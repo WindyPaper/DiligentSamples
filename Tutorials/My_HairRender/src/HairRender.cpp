@@ -355,6 +355,8 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
         "LineOffsetBuffer", \
         "RenderQueueBuffer", \
         "FullDepthMap", \
+        "OutDebugPerLayerInfoTex0", \
+        "OutDebugPerLayerInfoTex1", \
         "OutHairRenderTex"
     };
     std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
@@ -399,6 +401,14 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
     HairResultTextureDesc.BindFlags = BIND_UNORDERED_ACCESS;
     m_pDevice->CreateTexture(HairResultTextureDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutDebugLayerTex);
 
+    TextureDesc HairDebugLayerInfoTexDesc = HairResultTextureDesc;
+    HairDebugLayerInfoTexDesc.Name = "Hair Debug texture desc";
+    HairDebugLayerInfoTexDesc.Format = TEX_FORMAT_RGBA32_FLOAT;
+    m_pDevice->CreateTexture(HairDebugLayerInfoTexDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex0);
+    m_pDevice->CreateTexture(HairDebugLayerInfoTexDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex1);
+    m_pDevice->CreateTexture(HairDebugLayerInfoTexDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex2);
+    m_pDevice->CreateTexture(HairDebugLayerInfoTexDesc, nullptr, &m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex3);
+
     ITexture *pDepth = m_pSwapChain->GetDepthTexture();
     
     m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData")->Set(m_HairConstData);
@@ -414,7 +424,7 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
         m_DrawLineFromWorkQueueCS.LineOffsetBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
     m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "RenderQueueBuffer")->Set( \
         m_DrawLineFromWorkQueueCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
-    m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairVertexShadeData")->Set( \
+    SET_SHADER_PARAM_SAFE(m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairVertexShadeData"), \
         m_DrawLineFromWorkQueueCS.HairVertexShadeData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
     auto pDepthMapParam = m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "FullDepthMap");
     if(pDepthMapParam)
@@ -422,6 +432,15 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
     auto pDebugLayerTexParam = m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutDebugLayerTex");
     if(pDebugLayerTexParam)
         pDebugLayerTexParam->Set(m_DrawLineFromWorkQueueCS.OutDebugLayerTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+    SET_SHADER_PARAM_SAFE(m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutDebugPerLayerInfoTex0"), \
+        m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex0->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+    SET_SHADER_PARAM_SAFE(m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutDebugPerLayerInfoTex1"), \
+        m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex1->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+    SET_SHADER_PARAM_SAFE(m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutDebugPerLayerInfoTex2"), \
+        m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex2->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+    SET_SHADER_PARAM_SAFE(m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutDebugPerLayerInfoTex3"), \
+        m_DrawLineFromWorkQueueCS.OutDebugLayerInfoTex3->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
     // m_DrawLineFromWorkQueueCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutHairRenderTex")->Set( \
     //     m_DrawLineFromWorkQueueCS.OutHairRenderTex->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 }

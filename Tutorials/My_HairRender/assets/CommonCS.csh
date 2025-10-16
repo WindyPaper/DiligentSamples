@@ -23,6 +23,13 @@ void swap_uint(inout uint x, inout uint y)
     y = t;
 }
 
+void swap_f3(inout float3 x, inout float3 y)
+{
+    float3 t = x;
+    x = y;
+    y = t;
+}
+
 bool IsValidPixel(int w_x, int w_y)
 {
     bool ret = false;

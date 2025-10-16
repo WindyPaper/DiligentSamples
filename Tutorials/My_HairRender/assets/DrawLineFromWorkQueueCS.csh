@@ -17,6 +17,11 @@ Texture2D<float4> FullDepthMap;
 RWTexture2D<float4> OutHairRenderTex;
 RWTexture2D<uint4> OutDebugLayerTex;
 
+RWTexture2D<float4> OutDebugPerLayerInfoTex0;
+RWTexture2D<float4> OutDebugPerLayerInfoTex1;
+RWTexture2D<float4> OutDebugPerLayerInfoTex2;
+RWTexture2D<float4> OutDebugPerLayerInfoTex3;
+
 //RWStructuredBuffer<uint> OutLineAccumulateBuffer;
 
 StructuredBuffer<uint> WorkQueueBuffer;
@@ -28,6 +33,16 @@ StructuredBuffer<uint> HairVertexShadeData;
 groupshared float GroupDepthCache[256];
 groupshared uint GroupPixelVisibilityBit[8];
 groupshared uint64_t GroupMLABLayer[2048]; //16bit depth + 16bit opacity + 32bit(r11g11b10float)
+
+groupshared uint DebugGroupData[256];
+
+// groupshared float4 DebugLayer0[256];
+// groupshared float4 DebugLayer1[256];
+// groupshared float4 DebugLayer2[256];
+// groupshared float4 DebugLayer3[256];
+groupshared float4 DebugDepthData[256];
+
+// groupshared float2 DebugLastLayerInfo[256];
 
 uint GLPackHalf2x16(float2 value)
 {
@@ -41,7 +56,8 @@ float2 GLUnpackHalf2x16(uint value)
 
 uint GetDefaultInitDepthAndAlphaPackVal()
 {
-    return GLPackHalf2x16(float2(1.0f, 65504.0f));
+    //max fp16 value: 65504
+    return GLPackHalf2x16(float2(1.0f, 65535.0f));
 }
 
 bool AddAccumulateBuffer(int px, int py, float pixel_d)
@@ -98,16 +114,16 @@ bool IsDrawLineValidPixel(int w_x, int w_y, float curr_depth)
 //
 uint PackR11G11B10F(float3 rgb)
 {
-    uint r = (f32tof16(rgb.r) << 7u) & 4192256u;
-    uint g = (f32tof16(rgb.g) >> 4u) & 2047u;
+    uint r = (f32tof16(rgb.r) << 7u) & 4192256u; //0000 0000 0011 1111 1111 1000 0000 0000
+    uint g = (f32tof16(rgb.g) >> 4u) & 2047u;    //0000 0000 0000 0000 0000 0111 1111 1111
     uint b = (f32tof16(rgb.b) >> 5u) << 22u;
     return r | g | b;
 }
 
 float3 UnpackR11G11B10F(uint rgb)
 {
-    float r = f16tof32((rgb << 4u) & 32752u);
-    float g = f16tof32((rgb >> 7u) & 32752u);
+    float r = f16tof32((rgb >> 7u) & 32752u); //0111 1111 1111 0000
+    float g = f16tof32((rgb << 4u) & 32752u); //0111 1111 1111 0000    
     float b = f16tof32((rgb >> 22u) << 5u);
 	return float3(r, g, b);
 }
@@ -138,16 +154,20 @@ uint64_t SetupMLABFragment(float3 rgb, float alpha, float depth)
 uint64_t SetupMLABFragmentFromDepthInt(float3 rgb, float alpha, uint depth_uint)
 {
     uint color_int = PackR11G11B10F(rgb);//((GLPackHalf2x16(float2(rgb.r, 0.0)) << 7u) & 4192256u) | (((GLPackHalf2x16(float2(rgb.g, 0.0)) >> 4u) & 2047u)) | (((GLPackHalf2x16(float2(rgb.b, 0.0)) >> 5u) << 22u));
-    uint64_t depth_opacity_int = ((uint64_t(depth_uint) << 16u) | uint64_t(f32tof16(alpha))) << 32u;
+    uint64_t depth_opacity_int =  uint64_t((depth_uint << 16u) | f32tof16(alpha)) << 32u;
 
     return depth_opacity_int | color_int;
 }
 
-void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float depth)
+void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float depth, uint2 screen_pixel_pos)
 {
     uint init_depth_alpha = GetDefaultInitDepthAndAlphaPackVal();
     //uint curr_depth_alpha = GLPackHalf2x16(float2(alpha, depth));
     uint64_t curr_fragment_pack = SetupMLABFragment(rgb * alpha, 1.0f - alpha, depth);
+
+    float4 debug_c = GetMLABFragmentColor(curr_fragment_pack);
+    // DebugLastLayerInfo[local_y * 16 + local_x] = float2(debug_c.r, debug_c.a);
+
     uint64_t blend_layer_pack_val = curr_fragment_pack;
     for(int i = 0; i < OIT_LAYER_COUNT; ++i)
     {
@@ -158,9 +178,13 @@ void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float d
 
         if(src_val > blend_layer_pack_val)
         {
-            blend_layer_pack_val = src_val;
+            blend_layer_pack_val = src_val;           
         }
     }
+
+    uint SrcDebugVal;
+    InterlockedAdd(DebugGroupData[local_y * 16 + local_x], 1, SrcDebugVal);
+    DebugDepthData[local_y * 16 + local_x][SrcDebugVal] = f16tof32(curr_fragment_pack >> 48);
 
     uint compare_layer_depth_alpha = uint(blend_layer_pack_val >> 32u);
     if(compare_layer_depth_alpha != init_depth_alpha)
@@ -198,7 +222,7 @@ void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float d
     }
 }
 
-void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float3 HairColor1, uint2 TilePixelPos, uint TileId)
+void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float3 HairColor1, uint2 TilePixelPos, uint TileId, uint2 ScreenPixel)
 {
     if(!isnan(V0.Pos.x))
     {
@@ -254,6 +278,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                     swap(StartPixelCoordInTile.y, EndPixelCoordInTile.y);
 
                     swap(StartPixelZ, EndPixelZ);
+
+                    swap_f3(HairColor0, HairColor1);
                 }
 
                 //compute the slope
@@ -271,7 +297,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                 float intersect_y_not_in_tile = StartPixelCoord.y;
                 float test_accu_gradient = 0.0f;
 
-                float lerp_factor = 1.0f / (EndPixelCoordInTile.x - StartPixelCoordInTile.x);
+                //float lerp_factor = 1.0f / (EndPixelCoordInTile.x - StartPixelCoordInTile.x);
                 float lerp_value = 0.0f;
 
                 float round_start_tile_x = round(StartPixelCoordInTile.x);
@@ -280,6 +306,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                 int s_x_in_tile = round_start_tile_x;//(StartPixelCoordInTile.x);
                 int e_x_in_tile = round_end_tile_x;//(EndPixelCoordInTile.x);
                 float intersect_y = (StartPixelCoordInTile.y);// +  gradient * (round_start_tile_x - StartPixelCoordInTile.x);
+                float lerp_factor = 1.0f / (e_x_in_tile - s_x_in_tile);
                 
                 // uint loop_num = 0;
                 while(s_x_in_tile < 0 && intersect_y < 0.0f)
@@ -291,8 +318,9 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                     // ++loop_num;
                 }
                 e_x_in_tile = min(16, e_x_in_tile);
+                lerp_value = saturate(lerp_value);
 
-                //float3 test_white_color = float3(1.0f, 1.0f, 1.0f);
+                float3 test_white_color = float3(1.0f, 1.0f, 1.0f);
 
                 if(steep)
                 {
@@ -310,7 +338,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
                         }                        
 
                         w_x = w_x + 1;
@@ -323,11 +351,12 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
                         }                        
 
                         intersect_y += gradient;
                         lerp_value += lerp_factor;
+                        lerp_value = saturate(lerp_value);
                     }
                 }
                 else
@@ -346,7 +375,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
                         }                        
 
                         w_y = w_y + 1;
@@ -359,11 +388,12 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
                         }                        
 
                         intersect_y += gradient;
                         lerp_value += lerp_factor;
+                        lerp_value = saturate(lerp_value);
                     }
                 }
 
@@ -419,24 +449,52 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
     }
 }
 
-void BlendMLABToOutput(uint local_x, uint local_y, uint2 screen_pixel_pos)
+float4 BlendMLAB(uint local_x, uint local_y, float2 screen_pixel_pos)
 {
     uint64_t local_layer_pack_vals[OIT_LAYER_COUNT];
 
     for(int i = 0; i < OIT_LAYER_COUNT; ++i)
     {
-        local_layer_pack_vals[i] = GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + i];
+        local_layer_pack_vals[i] = GroupMLABLayer[(local_y * 16 + local_x) * OIT_LAYER_COUNT + i];        
     }
 
-    float4 output_color = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    float blend_alpha = 1.0f;
+    float4 output_color = float4(0.0f, 0.0f, 0.0f, blend_alpha);
     uint init_depth_alpha = GetDefaultInitDepthAndAlphaPackVal();
     if((local_layer_pack_vals[0] >> 32u) != init_depth_alpha)
     {
-        float3 accumu_color = float3(0.0f, 0.0f, 0.0f);
-        float blend_alpha = 1.0f;
+        float3 accumu_color = float3(0.0f, 0.0f, 0.0f);        
         for(int i = 0; i < OIT_LAYER_COUNT; ++i)
         {            
-            float4 layer_color = GetMLABFragmentColor(local_layer_pack_vals[i]) * blend_alpha;            
+            float4 layer_color = GetMLABFragmentColor(local_layer_pack_vals[i]) * blend_alpha;  
+
+            float4 src_color = GetMLABFragmentColor(local_layer_pack_vals[i]);          
+
+            uint layer_depth_uint = uint(local_layer_pack_vals[i] >> 48u);
+
+            uint debug_depth_idx = min(3, i);
+            float4 out_debug_color = float4(src_color.r, src_color.g, src_color.a, f16tof32(layer_depth_uint));
+
+            if(i == 0)
+            {
+                // DebugLayer0[local_y * 16 + local_x] = out_debug_color;
+                OutDebugPerLayerInfoTex0[screen_pixel_pos] = out_debug_color;
+            }
+            else if(i == 1)
+            {
+                // DebugLayer1[local_y * 16 + local_x] = out_debug_color;
+                OutDebugPerLayerInfoTex1[screen_pixel_pos] = out_debug_color;
+            }
+            else if(i == 2)
+            {
+                // DebugLayer2[local_y * 16 + local_x] = out_debug_color;
+                OutDebugPerLayerInfoTex2[screen_pixel_pos] = out_debug_color;
+            }
+            else if(i == 3)
+            {
+                // DebugLayer3[local_y * 16 + local_x] = out_debug_color;
+                OutDebugPerLayerInfoTex3[screen_pixel_pos] = out_debug_color;
+            }
 
             accumu_color += layer_color.rgb;
             blend_alpha *= layer_color.a;
@@ -450,13 +508,15 @@ void BlendMLABToOutput(uint local_x, uint local_y, uint2 screen_pixel_pos)
                 {
                     break;
                 }
-            }
+            }            
         }
 
         output_color = float4(accumu_color, blend_alpha);
     }
 
-    OutHairRenderTex[screen_pixel_pos] = output_color;
+    //OutHairRenderTex[screen_pixel_pos] = output_color;
+    output_color.rg = output_color.gr;
+    return output_color;
 }
 
 //16X16 pixel per tile
@@ -471,8 +531,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
     uint tile_y = (work_queue_value >> 12u) & 4095u;
     uint valid_offset_buf_idx = work_queue_value >> 24u;
 
-    //init MLAB Layer
-    //max fp16 value: 65504
+    //init MLAB Layer    
     uint64_t pack_init_mlab_data = uint64_t(GetDefaultInitDepthAndAlphaPackVal());
     uint64_t init_mlab_data = pack_init_mlab_data << 32u;
     for(int i = 0; i < OIT_LAYER_COUNT; ++i)
@@ -493,12 +552,26 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         GroupPixelVisibilityBit[thread_group_idx] = 0u;
     }
 
+    float4 bg_color = OutHairRenderTex[screen_pixel_pos];
+
     OutDebugLayerTex[screen_pixel_pos.xy] = uint4(0, 0, 0, 0);//(0.0f, 0.0f, 0.0f, 0.0f);
     uint test_val = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;    
 
+    DebugGroupData[local_thread_id.y * 16 + local_thread_id.x] = 0;
+    // DebugLayer0[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // DebugLayer1[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // DebugLayer2[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // DebugLayer3[local_thread_id.y * 16 + local_thread_id.x] = float4(0.123f, 0.123f, 0.123f, 0.123f);
+    // DebugLastLayerInfo[local_thread_id.y * 16 + local_thread_id.x] = float2(0.123f, 0.123f);
+    DebugDepthData[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    OutDebugPerLayerInfoTex0[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    OutDebugPerLayerInfoTex1[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    OutDebugPerLayerInfoTex2[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    OutDebugPerLayerInfoTex3[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
     GroupMemoryBarrierWithGroupSync();
 
-    OutDebugLayerTex[screen_pixel_pos.xy].z = 10086;
+    // OutDebugLayerTex[screen_pixel_pos.xy].z = 10086;
 
     // for slice iterator
     for(uint curr_slice_num = valid_offset_buf_idx; curr_slice_num < VOXEL_SLICE_NUM; ++curr_slice_num)
@@ -507,13 +580,13 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
         uint offset_idx = LineOffsetBuffer.Load(voxel_data_idx * 4);
         uint line_size = LineSizeBuffer.Load(voxel_data_idx * 4);
 
-        OutDebugLayerTex[screen_pixel_pos.xy].xy = uint2(voxel_data_idx, test_val); 
+        // OutDebugLayerTex[screen_pixel_pos.xy].xy = uint2(voxel_data_idx, test_val); 
         
         if(line_size > 0)
         {
             // OutHairRenderTex[screen_pixel_pos.xy] = float4(0.0f, 0.0f, id.x, id.y); 
-            OutDebugLayerTex[screen_pixel_pos.xy].z = voxel_data_idx;
-            ++OutDebugLayerTex[screen_pixel_pos.xy].w;
+            // OutDebugLayerTex[screen_pixel_pos.xy].z = voxel_data_idx;
+            // ++OutDebugLayerTex[screen_pixel_pos.xy].w;
             for(uint curr_line_idx = thread_group_idx; curr_line_idx < line_size; curr_line_idx += 16 * 16)
             {                
                 uint line_idx = RenderQueueBuffer[offset_idx + curr_line_idx];
@@ -526,32 +599,62 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
                 uint HairPackC0 = HairVertexShadeData[VertexIdx0];
                 uint HairPackC1 = HairVertexShadeData[VertexIdx1];
 
-                float3 HairColor0;
-                HairColor0.x = GLUnpackHalf2x16((HairPackC0 << 4u) & 32752u).x;
-                HairColor0.y = GLUnpackHalf2x16((HairPackC0 >> 7u) & 32752u).x;
-                HairColor0.z = GLUnpackHalf2x16((HairPackC0 >> 22u) << 5u).x;
+                float3 HairColor0 = UnpackR11G11B10F(HairPackC0);
+                // HairColor0.x = GLUnpackHalf2x16((HairPackC0 << 4u) & 32752u).x;
+                // HairColor0.y = GLUnpackHalf2x16((HairPackC0 >> 7u) & 32752u).x;
+                // HairColor0.z = GLUnpackHalf2x16((HairPackC0 >> 22u) << 5u).x;
 
-                float3 HairColor1;
-                HairColor1.x = GLUnpackHalf2x16((HairPackC1 << 4u) & 32752u).x;
-                HairColor1.y = GLUnpackHalf2x16((HairPackC1 >> 7u) & 32752u).x;
-                HairColor1.z = GLUnpackHalf2x16((HairPackC1 >> 22u) << 5u).x;
+                float3 HairColor1 = UnpackR11G11B10F(HairPackC1);
+                // HairColor1.x = GLUnpackHalf2x16((HairPackC1 << 4u) & 32752u).x;
+                // HairColor1.y = GLUnpackHalf2x16((HairPackC1 >> 7u) & 32752u).x;
+                // HairColor1.z = GLUnpackHalf2x16((HairPackC1 >> 22u) << 5u).x;
 
-                // HairColor0 = float3(0.0f, 0.0f, 0.0f);
-                // HairColor1 = float3(1.0f, 1.0f, 1.0f);
+                // HairColor0 = float3(0.5f, 0.5f, 0.5f);
+                // HairColor1 = float3(0.5f, 0.5f, 0.5f);
 
-                DrawSoftLine(V0, V1, HairColor0, HairColor1, uint2(tile_x_in_pixel, tile_y_in_pixel), tile_y * 16 + tile_x);
+                DrawSoftLine(V0, V1, HairColor0, HairColor1, uint2(tile_x_in_pixel, tile_y_in_pixel), tile_y * 16 + tile_x, screen_pixel_pos);
             }
 
             // //blend 
-            //GroupMemoryBarrierWithGroupSync();
+            GroupMemoryBarrierWithGroupSync();
 
-            // BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
+            //BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
+            float4 hair_result = BlendMLAB(local_thread_id.x, local_thread_id.y, screen_pixel_pos);        
+
+            float4 output_blend_color = float4(bg_color.rgb * hair_result.a + hair_result.rgb, 1.0f);
+            
+            OutHairRenderTex[screen_pixel_pos] = output_blend_color;//lerp(bg_color, hair_result, hair_result.a);
+
+            OutDebugLayerTex[screen_pixel_pos].x = DebugGroupData[local_thread_id.y * 16 + local_thread_id.x];
+            OutDebugLayerTex[screen_pixel_pos].y = uint(hair_result.r * 100.0f);
+            OutDebugLayerTex[screen_pixel_pos].z = uint(hair_result.a * 255u);
+
+            // OutDebugPerLayerInfoTex0[screen_pixel_pos] = DebugLayer0[local_thread_id.y * 16 + local_thread_id.x];
+            // OutDebugPerLayerInfoTex1[screen_pixel_pos] = DebugLayer1[local_thread_id.y * 16 + local_thread_id.x];
+            // OutDebugPerLayerInfoTex2[screen_pixel_pos] = DebugLayer2[local_thread_id.y * 16 + local_thread_id.x];
+            // OutDebugPerLayerInfoTex3[screen_pixel_pos] = DebugLayer3[local_thread_id.y * 16 + local_thread_id.x];
         }
 
         //blend 
-        GroupMemoryBarrierWithGroupSync();
+        // GroupMemoryBarrierWithGroupSync();
 
-        BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
+        // //BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
+        // float4 hair_result = BlendMLAB(local_thread_id.x, local_thread_id.y);        
+
+        // float4 output_blend_color = float4(bg_color.rgb * hair_result.a + hair_result.rgb, 1.0f);
+        
+        // OutHairRenderTex[screen_pixel_pos] = output_blend_color;//lerp(bg_color, hair_result, hair_result.a);
+
+        // OutDebugLayerTex[screen_pixel_pos].x = DebugGroupData[local_thread_id.y * 16 + local_thread_id.x];
+        // OutDebugLayerTex[screen_pixel_pos].y = uint(hair_result.r * 100.0f);
+        // OutDebugLayerTex[screen_pixel_pos].z = uint(hair_result.a * 255u);
+
+        // OutDebugPerLayerInfoTex0[screen_pixel_pos].xy = DebugLayer0[local_thread_id.y * 16 + local_thread_id.x];
+        // OutDebugPerLayerInfoTex0[screen_pixel_pos].zw = DebugLayer1[local_thread_id.y * 16 + local_thread_id.x];
+        // OutDebugPerLayerInfoTex1[screen_pixel_pos].xy = DebugLayer2[local_thread_id.y * 16 + local_thread_id.x];
+        // OutDebugPerLayerInfoTex1[screen_pixel_pos].zw = DebugLastLayerInfo[local_thread_id.y * 16 + local_thread_id.x];
+
+        // OutDebugPerLayerInfoTex1[screen_pixel_pos] = bg_color;
     }
     
 
