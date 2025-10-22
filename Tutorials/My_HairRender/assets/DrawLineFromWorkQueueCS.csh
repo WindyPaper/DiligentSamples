@@ -15,12 +15,12 @@ StructuredBuffer<uint> IdxData;
 
 Texture2D<float4> FullDepthMap;
 RWTexture2D<float4> OutHairRenderTex;
-RWTexture2D<uint4> OutDebugLayerTex;
+// RWTexture2D<uint4> OutDebugLayerTex;
 
-RWTexture2D<float4> OutDebugPerLayerInfoTex0;
-RWTexture2D<float4> OutDebugPerLayerInfoTex1;
-RWTexture2D<float4> OutDebugPerLayerInfoTex2;
-RWTexture2D<float4> OutDebugPerLayerInfoTex3;
+// RWTexture2D<float4> OutDebugPerLayerInfoTex0;
+// RWTexture2D<float4> OutDebugPerLayerInfoTex1;
+// RWTexture2D<float4> OutDebugPerLayerInfoTex2;
+// RWTexture2D<float4> OutDebugPerLayerInfoTex3;
 
 //RWStructuredBuffer<uint> OutLineAccumulateBuffer;
 
@@ -34,13 +34,13 @@ groupshared float GroupDepthCache[256];
 groupshared uint GroupPixelVisibilityBit[8];
 groupshared uint64_t GroupMLABLayer[2048]; //16bit depth + 16bit opacity + 32bit(r11g11b10float)
 
-groupshared uint DebugGroupData[256];
+// groupshared uint DebugGroupData[256];
 
 // groupshared float4 DebugLayer0[256];
 // groupshared float4 DebugLayer1[256];
 // groupshared float4 DebugLayer2[256];
 // groupshared float4 DebugLayer3[256];
-groupshared float4 DebugDepthData[256];
+// groupshared float4 DebugDepthData[256];
 
 // groupshared float2 DebugLastLayerInfo[256];
 
@@ -56,7 +56,6 @@ float2 GLUnpackHalf2x16(uint value)
 
 uint GetDefaultInitDepthAndAlphaPackVal()
 {
-    //max fp16 value: 65504
     return GLPackHalf2x16(float2(1.0f, 65535.0f));
 }
 
@@ -165,7 +164,7 @@ void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float d
     //uint curr_depth_alpha = GLPackHalf2x16(float2(alpha, depth));
     uint64_t curr_fragment_pack = SetupMLABFragment(rgb * alpha, 1.0f - alpha, depth);
 
-    float4 debug_c = GetMLABFragmentColor(curr_fragment_pack);
+    // float4 debug_c = GetMLABFragmentColor(curr_fragment_pack);
     // DebugLastLayerInfo[local_y * 16 + local_x] = float2(debug_c.r, debug_c.a);
 
     uint64_t blend_layer_pack_val = curr_fragment_pack;
@@ -182,9 +181,9 @@ void AddToMLABLayer(uint local_x, uint local_y, float3 rgb, float alpha, float d
         }
     }
 
-    uint SrcDebugVal;
-    InterlockedAdd(DebugGroupData[local_y * 16 + local_x], 1, SrcDebugVal);
-    DebugDepthData[local_y * 16 + local_x][SrcDebugVal] = f16tof32(curr_fragment_pack >> 48);
+    // uint SrcDebugVal;
+    // InterlockedAdd(DebugGroupData[local_y * 16 + local_x], 1, SrcDebugVal);
+    // DebugDepthData[local_y * 16 + local_x][SrcDebugVal] = f16tof32(curr_fragment_pack >> 48);
 
     uint compare_layer_depth_alpha = uint(blend_layer_pack_val >> 32u);
     if(compare_layer_depth_alpha != init_depth_alpha)
@@ -468,33 +467,33 @@ float4 BlendMLAB(uint local_x, uint local_y, float2 screen_pixel_pos)
         {            
             float4 layer_color = GetMLABFragmentColor(local_layer_pack_vals[i]) * blend_alpha;  
 
-            float4 src_color = GetMLABFragmentColor(local_layer_pack_vals[i]);          
+            // float4 src_color = GetMLABFragmentColor(local_layer_pack_vals[i]);          
 
-            uint layer_depth_uint = uint(local_layer_pack_vals[i] >> 48u);
+            // uint layer_depth_uint = uint(local_layer_pack_vals[i] >> 48u);
 
-            uint debug_depth_idx = min(3, i);
-            float4 out_debug_color = float4(src_color.r, src_color.g, src_color.a, f16tof32(layer_depth_uint));
+            // uint debug_depth_idx = min(3, i);
+            // float4 out_debug_color = float4(src_color.r, src_color.g, src_color.a, f16tof32(layer_depth_uint));
 
-            if(i == 0)
-            {
-                // DebugLayer0[local_y * 16 + local_x] = out_debug_color;
-                OutDebugPerLayerInfoTex0[screen_pixel_pos] = out_debug_color;
-            }
-            else if(i == 1)
-            {
-                // DebugLayer1[local_y * 16 + local_x] = out_debug_color;
-                OutDebugPerLayerInfoTex1[screen_pixel_pos] = out_debug_color;
-            }
-            else if(i == 2)
-            {
-                // DebugLayer2[local_y * 16 + local_x] = out_debug_color;
-                OutDebugPerLayerInfoTex2[screen_pixel_pos] = out_debug_color;
-            }
-            else if(i == 3)
-            {
-                // DebugLayer3[local_y * 16 + local_x] = out_debug_color;
-                OutDebugPerLayerInfoTex3[screen_pixel_pos] = out_debug_color;
-            }
+            // if(i == 0)
+            // {
+            //     // DebugLayer0[local_y * 16 + local_x] = out_debug_color;
+            //     OutDebugPerLayerInfoTex0[screen_pixel_pos] = out_debug_color;
+            // }
+            // else if(i == 1)
+            // {
+            //     // DebugLayer1[local_y * 16 + local_x] = out_debug_color;
+            //     OutDebugPerLayerInfoTex1[screen_pixel_pos] = out_debug_color;
+            // }
+            // else if(i == 2)
+            // {
+            //     // DebugLayer2[local_y * 16 + local_x] = out_debug_color;
+            //     OutDebugPerLayerInfoTex2[screen_pixel_pos] = out_debug_color;
+            // }
+            // else if(i == 3)
+            // {
+            //     // DebugLayer3[local_y * 16 + local_x] = out_debug_color;
+            //     OutDebugPerLayerInfoTex3[screen_pixel_pos] = out_debug_color;
+            // }
 
             accumu_color += layer_color.rgb;
             blend_alpha *= layer_color.a;
@@ -554,20 +553,20 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
 
     float4 bg_color = OutHairRenderTex[screen_pixel_pos];
 
-    OutDebugLayerTex[screen_pixel_pos.xy] = uint4(0, 0, 0, 0);//(0.0f, 0.0f, 0.0f, 0.0f);
-    uint test_val = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;    
+    // OutDebugLayerTex[screen_pixel_pos.xy] = uint4(0, 0, 0, 0);//(0.0f, 0.0f, 0.0f, 0.0f);
+    // uint test_val = (tile_y * DownSampleDepthSize.x + tile_x) * VOXEL_SLICE_NUM + valid_offset_buf_idx;    
 
-    DebugGroupData[local_thread_id.y * 16 + local_thread_id.x] = 0;
-    // DebugLayer0[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    // DebugLayer1[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    // DebugLayer2[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    // DebugLayer3[local_thread_id.y * 16 + local_thread_id.x] = float4(0.123f, 0.123f, 0.123f, 0.123f);
-    // DebugLastLayerInfo[local_thread_id.y * 16 + local_thread_id.x] = float2(0.123f, 0.123f);
-    DebugDepthData[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    OutDebugPerLayerInfoTex0[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    OutDebugPerLayerInfoTex1[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    OutDebugPerLayerInfoTex2[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    OutDebugPerLayerInfoTex3[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // DebugGroupData[local_thread_id.y * 16 + local_thread_id.x] = 0;
+    // // DebugLayer0[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // // DebugLayer1[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // // DebugLayer2[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // // DebugLayer3[local_thread_id.y * 16 + local_thread_id.x] = float4(0.123f, 0.123f, 0.123f, 0.123f);
+    // // DebugLastLayerInfo[local_thread_id.y * 16 + local_thread_id.x] = float2(0.123f, 0.123f);
+    // DebugDepthData[local_thread_id.y * 16 + local_thread_id.x] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // OutDebugPerLayerInfoTex0[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // OutDebugPerLayerInfoTex1[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // OutDebugPerLayerInfoTex2[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // OutDebugPerLayerInfoTex3[screen_pixel_pos] = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
     GroupMemoryBarrierWithGroupSync();
 
@@ -625,9 +624,9 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
             
             OutHairRenderTex[screen_pixel_pos] = output_blend_color;//lerp(bg_color, hair_result, hair_result.a);
 
-            OutDebugLayerTex[screen_pixel_pos].x = DebugGroupData[local_thread_id.y * 16 + local_thread_id.x];
-            OutDebugLayerTex[screen_pixel_pos].y = uint(hair_result.r * 100.0f);
-            OutDebugLayerTex[screen_pixel_pos].z = uint(hair_result.a * 255u);
+            // OutDebugLayerTex[screen_pixel_pos].x = DebugGroupData[local_thread_id.y * 16 + local_thread_id.x];
+            // OutDebugLayerTex[screen_pixel_pos].y = uint(hair_result.r * 100.0f);
+            // OutDebugLayerTex[screen_pixel_pos].z = uint(hair_result.a * 255u);
 
             // OutDebugPerLayerInfoTex0[screen_pixel_pos] = DebugLayer0[local_thread_id.y * 16 + local_thread_id.x];
             // OutDebugPerLayerInfoTex1[screen_pixel_pos] = DebugLayer1[local_thread_id.y * 16 + local_thread_id.x];
