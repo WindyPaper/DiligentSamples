@@ -225,6 +225,10 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
 {
     if(!isnan(V0.Pos.x))
     {
+        float hair_mat_scale = 0.5f;
+        float hair_v0_width = hair_mat_scale * float(V0.Misc & 65535u);
+        float hair_v1_width = hair_mat_scale * float(V1.Misc & 65535u);
+
         float4 VNDC0 = mul(float4(V0.Pos, 1.0f), ViewProj);
         VNDC0.xyz /= VNDC0.w;
         VNDC0.xy = VNDC0.xy * 0.5f + float2(0.5f, 0.5f);
@@ -238,9 +242,24 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
             //empty
         }
         else
-        {
+        {        
             float2 StartPixelCoord = (VNDC0.xy * ScreenSize);
+            float2 OffsetStartPixelCoord = StartPixelCoord + float2(0.5f, 0.5f);
+            float2 OffsetStartPixelNDCXY = OffsetStartPixelCoord / ScreenSize * 2.0f - 1.0f;
+            float4 OffsetStartPos4 = mul(float4(OffsetStartPixelNDCXY, VNDC0.z, 1.0f), InvViewProj);
+            OffsetStartPos4.xyz = OffsetStartPos4.xyz / OffsetStartPos4.w;
+            float V0Alpha = length(OffsetStartPos4.xyz - V0.Pos) * hair_v0_width;
+            V0Alpha = max(0.0001f, V0Alpha);
+            V0Alpha = min(1.0f, V0Alpha);
+
             float2 EndPixelCoord = (VNDC1.xy * ScreenSize);
+            float2 OffsetEndPixelCoord = EndPixelCoord + float2(0.5f, 0.5f);
+            float2 OffsetEndPixelNDCXY = OffsetEndPixelCoord / ScreenSize * 2.0f - 1.0f;
+            float4 OffsetEndPos4 = mul(float4(OffsetEndPixelNDCXY, VNDC1.z, 1.0f), InvViewProj);
+            OffsetEndPos4.xyz = OffsetEndPos4.xyz / OffsetEndPos4.w;
+            float V1Alpha = length(OffsetEndPos4.xyz - V1.Pos) * hair_v1_width;
+            V1Alpha = max(0.0001f, V1Alpha);
+            V1Alpha = min(1.0f, V1Alpha);
 
             float2 StartPixelCoordInTile = (StartPixelCoord) - TilePixelPos;
             float2 EndPixelCoordInTile = (EndPixelCoord) - TilePixelPos;
@@ -279,6 +298,8 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                     swap(StartPixelZ, EndPixelZ);
 
                     swap_f3(HairColor0, HairColor1);
+
+                    swap(V0Alpha, V1Alpha);
                 }
 
                 //compute the slope
@@ -328,6 +349,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                         int w_x = floor(intersect_y);
                         int w_y = i;                        
                         float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                        float curr_alpha = lerp(V0Alpha, V1Alpha, lerp_value);
                         bool is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
                         if(is_valid_pixel)
                         {
@@ -337,7 +359,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright * curr_alpha, curr_depth, ScreenPixel);
                         }                        
 
                         w_x = w_x + 1;
@@ -350,7 +372,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright * curr_alpha, curr_depth, ScreenPixel);
                         }                        
 
                         intersect_y += gradient;
@@ -365,6 +387,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                         int w_x = i;
                         int w_y = floor(intersect_y);
                         float curr_depth = lerp(StartPixelZ, EndPixelZ, lerp_value);
+                        float curr_alpha = lerp(V0Alpha, V1Alpha, lerp_value);
                         bool is_valid_pixel = IsDrawLineValidPixel(w_x, w_y, curr_depth);
                         if(is_valid_pixel)
                         {
@@ -374,7 +397,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright * curr_alpha, curr_depth, ScreenPixel);
                         }                        
 
                         w_y = w_y + 1;
@@ -387,7 +410,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
                             //     OutHairRenderTex[uint2(w_x + TilePixelPos.x, w_y + TilePixelPos.y)] = float4(test_white_color * bright, 1.0f);
                             // }
                             float3 hair_lerp_color = lerp(HairColor0, HairColor1, lerp_value);
-                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright, curr_depth, ScreenPixel);
+                            AddToMLABLayer(w_x, w_y, hair_lerp_color, bright * curr_alpha, curr_depth, ScreenPixel);
                         }                        
 
                         intersect_y += gradient;
@@ -596,7 +619,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
                 HairVertexData V1 = VerticesDatas[VertexIdx1];
 
                 uint HairPackC0 = HairVertexShadeData[VertexIdx0];
-                uint HairPackC1 = HairVertexShadeData[VertexIdx1];
+                uint HairPackC1 = HairVertexShadeData[VertexIdx1];                
 
                 float3 HairColor0 = UnpackR11G11B10F(HairPackC0);
                 // HairColor0.x = GLUnpackHalf2x16((HairPackC0 << 4u) & 32752u).x;
