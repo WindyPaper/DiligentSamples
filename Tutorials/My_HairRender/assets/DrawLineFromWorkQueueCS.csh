@@ -641,7 +641,43 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, \
             GroupMemoryBarrierWithGroupSync();
 
             //BlendMLABToOutput(local_thread_id.x, local_thread_id.y, screen_pixel_pos);
-            float4 hair_result = BlendMLAB(local_thread_id.x, local_thread_id.y, screen_pixel_pos);        
+            float4 hair_result = BlendMLAB(local_thread_id.x, local_thread_id.y, screen_pixel_pos);  
+
+            if(hair_result.a < 0.01f) //near opaque
+            {
+                GroupDepthCache[local_thread_id.y * 16 + local_thread_id.x] = 0.0f;
+
+                //add visibility bit flag
+                uint BitsIdx = thread_group_idx >> 5;
+                uint BitsValue = thread_group_idx & 31;
+                InterlockedOr(GroupPixelVisibilityBit[BitsIdx], 1u << BitsValue);
+            }
+            
+            GroupMemoryBarrierWithGroupSync();
+
+            // if (((((GroupPixelVisibilityBit[1u] & GroupPixelVisibilityBit[0u]) == 4294967295u) && ((GroupPixelVisibilityBit[3u] & GroupPixelVisibilityBit[2u]) == 4294967295u)) && ((GroupPixelVisibilityBit[5u] & GroupPixelVisibilityBit[4u]) == 4294967295u)) && ((GroupPixelVisibilityBit[7u] & GroupPixelVisibilityBit[6u]) == 4294967295u))
+            // {
+            //     float4 output_blend_color = float4(bg_color.rgb * hair_result.a + hair_result.rgb, 1.0f);
+            
+            //     OutHairRenderTex[screen_pixel_pos] = output_blend_color;
+
+            //     break;
+
+            // }
+
+            uint bit_output = 4294967295u;
+            for(int bit_idx = 0; bit_idx < 8; ++bit_idx)
+            {
+                bit_output = bit_output & GroupPixelVisibilityBit[bit_idx];
+            }
+            if(bit_output == 4294967295u) //pixel full
+            {
+                float4 output_blend_color = float4(bg_color.rgb * hair_result.a + hair_result.rgb, 1.0f);
+            
+                OutHairRenderTex[screen_pixel_pos] = output_blend_color;
+
+                break;
+            }
 
             float4 output_blend_color = float4(bg_color.rgb * hair_result.a + hair_result.rgb, 1.0f);
             
