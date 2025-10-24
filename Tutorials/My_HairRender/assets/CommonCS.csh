@@ -4,9 +4,11 @@ cbuffer HairConstData
     float4x4 ViewProj;
     float4x4 InvViewProj;
     float4 HairBBoxMin;
-    float4 HairBBoxSize;
+    float4 HairBBoxToCamMinMaxDist;
 	float2 ScreenSize;
     float2 DownSampleDepthSize;
+    float4 CameraForward;
+    float4 CameraWPos;
 };
 
 void swap(inout float x, inout float y)

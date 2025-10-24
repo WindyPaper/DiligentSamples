@@ -1,6 +1,7 @@
 ﻿#include "HairRender.h"
 
 #include "MapHelper.hpp"
+#include "../../../../DiligentCore/ThirdParty/glew/include/GL/glew.h"
 
 
 namespace Diligent {
@@ -692,8 +693,35 @@ void Diligent::HairRender::RunDrawLineFromWorkQueueCS(ITexture *pRTView)
     }
 }
 
-void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj, ITexture *pRTView)
+void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, ITexture *pRTView, const float3 &camera_forward, const float3 &cam_pos)
 {
+    //float hair_bbox_min_dir_length = length(m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin);
+    float3 hair_bbox_min_dir = (m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin);// / hair_bbox_min_dir_length;
+    float3 hair_bbox_min_dir_cs = float4(hair_bbox_min_dir, 0.0f) * view_mat;
+    float3 hair_bbox_min_v_cs = float4(m_HairRawData.HairBBoxMin, 1.0f) * view_mat;
+    float3 hair_bbox_v[8];
+    hair_bbox_v[0] = hair_bbox_min_v_cs;
+    hair_bbox_v[1] = hair_bbox_min_v_cs + float3(hair_bbox_min_dir_cs[0], 0.0f, 0.0f);
+    hair_bbox_v[2] = hair_bbox_min_v_cs + float3(0.0f, hair_bbox_min_dir_cs[1], 0.0f);
+    hair_bbox_v[3] = hair_bbox_min_v_cs + float3(0.0f, 0.0f, hair_bbox_min_dir_cs[2]);
+    hair_bbox_v[4] = hair_bbox_min_v_cs + float3(hair_bbox_min_dir_cs[0], hair_bbox_min_dir_cs[1], 0.0f);
+    hair_bbox_v[5] = hair_bbox_min_v_cs + float3(hair_bbox_min_dir_cs[0], 0.0f, hair_bbox_min_dir_cs[2]);
+    hair_bbox_v[6] = hair_bbox_min_v_cs + float3(0.0f, hair_bbox_min_dir_cs[1], hair_bbox_min_dir_cs[2]);
+    hair_bbox_v[7] = hair_bbox_min_v_cs + float3(hair_bbox_min_dir_cs[0], hair_bbox_min_dir_cs[1], hair_bbox_min_dir_cs[2]);
+
+    float max_float = std::numeric_limits<float>::max();
+    float3 hair_bbox_min_cs = Diligent::float3(max_float, max_float, max_float);
+    float min_float = std::numeric_limits<float>::min();
+    float3 hair_bbox_max_cs = Diligent::float3(min_float, min_float, min_float);
+    for(int i = 0; i < 8; ++i)
+    {
+        const float3 &data = hair_bbox_v[i];
+
+        hair_bbox_min_cs = Diligent::min(hair_bbox_min_cs, data);
+        hair_bbox_max_cs = Diligent::max(hair_bbox_max_cs, data);
+    }
+    
+    
     float2 PixelSize = float2(m_pSwapChain->GetDesc().Width, m_pSwapChain->GetDesc().Height);
     {
         // Map the buffer and write current world-view-projection matrix
@@ -703,7 +731,9 @@ void Diligent::HairRender::RunCS(const float4x4 &viwe_proj, const float4x4 &inv_
         CBConstants->ScreenSize = PixelSize;
         CBConstants->DownSampleDepthSize = float2(m_DownSampledDepthSize.x, m_DownSampledDepthSize.y);
         CBConstants->HairBBoxMin = float4(m_HairRawData.HairBBoxMin, 1.0f);
-        CBConstants->HairBBoxSize = float4(m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin, 1.0f);
+        CBConstants->HairBBoxToCamMinMaxDist = float4(hair_bbox_min_cs.z, hair_bbox_max_cs.z, 1.0f, 1.0f);
+        CBConstants->CameraForward = float4(camera_forward, 1.0f);
+        CBConstants->CameraWPos = float4(cam_pos, 1.0f);
     }
 
     RunDownSampledDepthMapCS();

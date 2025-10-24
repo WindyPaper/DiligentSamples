@@ -90,8 +90,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             if(!IsOutScreen)
             {
                 //voxel z offset
-                float LineDistRadio = max(dot(normalize(V0.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)), dot(normalize(V1.Pos - HairBBoxMin.xyz), normalize(HairBBoxSize.xyz)));
-                uint VoxelZOffset = saturate(LineDistRadio) * (VOXEL_SLICE_NUM - 1);
+                float proj_length = max(dot((V0.Pos - CameraWPos.xyz), CameraForward.xyz), dot((V1.Pos - CameraWPos.xyz), CameraForward.xyz));
+                uint VoxelZOffset = saturate(proj_length - HairBBoxToCamMinMaxDist.x) / (HairBBoxToCamMinMaxDist.y - HairBBoxToCamMinMaxDist.x) * (VOXEL_SLICE_NUM - 1);
 
                 float2 StartPixelCoord = VNDC0.xy * ScreenSize;
                 float2 EndPixelCoord = VNDC1.xy * ScreenSize;

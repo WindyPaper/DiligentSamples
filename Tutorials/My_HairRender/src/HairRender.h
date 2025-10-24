@@ -22,9 +22,11 @@ struct HairConstData
     float4x4 ViewProj;
     float4x4 InvViewProj;
     float4 HairBBoxMin;
-    float4 HairBBoxSize;
+    float4 HairBBoxToCamMinMaxDist;
     float2 ScreenSize;
     float2 DownSampleDepthSize;
+    float4 CameraForward;
+    float4 CameraWPos;
 };
 
 struct PassBaseData
@@ -141,7 +143,7 @@ public:
     void RunGetWorkQueueCS();
     void RunDrawLineFromWorkQueueCS(ITexture *pRTView);
     
-    void RunCS(const float4x4 &viwe_proj, const float4x4 &inv_view_proj, ITexture *pRTView);
+    void RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, ITexture *pRTView, const float3 &cam_forward, const float3 &cam_pos);
 
 private:
     HairData m_HairRawData;
