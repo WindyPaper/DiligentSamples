@@ -91,7 +91,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             {
                 //voxel z offset
                 float proj_length = max(dot((V0.Pos - CameraWPos.xyz), CameraForward.xyz), dot((V1.Pos - CameraWPos.xyz), CameraForward.xyz));
-                uint VoxelZOffset = saturate(proj_length - HairBBoxToCamMinMaxDist.x) / (HairBBoxToCamMinMaxDist.y - HairBBoxToCamMinMaxDist.x) * (VOXEL_SLICE_NUM - 1);
+                uint VoxelZOffset = saturate((proj_length - HairBBoxToCamMinMaxDist.x) / (HairBBoxToCamMinMaxDist.y - HairBBoxToCamMinMaxDist.x)) * (VOXEL_SLICE_NUM - 1);
 
                 float2 StartPixelCoord = VNDC0.xy * ScreenSize;
                 float2 EndPixelCoord = VNDC1.xy * ScreenSize;
