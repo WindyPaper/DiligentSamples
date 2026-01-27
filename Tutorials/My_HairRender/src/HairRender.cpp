@@ -25,6 +25,7 @@ void Diligent::HairRender::InitPSO()
 {
     //init common gpu data
     m_HairConstData = CreateConstBuffer(sizeof(HairConstData), nullptr, "Hair const data");
+	m_LightData = CreateConstBuffer(sizeof(LightData), nullptr, "Light data");
     
     CreateHWPSO();
     CreateDownSampleMapPSO();
@@ -32,6 +33,7 @@ void Diligent::HairRender::InitPSO()
     CreateLineSizeInFrustumVoxelPSO();
     CreateGetLineOffsetAndCounterPSO();
     CreateGetLineVisibilityPSO();
+	CreateVertexShadingPSO();
     CreateGetWorkQueuePSO();
     CreateDrawLineFromWorkQueueCS();
 }
@@ -288,6 +290,56 @@ void Diligent::HairRender::CreateGetLineVisibilityPSO()
         m_GetLineVisibilityCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 }
 
+void Diligent::HairRender::CreateVertexShadingPSO()
+{
+	//uint RenderQueueBufferCount = m_GetLineOffsetCounterCS.CountCPUData[0];
+	AutoPtrShader ap_line_vertex_shading = CreateShader("CSMain", "./LineVertexShading.csh", \
+		"Line Vertex Shading CS", SHADER_TYPE_COMPUTE);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	std::vector<std::string> ParamNames = { \
+		"HairConstData", \
+		"LightData", \
+		"VerticesDatas", \
+		"IdxData", \
+		"LineVisibilityBuffer", \
+		"OutHairVertexShadeData"
+	};
+	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Vertex Shading PSO");
+
+	PSOCreateInfo.pCS = ap_line_vertex_shading;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_VertexShadingCS.PSO);
+
+	//SRB
+	m_VertexShadingCS.PSO->CreateShaderResourceBinding(&m_VertexShadingCS.SRB, true);
+
+	m_VertexShadingCS.VerticesData = m_apHairVertexArray;
+	m_VertexShadingCS.LineIdxData = m_apHairIdxArray;
+
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData"), m_HairConstData);
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LightData"), m_LightData);
+
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas"), \
+		m_GetLineVisibilityCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "IdxData"), \
+		m_GetLineVisibilityCS.LineIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LineVisibilityBuffer"), \
+		m_GetLineVisibilityCS.VisibilityBitBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));	
+
+	m_VertexShadingCS.OutHairVertexShadeData = CreateStructureBuffer(sizeof(uint), \
+		(int)m_HairRawData.HairVertexDataArray.size(), \
+		nullptr, \
+		"Hair vertex shade buffer");
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutHairVertexShadeData"), \
+		m_VertexShadingCS.OutHairVertexShadeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));	
+}
+
 void Diligent::HairRender::CreateGetWorkQueuePSO()
 {
     AutoPtrShader ap_cs = CreateShader("CSMain", "./LineGetWorkQueue.csh", \
@@ -380,13 +432,15 @@ void Diligent::HairRender::CreateDrawLineFromWorkQueueCS()
     m_DrawLineFromWorkQueueCS.LineSizeBuffer = m_LineSizeInFrustumVoxelCS.LineSizeBuffer;
     m_DrawLineFromWorkQueueCS.RenderQueueBuffer = m_GetLineVisibilityCS.RenderQueueBuffer;
 
-    //read test hair shade data
-    std::vector<uint> HairVertexShadeVec;
-    ReadFile("./hair_shade_result.bin", HairVertexShadeVec);
-    m_DrawLineFromWorkQueueCS.HairVertexShadeData = CreateStructureBuffer(sizeof(uint), \
-        HairVertexShadeVec.size(), \
-        &HairVertexShadeVec[0], \
-        "Hair shade buffer");
+    ////read test hair shade data
+    //std::vector<uint> HairVertexShadeVec;
+    //ReadFile("./hair_shade_result.bin", HairVertexShadeVec);
+    //m_DrawLineFromWorkQueueCS.HairVertexShadeData = CreateStructureBuffer(sizeof(uint), \
+    //    HairVertexShadeVec.size(), \
+    //    &HairVertexShadeVec[0], \
+    //    "Hair shade buffer");
+
+	m_DrawLineFromWorkQueueCS.HairVertexShadeData = m_VertexShadingCS.OutHairVertexShadeData;
     
 
     //create result buffer
@@ -650,6 +704,20 @@ void Diligent::HairRender::RunGetLineVisibilityCS()
     m_pDeviceCtx->DispatchCompute(attr);
 }
 
+void Diligent::HairRender::RunVertexShadingCS()
+{
+	m_pDeviceCtx->SetPipelineState(m_VertexShadingCS.PSO);
+
+	float LineCount = (float)m_HairRawData.HairIdxDataArray.size();
+
+	m_pDeviceCtx->CommitShaderResources(m_VertexShadingCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	const uint LineSizeCSPerGroupThreadNum = 64;
+
+	const DispatchComputeAttribs attr((uint)ceil(LineCount / LineSizeCSPerGroupThreadNum), 1, 1);
+	m_pDeviceCtx->DispatchCompute(attr);
+}
+
 void Diligent::HairRender::RunGetWorkQueueCS()
 {
     m_pDeviceCtx->SetPipelineState(m_GetWorkQueueCS.PSO);
@@ -734,6 +802,10 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
         CBConstants->HairBBoxToCamMinMaxDist = float4(hair_bbox_min_cs.z, hair_bbox_max_cs.z, 1.0f, 1.0f);
         CBConstants->CameraForward = float4(camera_forward, 1.0f);
         CBConstants->CameraWPos = float4(cam_pos, 1.0f);
+
+		MapHelper<LightData> LightCBConstants(m_pDeviceCtx, m_LightData, MAP_WRITE, MAP_FLAG_DISCARD);
+		LightCBConstants->DirectionLightDir = float4(1.0f, 1.0f, 1.0f, 0.0f);
+		LightCBConstants->DirectionLightColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     RunDownSampledDepthMapCS();
@@ -742,6 +814,7 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
     RunFrustumVoxelCullLineSizeCS();
     RunGetLineOffsetAndCounterCS();
     RunGetLineVisibilityCS();
+	RunVertexShadingCS();
     RunGetWorkQueueCS();
     RunDrawLineFromWorkQueueCS(pRTView);
 }

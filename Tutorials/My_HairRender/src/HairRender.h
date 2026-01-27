@@ -29,6 +29,12 @@ struct HairConstData
     float4 CameraWPos;
 };
 
+struct LightData
+{
+	float4 DirectionLightDir;
+	float4 DirectionLightColor;
+};
+
 struct PassBaseData
 {
     RefCntAutoPtr<IPipelineState>         PSO;
@@ -112,6 +118,18 @@ struct DrawLineFromWorkQueueCS : public PassBaseData
     AutoPtrTex OutDebugLayerInfoTex3;
 };
 
+struct VertexShadingCS : public PassBaseData
+{
+	AutoPtrBuffer VerticesData;
+	AutoPtrBuffer LineIdxData;
+
+	AutoPtrBuffer LineOffsetBuffer;
+	AutoPtrBuffer WorkQueueBuffer;
+	AutoPtrBuffer LineSizeBuffer;
+	AutoPtrBuffer RenderQueueBuffer;
+	AutoPtrBuffer OutHairVertexShadeData;
+};
+
 class HairRender : public IBaseRender
 {
 public:
@@ -129,6 +147,7 @@ public:
     void CreateLineSizeInFrustumVoxelPSO();
     void CreateGetLineOffsetAndCounterPSO();
     void CreateGetLineVisibilityPSO();
+	void CreateVertexShadingPSO();
     void CreateGetWorkQueuePSO();
     void CreateDrawLineFromWorkQueueCS();
     //void CreateGetLineVisibilityDependencyPSOParams(int visibility_line_count);
@@ -140,6 +159,7 @@ public:
     void RunFrustumVoxelCullLineSizeCS();
     void RunGetLineOffsetAndCounterCS();
     void RunGetLineVisibilityCS();
+	void RunVertexShadingCS();
     void RunGetWorkQueueCS();
     void RunDrawLineFromWorkQueueCS(ITexture *pRTView);
     
@@ -157,6 +177,7 @@ private:
 
     //common
     AutoPtrBuffer m_HairConstData;
+	AutoPtrBuffer m_LightData;
     uint2 m_DownSampledDepthSize;
 
     //--Cull start
@@ -167,6 +188,7 @@ private:
     LineSizeInFrustumVoxelCS m_LineSizeInFrustumVoxelCS;
     GetLineOffsetCounterCS m_GetLineOffsetCounterCS;
     GetLineVisibilityCS m_GetLineVisibilityCS;
+	VertexShadingCS m_VertexShadingCS;
     int m_VisibilityLineCount;
     GetWorkQueueCS m_GetWorkQueueCS;
     DrawLineFromWorkQueueCS m_DrawLineFromWorkQueueCS;

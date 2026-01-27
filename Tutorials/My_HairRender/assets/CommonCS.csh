@@ -42,3 +42,19 @@ bool IsValidPixel(int w_x, int w_y)
 
     return ret;
 }
+
+uint PackR11G11B10F(float3 rgb)
+{
+    uint r = (f32tof16(rgb.r) << 7u) & 4192256u; //0000 0000 0011 1111 1111 1000 0000 0000
+    uint g = (f32tof16(rgb.g) >> 4u) & 2047u;    //0000 0000 0000 0000 0000 0111 1111 1111
+    uint b = (f32tof16(rgb.b) >> 5u) << 22u;
+    return r | g | b;
+}
+
+float3 UnpackR11G11B10F(uint rgb)
+{
+    float r = f16tof32((rgb >> 7u) & 32752u); //0111 1111 1111 0000
+    float g = f16tof32((rgb << 4u) & 32752u); //0111 1111 1111 0000    
+    float b = f16tof32((rgb >> 22u) << 5u);
+	return float3(r, g, b);
+}
