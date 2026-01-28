@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "HairShadingCommon.ush"
+#include "HairShadingCommon.csh"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Utility functions
@@ -50,7 +50,7 @@ float3 EvaluateHairMultipleScattering(
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Hair BSDF Reference code
 
-#define HAIR_REFERENCE 0
+#define HAIR_REFERENCE 1
 #if HAIR_REFERENCE
 
 struct FHairTemp
@@ -234,7 +234,8 @@ float3 HairShadingRef(FGBufferData GBuffer, float3 L, float3 V, half3 N, uint2 R
 	};
 
 	float3 S = 0;
-	UNROLL for (uint p = 0; p < 3; p++)
+	[unroll]
+	for (uint p = 0; p < 3; p++)
 	{
 		if (p == 0 && (HairComponents & HAIR_COMPONENT_R) == 0) continue;
 		if (p == 1 && (HairComponents & HAIR_COMPONENT_TT) == 0) continue;
@@ -280,7 +281,7 @@ float3 HairShading( FGBufferData GBuffer, float3 L, float3 V, half3 N, float Sha
 	// 	S += KajiyaKayDiffuseAttenuation(GBuffer, L, V, N, Shadow);
 	// }
 
-	// S = -min(-S, 0.0);
+	S = -min(-S, 0.0);
 	return S;
 }
 

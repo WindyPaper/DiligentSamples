@@ -1,6 +1,7 @@
 //Calculate hair vertex shading data
 
 #include "CommonCS.csh"
+#include "HairBsdf.csh"
 
 cbuffer LightData
 {
@@ -39,12 +40,17 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             HairVertexData V1 = VerticesDatas[VertexIdx0 + 1];
 
             float3 tangent = normalize(V1.Pos - V0.Pos);
+            float3 view_dir = normalize(CameraWPos.xyz - V1.Pos); // transform to world pos
 
-            
-
+            FGBufferData hair_test_gb;
+            hair_test_gb.BaseColor = float3(0.8f, 0.8f, 0.2f);
+            hair_test_gb.Roughness = 0.3f;
+            FHairTransmittanceData TransmittanceData = InitHairStrandsTransmittanceData();
+	        TransmittanceData.bUseSeparableR = true;
+            float3 hair_dir_fs = HairShading( hair_test_gb, normalize(DirectionLightDir.xyz), view_dir, tangent, 1.0f, TransmittanceData, 0, 0, 0 );
         
 
-            OutHairVertexShadeData[VertexIdx0 + 1] = PackR11G11B10F(float3(1.0f, 1.0f, 1.0f));
+            OutHairVertexShadeData[VertexIdx0 + 1] = PackR11G11B10F(hair_dir_fs);
 
             if(VertexType == 1)
             {

@@ -2,6 +2,20 @@
 
 #pragma once
 
+struct FGBufferData
+{
+	// 0..1, white for SHADINGMODELID_SUBSURFACE_PROFILE and SHADINGMODELID_EYE (apply BaseColor after scattering is more correct and less blurry)
+	float3 BaseColor;
+	// 0..1
+	float Metallic;
+	// 0..1
+	float Specular;
+	// 0..1
+	float4 CustomData;
+	// 0..1
+	float Roughness;
+};
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Hair components
 
@@ -13,6 +27,8 @@
 #define HAIR_COMPONENT_GS			0x10u
 #define HAIR_COMPONENT_MULTISCATTER	0x20u
 #define HAIR_COMPONENT_TT_MODEL  	0x40u
+
+#define PI 3.141592653f
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Transmittance functions
@@ -29,6 +45,35 @@ struct FHairTransmittanceData
 
 	uint ScatteringComponent;
 };
+
+//==================
+float Square( float x )
+{
+	return x*x;
+}
+
+float Pow2( float x )
+{
+	return x*x;
+}
+
+float3 Pow2( float3 x )
+{
+	return x*x;
+}
+
+float Pow5( float x )
+{
+	float xx = x*x;
+	return xx * xx * x;
+}
+
+float Luminance( float3 LinearColor )
+{
+	return dot( LinearColor, float3( 0.3, 0.59, 0.11 ) );
+}
+
+//==================
 
 FHairTransmittanceData InitHairTransmittanceData(bool bMultipleScatterEnable = true)
 {

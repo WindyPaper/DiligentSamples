@@ -10,21 +10,7 @@
 
 // #include "../ShadingModels.ush"
 
-struct FGBufferData
-{
-	// 0..1, white for SHADINGMODELID_SUBSURFACE_PROFILE and SHADINGMODELID_EYE (apply BaseColor after scattering is more correct and less blurry)
-	half3 BaseColor;
-	// 0..1
-	half Metallic;
-	// 0..1
-	half Specular;
-	// 0..1
-	half4 CustomData;
-	// 0..1
-	half Roughness;
-};
-
-#include "HairBsdf.ush"
+#include "HairBsdf.csh"
 
 
 #define PERMUTATION_LUT_TYPE_DUALSCATTERING 0
