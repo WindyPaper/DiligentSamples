@@ -30,6 +30,10 @@
 #include "GraphicsUtilities.h"
 #include "CommonlyUsedStates.h"
 
+#include "imgui.h"
+#include "imGuIZMO.h"
+#include "ImGuiUtils.hpp"
+
 namespace Diligent
 {
 
@@ -397,7 +401,9 @@ void Tutorial02_Cube::Render()
     m_pImmediateContext->DrawIndexed(DrawAttrs); 
 
     //m_pHairRender->HWRender(m_Camera.GetViewProjMatrix());
-    m_pHairRender->RunCS(m_Camera.GetViewMatrix(), m_Camera.GetViewProjMatrix(), m_Camera.GetViewProjMatrix().Inverse(), m_pColorRT, m_Camera.GetWorldAhead(), m_Camera.GetPos());
+    m_pHairRender->RunCS(m_Camera.GetViewMatrix(), m_Camera.GetViewProjMatrix(), m_Camera.GetViewProjMatrix().Inverse(), \
+		m_pColorRT, m_Camera.GetWorldAhead(), m_Camera.GetPos(), \
+	m_DirectionalLightData.DirectionalLightDir, m_DirectionalLightData.DirectionalColor);
 
     //transition depth buffer from SRV to Depth write
     std::vector<StateTransitionDesc> Barriers;
@@ -429,6 +435,7 @@ void Tutorial02_Cube::Update(double CurrTime, double ElapsedTime)
     SampleBase::Update(CurrTime, ElapsedTime);
 
     m_Camera.Update(m_InputController, static_cast<float>(ElapsedTime));
+	UpdateUI();
 
     //float3 CamForward = m_Camera.GetWorldAhead();
 
@@ -447,6 +454,78 @@ void Tutorial02_Cube::Update(double CurrTime, double ElapsedTime)
     // Compute world-view-projection matrix
     //m_WorldViewProjMatrix = CubeModelTransform * View * SrfPreTransform * Proj;
     m_WorldViewProjMatrix = CubeModelTransform * m_Camera.GetViewProjMatrix();
+}
+
+void Tutorial02_Cube::UpdateUI()
+{
+	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("Camera Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		float3 CamPos = m_Camera.GetPos();
+		ImGui::Text("Cam pos %.2f, %.2f, %.2f", CamPos.x, CamPos.y, CamPos.z);
+		/*float3 CamForward = m_Camera.GetWorldAhead();
+		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
+		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);*/
+
+		ImGui::gizmo3D("Directional Light", m_DirectionalLightData.DirectionalLightDir, ImGui::GetTextLineHeight() * 10);
+		//ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);		
+		ImGui::ColorEdit4("Color", &m_DirectionalLightData.DirectionalColor[0]);
+	}
+	ImGui::End();
+
+	//auto UISwellSettingFunc = [](WaveDisplaySetting *pSetting)
+	//{
+	//	ImGui::SliderFloat("Scale", &pSetting->scale, 0.01f, 1.0f);
+	//	ImGui::SliderFloat("WindSpeed", &pSetting->WindSpeed, 0.01f, 10.0f);
+	//	ImGui::SliderFloat("WindDirectionalAngle", &pSetting->WindDirectionalAngle, 0.01f, 360.0f);
+	//	ImGui::SliderFloat("Fetch", &pSetting->fetch, 0.01f, 1000000.0f);
+	//	ImGui::SliderFloat("SpreadBlend", &pSetting->SpreadBlend, 0.01f, 1.0f);
+	//	ImGui::SliderFloat("Swell", &pSetting->swell, 0.01f, 1.0f);
+	//	ImGui::SliderFloat("PeakEnhancement", &pSetting->PeakEnhancement, 0.01f, 120.0f);
+	//	ImGui::SliderFloat("ShortWavesFade", &pSetting->ShortWavesFade, 0.01f, 1.0f);
+	//};
+
+	//if (ImGui::Begin("Ocean params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	//{
+	//	//if (ImGui::Button("LocalSpectrumSetting"))
+	//	if (ImGui::Begin("local spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	//	{
+	//		UISwellSettingFunc(m_WaveSwellSetting[0]);
+	//	}
+	//	ImGui::End();
+
+	//	//if (ImGui::Button("SwellSpectrumSetting"))
+	//	if (ImGui::Begin("swell spectrum params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	//	{
+	//		UISwellSettingFunc(m_WaveSwellSetting[1]);
+	//	}
+	//	ImGui::End();
+
+	//	if (ImGui::Begin("ocean material params", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	//	{
+	//		ImGui::ColorEdit4("OceanColor", &m_OceanMaterialParams.OceanColor[0]);
+	//		ImGui::ColorEdit4("SSSColor", &m_OceanMaterialParams.SSSColor[0]);
+
+	//		ImGui::SliderFloat("SSSStrength", &m_OceanMaterialParams.SSSStrength, 0.01f, 1.0f);
+	//		ImGui::SliderFloat("SSSScale", &m_OceanMaterialParams.SSSScale, 0.01f, 50.0f);
+	//		ImGui::SliderFloat("SSSBase", &m_OceanMaterialParams.SSSBase, -5.0f, 1.0f);
+	//		ImGui::SliderFloat("LodScale", &m_OceanMaterialParams.LodScale, 0.01f, 100.0f);
+
+	//		ImGui::SliderFloat("MaxGloss", &m_OceanMaterialParams.MaxGloss, 0.01f, 1.0f);
+	//		ImGui::SliderFloat("Roughness", &m_OceanMaterialParams.Roughness, 0.01f, 1.0f);
+	//		ImGui::SliderFloat("RoughnessScale", &m_OceanMaterialParams.RoughnessScale, 0.0f, 0.5f);
+	//		ImGui::SliderFloat("ContactFoam", &m_OceanMaterialParams.ContactFoam, 0.01f, 1.0f);
+
+	//		ImGui::ColorEdit4("FoamColor", &m_OceanMaterialParams.FoamColor[0]);
+
+	//		ImGui::SliderFloat("FoamBiasLod0", &m_OceanMaterialParams.FoamBiasLod0, 0.01f, 7.0f);
+	//		ImGui::SliderFloat("FoamBiasLod1", &m_OceanMaterialParams.FoamBiasLod1, 0.01f, 7.0f);
+	//		ImGui::SliderFloat("FoamBiasLod2", &m_OceanMaterialParams.FoamBiasLod2, 0.01f, 7.0f);
+	//		ImGui::SliderFloat("FoamScale", &m_OceanMaterialParams.FoamScale, 0.01f, 20.0f);
+	//	}
+	//	ImGui::End();
+	//}
+	//ImGui::End();
 }
 
 Tutorial02_Cube::~Tutorial02_Cube()

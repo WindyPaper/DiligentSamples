@@ -40,7 +40,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             HairVertexData V1 = VerticesDatas[VertexIdx0 + 1];
 
             float3 tangent = normalize(V1.Pos - V0.Pos);
-            float3 view_dir = normalize(CameraWPos.xyz - V1.Pos); // transform to world pos
+            float3 view_dir = normalize(CameraWPos.xyz - V1.Pos);
 
             FGBufferData hair_test_gb;
             hair_test_gb.BaseColor = float3(0.8f, 0.8f, 0.2f);

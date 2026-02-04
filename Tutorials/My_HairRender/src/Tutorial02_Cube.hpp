@@ -40,6 +40,18 @@ extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12
 namespace Diligent
 {
 
+	struct DirectionalLightData
+	{
+		float4 DirectionalLightDir;
+		float4 DirectionalColor;
+
+		DirectionalLightData()
+		{
+			DirectionalLightDir = float4(0.5f, -0.5f, 0.5f, 1.0f);
+			DirectionalColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+		}		
+	};
+
 class Tutorial02_Cube final : public SampleBase
 {
 public:
@@ -53,6 +65,7 @@ public:
     virtual const Char* GetSampleName() const override final { return "Tutorial02: Cube"; }
 
 private:
+	void UpdateUI();
     void CreateRenderTargetPSO();
     
     void CreatePipelineState();
@@ -74,6 +87,7 @@ private:
     
     FirstPersonCamera m_Camera;
     HairRender *m_pHairRender;
+	DirectionalLightData m_DirectionalLightData;
     
 };
 

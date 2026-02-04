@@ -761,7 +761,9 @@ void Diligent::HairRender::RunDrawLineFromWorkQueueCS(ITexture *pRTView)
     }
 }
 
-void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, ITexture *pRTView, const float3 &camera_forward, const float3 &cam_pos)
+void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, \
+	ITexture *pRTView, const float3 &camera_forward, const float3 &cam_pos, \
+	const float4 &dir_light_dir, const float4 &dir_color)
 {
     //float hair_bbox_min_dir_length = length(m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin);
     float3 hair_bbox_min_dir = (m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin);// / hair_bbox_min_dir_length;
@@ -804,8 +806,8 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
         CBConstants->CameraWPos = float4(cam_pos, 1.0f);
 
 		MapHelper<LightData> LightCBConstants(m_pDeviceCtx, m_LightData, MAP_WRITE, MAP_FLAG_DISCARD);
-		LightCBConstants->DirectionLightDir = float4(1.0f, 1.0f, 1.0f, 0.0f);
-		LightCBConstants->DirectionLightColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+		LightCBConstants->DirectionLightDir = dir_light_dir;
+		LightCBConstants->DirectionLightColor = dir_color;
     }
 
     RunDownSampledDepthMapCS();

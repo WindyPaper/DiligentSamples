@@ -163,7 +163,9 @@ public:
     void RunGetWorkQueueCS();
     void RunDrawLineFromWorkQueueCS(ITexture *pRTView);
     
-    void RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, ITexture *pRTView, const float3 &cam_forward, const float3 &cam_pos);
+    void RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, \
+		ITexture *pRTView, const float3 &cam_forward, const float3 &cam_pos, \
+		const float4 &dir_light_dir, const float4 &dir_color);
 
 private:
     HairData m_HairRawData;
