@@ -62,6 +62,21 @@ float3 Pow2( float3 x )
 	return x*x;
 }
 
+float Pow3( float x )
+{
+	return x*x*x;
+}
+
+float2 Pow3( float2 x )
+{
+	return x*x*x;
+}
+
+float3 Pow3( float3 x )
+{
+	return x*x*x;
+}
+
 float Pow5( float x )
 {
 	float xx = x*x;

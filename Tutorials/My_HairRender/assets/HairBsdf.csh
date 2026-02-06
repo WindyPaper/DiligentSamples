@@ -19,33 +19,33 @@ float Hair_F(float CosTheta)
 	return F0 + (1 - F0) * Pow5(1 - CosTheta);
 }
 
-float3 KajiyaKayDiffuseAttenuation(FGBufferData GBuffer, float3 L, float3 V, half3 N, float Shadow)
-{
-	// Use soft Kajiya Kay diffuse attenuation
-	float KajiyaDiffuse = 1 - abs(dot(N, L));
+// float3 KajiyaKayDiffuseAttenuation(FGBufferData GBuffer, float3 L, float3 V, half3 N, float Shadow)
+// {
+// 	// Use soft Kajiya Kay diffuse attenuation
+// 	float KajiyaDiffuse = 1 - abs(dot(N, L));
 
-	float3 FakeNormal = normalize(V - N * dot(V, N));
-	//N = normalize( DiffuseN + FakeNormal * 2 );
-	N = FakeNormal;
+// 	float3 FakeNormal = normalize(V - N * dot(V, N));
+// 	//N = normalize( DiffuseN + FakeNormal * 2 );
+// 	N = FakeNormal;
 
-	// Hack approximation for multiple scattering.
-	float MinValue = 0.0001f;
-	float Wrap = 1;
-	float NoL = saturate((dot(N, L) + Wrap) / Square(1 + Wrap));
-	float DiffuseScatter = (1 / PI) * lerp(NoL, KajiyaDiffuse, 0.33) * GBuffer.Metallic;
-	float Luma = Luminance(GBuffer.BaseColor);
-    float3 BaseOverLuma = abs(GBuffer.BaseColor / max(Luma, MinValue));
-	float3 ScatterTint = Shadow < 1 ? pow(BaseOverLuma, 1 - Shadow) : 1;
-	return sqrt(abs(GBuffer.BaseColor)) * DiffuseScatter * ScatterTint;
-}
+// 	// Hack approximation for multiple scattering.
+// 	float MinValue = 0.0001f;
+// 	float Wrap = 1;
+// 	float NoL = saturate((dot(N, L) + Wrap) / Square(1 + Wrap));
+// 	float DiffuseScatter = (1 / PI) * lerp(NoL, KajiyaDiffuse, 0.33) * GBuffer.Metallic;
+// 	float Luma = Luminance(GBuffer.BaseColor);
+//     float3 BaseOverLuma = abs(GBuffer.BaseColor / max(Luma, MinValue));
+// 	float3 ScatterTint = Shadow < 1 ? pow(BaseOverLuma, 1 - Shadow) : 1;
+// 	return sqrt(abs(GBuffer.BaseColor)) * DiffuseScatter * ScatterTint;
+// }
 
-float3 EvaluateHairMultipleScattering(
-	const FHairTransmittanceData TransmittanceData,
-	const float Roughness,
-	const float3 Fs)
-{
-	return TransmittanceData.GlobalScattering * (Fs + TransmittanceData.LocalScattering) * TransmittanceData.OpaqueVisibility;
-}
+// float3 EvaluateHairMultipleScattering(
+// 	const FHairTransmittanceData TransmittanceData,
+// 	const float Roughness,
+// 	const float3 Fs)
+// {
+// 	return TransmittanceData.GlobalScattering * (Fs + TransmittanceData.LocalScattering) * TransmittanceData.OpaqueVisibility;
+// }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Hair BSDF Reference code
@@ -264,6 +264,119 @@ float3 HairShadingRef(FGBufferData GBuffer, float3 L, float3 V, half3 N, uint2 R
 }
 #endif
 
+///////////////
+float Hair_g2(float Variance,float Theta)
+{
+	//const float A = 1.f / sqrt(2 * PI * Variance);
+	const float A = 1.f;
+	return A * exp(-0.5 * Pow2(Theta) / Variance);
+}
+
+FHairTransmittanceData ComputeDualScatteringTerms(float Roughness,
+	const float3 V,
+	const float3 L,
+	const float3 T, 
+    float3 A_front,
+    float3 A_back)
+{
+    const float SinThetaL = clamp(dot(T, L), -1, 1);
+	const float SinThetaV = clamp(dot(T, V), -1, 1);
+	const float CosThetaL = sqrt(1 - SinThetaL * SinThetaL);
+	const float MaxAverageScatteringValue = 0.99f;
+
+	// Straight implementation of the dual scattering paper 
+	const float3 af	 = min(MaxAverageScatteringValue.xxx, A_front);
+	const float3 af2 = Pow2(af);
+	const float3 ab  = min(MaxAverageScatteringValue.xxx, A_back);
+	const float3 ab2 = Pow2(ab);
+	const float3 OneMinusAf2 = 1 - af2;
+
+	const float3 A1 = ab * af2 / OneMinusAf2;
+	const float3 A3 = ab * ab2 * af2 / (OneMinusAf2*Pow2(OneMinusAf2));
+	const float3 Ab = A1 + A3;
+
+	// Add a min/max roughness for dual scattering based. This is a bit adhoc, but 
+	// * Min/lower bound helps with BSDF being too narrow and causing some fireflies, 
+	// * Max/upper bound helps against "too-flat" look due to dual scattering assuming directional lobe (vs. more radially uniform)
+	Roughness = clamp(Roughness, 0.18f, 0.6f);
+	const float Beta_R	 = Pow2( Roughness );
+	const float Beta_TT	 = Pow2( Roughness / 2 ); 
+	const float Beta_TRT = Pow2( Roughness * 2 ); 
+
+	const float Shift     = 0.035;
+	const float Shift_R   =-0.035*2;
+	const float Shift_TT  = 0.035;
+	const float Shift_TRT = 0.035*4;
+
+	// Average density factor (This is the constant used in the original paper)
+	const float df = 0.7f;
+	const float db = 0.7f;
+
+	// Always shift the hair count by one to remove self-occlusion/shadow aliasing and have smoother transition
+	// This insure the the pow function always starts at 0 for front facing hair
+	const float HairCount = 1.0f;//max(0, TransmittanceMask.HairCount - 1);
+
+	// This is a coarse approximation of eq. 13. Normally, Beta_f should be weighted by the 'normalized' 
+	// R, TT, and TRT terms 
+	const float3 af_weights = af / (af.r + af.g + af.b);
+	const float3 Beta_f  = dot(float3(Beta_R, Beta_TT, Beta_TRT), af_weights);
+	const float3 Beta_f2 = Beta_f*Beta_f;
+	const float3 sigma_f2 = Beta_f2 * max(1.f, HairCount);
+
+	const float Theta_d = asin(SinThetaL) + asin(SinThetaV);
+	const float Theta_h = Theta_d * 0.5f;
+
+	// Global scattering spread 'Sf'
+	float3 Sf = float3(	Hair_g2(sigma_f2.r, Theta_h), 
+						Hair_g2(sigma_f2.g, Theta_h), 
+						Hair_g2(sigma_f2.b, Theta_h)) / PI;
+	const float3 Tf = pow(A_front, HairCount);
+
+	// Overall shift due to the various local scatteing event (all shift & roughnesss should vary with color)
+	const float3 shift_f = dot(float3(Shift_R, Shift_TT, Shift_TRT), af_weights);
+	const float3 shift_b = shift_f;
+	const float3 delta_b = shift_b * (1 - 2*ab2 / Pow2(1 - af2)) * shift_f * (2 * Pow2(1 - af2) + 4*af2*ab2)/Pow3(1-af2);
+
+	const float3 ab_weights = ab / (ab.r + ab.g + ab.b);
+	const float3 Beta_b  = dot(float3(Beta_R, Beta_TT, Beta_TRT), ab_weights);
+	const float3 Beta_b2 = Beta_b * Beta_b;
+
+	const float3 sigma_b = (1 + db*af2) * (ab*sqrt(2*Beta_f2 + Beta_b2) + ab*ab2*sqrt(2*Beta_f2 + Beta_b2)) / (ab + ab*ab2*(2*Beta_f + 3*Beta_b));
+	const float3 sigma_b2 = sigma_b * sigma_b;
+
+	// Local scattering Spread 'Sb'
+	// In Efficient Implementation of the Dual Scattering Model, the variance for back scattering is the sum of the front & back variances
+	float3 Sb = float3(	Hair_g2(sigma_f2.r + sigma_b2.r, Theta_h - delta_b.r),
+						Hair_g2(sigma_f2.g + sigma_b2.g, Theta_h - delta_b.g),
+						Hair_g2(sigma_f2.b + sigma_b2.b, Theta_h - delta_b.b)) / PI;
+
+
+	float3 GlobalScattering = lerp(1, Tf * Sf * df, saturate(HairCount));
+	float3 LocalScattering  = 2 * Ab * Sb * db;
+
+	// Different variant for managing sefl-occlusion issue for global scattering
+	FHairTransmittanceData Out = InitHairStrandsTransmittanceData();	
+	Out.GlobalScattering = GlobalScattering;
+	Out.LocalScattering  = LocalScattering;
+	return Out;	
+}
+
+// float3 EvaluateHairMultipleScattering(
+// 	float3 GlobalScattering,
+//     float3 LocalScattering,
+// 	const float3 Fs)
+// {
+// 	return GlobalScattering * (Fs + LocalScattering);
+// }
+
+float3 EvaluateHairMultipleScattering(
+	const FHairTransmittanceData TransmittanceData,
+	const float3 Fs)
+{
+	return TransmittanceData.GlobalScattering * (Fs + TransmittanceData.LocalScattering);// * TransmittanceData.OpaqueVisibility;
+}
+///////////////
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Hair BSDF
@@ -277,7 +390,7 @@ float3 HairShading( FGBufferData GBuffer, float3 L, float3 V, half3 N, float Sha
 
 	// if (HairTransmittance.ScatteringComponent & HAIR_COMPONENT_MULTISCATTER)
 	// {
-	// 	S  = EvaluateHairMultipleScattering(HairTransmittance, ClampedRoughness, S);
+	S  = EvaluateHairMultipleScattering(HairTransmittance, S);
 	// 	S += KajiyaKayDiffuseAttenuation(GBuffer, L, V, N, Shadow);
 	// }
 

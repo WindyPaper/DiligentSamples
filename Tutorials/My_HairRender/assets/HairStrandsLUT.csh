@@ -13,15 +13,19 @@
 #include "HairBsdf.csh"
 
 
-#define PERMUTATION_LUT_TYPE_DUALSCATTERING 0
-#define PERMUTATION_LUT_TYPE_MEAN_ENERGY 1
+#define PERMUTATION_LUT_TYPE_DUALSCATTERING 1
+#define PERMUTATION_LUT_TYPE_MEAN_ENERGY 0
 
 #define PERMUTATION_LUT_TYPE PERMUTATION_LUT_TYPE_MEAN_ENERGY
 
-uint AbsorptionCount;
-uint RoughnessCount;
-uint ThetaCount;
-uint SampleCountScale;
+cbuffer PrecomputeLUTData
+{
+	uint AbsorptionCount;
+	uint RoughnessCount;
+	uint ThetaCount;
+	uint SampleCountScale;
+};
+
 RWTexture3D<float4>	OutputColor;
 
  float radicalInverse_VdC(uint bits) {
@@ -63,7 +67,6 @@ float4 UniformSampleSphere( float2 E )
 	return float4( H, PDF );
 }
 
-float3 FromLinearAbsorption(float3 In) { return sqrt(In);  }
 float3 ToLinearAbsorption(float3 In) { return In*In; }
 
 #define TILE_PIXEL_SIZE 8
@@ -71,8 +74,12 @@ float3 ToLinearAbsorption(float3 In) { return In*In; }
 
 #if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_DUALSCATTERING
 
+// static int32 GHairLUTIncidentAngleCount = 64;
+// static int32 GHairLUTRoughnessCount = 64;
+// static int32 GHairLUTAbsorptionCount = 16;
+
 [numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, TILE_PIXEL_SIZE)]
-void MainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
 
 	// 3D LUT is organized as follow 
@@ -187,7 +194,7 @@ void MainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
 #if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_MEAN_ENERGY
 
 [numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, TILE_PIXEL_SIZE)]
-void MainCS(uint3 DispatchThreadId : SV_DispatchThreadID)
+void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
 	// 3D LUT is organized as follow 
 	//

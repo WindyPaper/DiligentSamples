@@ -35,6 +35,14 @@ struct LightData
 	float4 DirectionLightColor;
 };
 
+struct PrecomputeLUTData
+{
+	uint AbsorptionCount;
+	uint RoughnessCount;
+	uint ThetaCount;
+	uint SampleCountScale;
+};
+
 struct PassBaseData
 {
     RefCntAutoPtr<IPipelineState>         PSO;
@@ -118,6 +126,12 @@ struct DrawLineFromWorkQueueCS : public PassBaseData
     AutoPtrTex OutDebugLayerInfoTex3;
 };
 
+struct PrecomputeLUTForShadingCS : public PassBaseData
+{
+	AutoPtrBuffer PrecomputeLUTData;
+	AutoPtrTex OutHairAveragePrecomputeData;
+};
+
 struct VertexShadingCS : public PassBaseData
 {
 	AutoPtrBuffer VerticesData;
@@ -147,6 +161,7 @@ public:
     void CreateLineSizeInFrustumVoxelPSO();
     void CreateGetLineOffsetAndCounterPSO();
     void CreateGetLineVisibilityPSO();
+	void CreatePrecomputeForShadingPSO();
 	void CreateVertexShadingPSO();
     void CreateGetWorkQueuePSO();
     void CreateDrawLineFromWorkQueueCS();
@@ -159,6 +174,7 @@ public:
     void RunFrustumVoxelCullLineSizeCS();
     void RunGetLineOffsetAndCounterCS();
     void RunGetLineVisibilityCS();
+	void RunPrecomputeForShadingCS();
 	void RunVertexShadingCS();
     void RunGetWorkQueueCS();
     void RunDrawLineFromWorkQueueCS(ITexture *pRTView);
@@ -190,6 +206,8 @@ private:
     LineSizeInFrustumVoxelCS m_LineSizeInFrustumVoxelCS;
     GetLineOffsetCounterCS m_GetLineOffsetCounterCS;
     GetLineVisibilityCS m_GetLineVisibilityCS;
+	PrecomputeLUTForShadingCS m_PrecomputeLUTForShadingCS;
+	PrecomputeLUTData m_PrecomputeLutConfigData;
 	VertexShadingCS m_VertexShadingCS;
     int m_VisibilityLineCount;
     GetWorkQueueCS m_GetWorkQueueCS;

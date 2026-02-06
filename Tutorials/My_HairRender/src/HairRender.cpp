@@ -33,6 +33,7 @@ void Diligent::HairRender::InitPSO()
     CreateLineSizeInFrustumVoxelPSO();
     CreateGetLineOffsetAndCounterPSO();
     CreateGetLineVisibilityPSO();
+	CreatePrecomputeForShadingPSO();
 	CreateVertexShadingPSO();
     CreateGetWorkQueuePSO();
     CreateDrawLineFromWorkQueueCS();
@@ -290,6 +291,55 @@ void Diligent::HairRender::CreateGetLineVisibilityPSO()
         m_GetLineVisibilityCS.RenderQueueBuffer->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));
 }
 
+void Diligent::HairRender::CreatePrecomputeForShadingPSO()
+{
+	AutoPtrShader ap_precompute_lut_tex = CreateShader("CSMain", "./HairStrandsLUT.csh", \
+		"precompute lut tex CS", SHADER_TYPE_COMPUTE);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	// clang-format off
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	std::vector<std::string> ParamNames = { \
+		"PrecomputeLUTData", \
+		"OutputColor"		
+	};
+	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+
+	// clang-format on
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Precompute LUT PSO");
+
+	PSOCreateInfo.pCS = ap_precompute_lut_tex;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_PrecomputeLUTForShadingCS.PSO);
+
+	//SRB
+	m_PrecomputeLUTForShadingCS.PSO->CreateShaderResourceBinding(&m_PrecomputeLUTForShadingCS.SRB, true);
+
+	m_PrecomputeLutConfigData.ThetaCount = 64;
+	m_PrecomputeLutConfigData.RoughnessCount = 64;
+	m_PrecomputeLutConfigData.AbsorptionCount = 16;
+	m_PrecomputeLutConfigData.SampleCountScale = 1;
+
+	m_PrecomputeLUTForShadingCS.PrecomputeLUTData = CreateConstBuffer(sizeof(m_PrecomputeLutConfigData), &m_PrecomputeLutConfigData, "Precompute LUT Data");
+
+	float3 ScrPixelSize = float3(m_PrecomputeLutConfigData.ThetaCount, m_PrecomputeLutConfigData.RoughnessCount, m_PrecomputeLutConfigData.AbsorptionCount);
+	TextureDesc PrecomputeLUTTextureDesc;
+	PrecomputeLUTTextureDesc.Name = "Precompute 3D Texture Desc";
+	PrecomputeLUTTextureDesc.Type = RESOURCE_DIM_TEX_3D;
+	PrecomputeLUTTextureDesc.Width = ScrPixelSize.x;
+	PrecomputeLUTTextureDesc.Height = ScrPixelSize.y;
+	PrecomputeLUTTextureDesc.Depth = ScrPixelSize.z;
+	PrecomputeLUTTextureDesc.Format = TEX_FORMAT_RGBA16_FLOAT;
+	PrecomputeLUTTextureDesc.Usage = USAGE_DYNAMIC;
+	PrecomputeLUTTextureDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
+	m_pDevice->CreateTexture(PrecomputeLUTTextureDesc, nullptr, &m_PrecomputeLUTForShadingCS.OutHairAveragePrecomputeData);
+
+	SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "PrecomputeLUTData"), \
+		m_PrecomputeLUTForShadingCS.PrecomputeLUTData);
+	SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputColor"), \
+		m_PrecomputeLUTForShadingCS.OutHairAveragePrecomputeData->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+}
+
 void Diligent::HairRender::CreateVertexShadingPSO()
 {
 	//uint RenderQueueBufferCount = m_GetLineOffsetCounterCS.CountCPUData[0];
@@ -306,12 +356,42 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 		"VerticesDatas", \
 		"IdxData", \
 		"LineVisibilityBuffer", \
-		"OutHairVertexShadeData"
+		"OutHairVertexShadeData", \
+		"DSLut3D"
 	};
 	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
 
 	// clang-format on
 	PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Vertex Shading PSO");
+
+	//create sampler
+	PipelineResourceLayoutDesc& ResourceLayout = PSOCreateInfo.PSODesc.ResourceLayout;
+	// Shader variables should typically be mutable, which means they are expected
+	// to change on a per-instance basis
+	// clang-format off
+	ShaderResourceVariableDesc Vars[] =
+	{
+		{SHADER_TYPE_COMPUTE, "DSLut3D", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+	};
+	// clang-format on
+	ResourceLayout.Variables = Vars;
+	ResourceLayout.NumVariables = _countof(Vars);
+
+	// Define immutable sampler for g_Texture. Immutable samplers should be used whenever possible
+	// clang-format off
+	SamplerDesc SamLinearClampDesc
+	{
+		FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR, FILTER_TYPE_LINEAR,
+		TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP, TEXTURE_ADDRESS_CLAMP
+	};
+	ImmutableSamplerDesc ImtblSamplers[] =
+	{
+		{SHADER_TYPE_COMPUTE, "DSLut3D", SamLinearClampDesc},
+	};
+	// clang-format on
+	ResourceLayout.ImmutableSamplers = ImtblSamplers;
+	ResourceLayout.NumImmutableSamplers = _countof(ImtblSamplers);
+	//////
 
 	PSOCreateInfo.pCS = ap_line_vertex_shading;
 	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_VertexShadingCS.PSO);
@@ -338,6 +418,9 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 		"Hair vertex shade buffer");
 	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutHairVertexShadeData"), \
 		m_VertexShadingCS.OutHairVertexShadeData->GetDefaultView(BUFFER_VIEW_UNORDERED_ACCESS));	
+
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSLut3D"), \
+		m_PrecomputeLUTForShadingCS.OutHairAveragePrecomputeData->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void Diligent::HairRender::CreateGetWorkQueuePSO()
@@ -704,6 +787,26 @@ void Diligent::HairRender::RunGetLineVisibilityCS()
     m_pDeviceCtx->DispatchCompute(attr);
 }
 
+void Diligent::HairRender::RunPrecomputeForShadingCS()
+{
+	static bool run_once = false;
+
+	if (run_once == false)
+	{
+		m_pDeviceCtx->SetPipelineState(m_PrecomputeLUTForShadingCS.PSO);
+
+		m_pDeviceCtx->CommitShaderResources(m_PrecomputeLUTForShadingCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		uint precompute_lut_gx = (uint)ceil(m_PrecomputeLutConfigData.ThetaCount / 8.0);
+		uint precompute_lut_gy = (uint)ceil(m_PrecomputeLutConfigData.RoughnessCount / 8.0);
+		uint precompute_lut_gz = (uint)ceil(m_PrecomputeLutConfigData.AbsorptionCount / 8.0);
+		const DispatchComputeAttribs attr(precompute_lut_gx, precompute_lut_gy, precompute_lut_gz);
+		m_pDeviceCtx->DispatchCompute(attr);
+
+		run_once = true;
+	}
+}
+
 void Diligent::HairRender::RunVertexShadingCS()
 {
 	m_pDeviceCtx->SetPipelineState(m_VertexShadingCS.PSO);
@@ -816,6 +919,7 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
     RunFrustumVoxelCullLineSizeCS();
     RunGetLineOffsetAndCounterCS();
     RunGetLineVisibilityCS();
+	RunPrecomputeForShadingCS();
 	RunVertexShadingCS();
     RunGetWorkQueueCS();
     RunDrawLineFromWorkQueueCS(pRTView);
