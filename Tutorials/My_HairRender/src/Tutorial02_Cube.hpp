@@ -87,7 +87,8 @@ private:
     
     FirstPersonCamera m_Camera;
     HairRender *m_pHairRender;
-	DirectionalLightData m_DirectionalLightData;
+	ShadingLightData m_DirectionalLightData;
+	float m_DirLightIntensity;
     
 };
 

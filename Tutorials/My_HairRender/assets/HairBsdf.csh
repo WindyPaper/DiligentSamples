@@ -314,7 +314,7 @@ FHairTransmittanceData ComputeDualScatteringTerms(float Roughness,
 
 	// Always shift the hair count by one to remove self-occlusion/shadow aliasing and have smoother transition
 	// This insure the the pow function always starts at 0 for front facing hair
-	const float HairCount = 1.0f;//max(0, TransmittanceMask.HairCount - 1);
+	const float HairCount = 0.5f;//max(0, TransmittanceMask.HairCount - 1);
 
 	// This is a coarse approximation of eq. 13. Normally, Beta_f should be weighted by the 'normalized' 
 	// R, TT, and TRT terms 

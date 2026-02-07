@@ -29,10 +29,21 @@ struct HairConstData
     float4 CameraWPos;
 };
 
-struct LightData
+struct ShadingLightData
 {
 	float4 DirectionLightDir;
 	float4 DirectionLightColor;
+	float3 HairColor;
+	float HairRoughness;
+
+	ShadingLightData()
+	{
+		DirectionLightDir = float4(0.5f, -0.5f, 0.5f, 1.0f);
+		DirectionLightColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+
+		HairColor = float3(0.8f, 0.8f, 0.8f);
+		HairRoughness = 0.4f;
+	}
 };
 
 struct PrecomputeLUTData
@@ -181,7 +192,7 @@ public:
     
     void RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, \
 		ITexture *pRTView, const float3 &cam_forward, const float3 &cam_pos, \
-		const float4 &dir_light_dir, const float4 &dir_color);
+		const ShadingLightData &shading_data);
 
 private:
     HairData m_HairRawData;

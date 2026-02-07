@@ -3,10 +3,12 @@
 #include "CommonCS.csh"
 #include "HairBsdf.csh"
 
-cbuffer LightData
+cbuffer ShadingLightData
 {
     float4 DirectionLightDir;
     float4 DirectionLightColor;
+    float3 HairColor;
+    float HairRoughness;
 };
 
 struct HairVertexData
@@ -47,8 +49,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             float3 view_dir = normalize(CameraWPos.xyz - V1.Pos);
 
             FGBufferData hair_test_gb;
-            hair_test_gb.BaseColor = float3(0.8f, 0.8f, 0.8f);
-            hair_test_gb.Roughness = 0.1f;
+            hair_test_gb.BaseColor = HairColor;// float3(0.8f, 0.8f, 0.8f);
+            hair_test_gb.Roughness = HairRoughness;// 0.1f;
             FHairTransmittanceData TransmittanceData = InitHairStrandsTransmittanceData();
 	        TransmittanceData.bUseSeparableR = true;
             float3 V = view_dir;
@@ -56,7 +58,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
             float3 T = tangent;            
 
             const float SinLightAngle = dot(L, T);
-            const float3 HairColor = float3(0.8f, 0.8f, 0.8f);
+            //const float3 HairColor = float3(0.8f, 0.8f, 0.8f);
             const float3 RemappedAbsorption = FromLinearAbsorption(HairColor);
             float3 sample_uv0 = float3(saturate(abs(SinLightAngle)), saturate(hair_test_gb.Roughness), saturate(RemappedAbsorption.x));
             float3 sample_uv1 = float3(saturate(abs(SinLightAngle)), saturate(hair_test_gb.Roughness), saturate(RemappedAbsorption.y));
@@ -75,7 +77,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 group_id : SV_GroupID, uint gr
 
             if(VertexType == 1)
             {
-                OutHairVertexShadeData[VertexIdx0] = PackR11G11B10F(float3(1.0f, 1.0f, 1.0f));
+                OutHairVertexShadeData[VertexIdx0] = PackR11G11B10F(hair_dir_fs);//float3(1.0f, 1.0f, 1.0f));
             }
         }
     }

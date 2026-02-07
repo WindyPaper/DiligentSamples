@@ -25,7 +25,7 @@ void Diligent::HairRender::InitPSO()
 {
     //init common gpu data
     m_HairConstData = CreateConstBuffer(sizeof(HairConstData), nullptr, "Hair const data");
-	m_LightData = CreateConstBuffer(sizeof(LightData), nullptr, "Light data");
+	m_LightData = CreateConstBuffer(sizeof(ShadingLightData), nullptr, "Shading Light Data");
     
     CreateHWPSO();
     CreateDownSampleMapPSO();
@@ -352,7 +352,7 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 	// to change on a per-instance basis
 	std::vector<std::string> ParamNames = { \
 		"HairConstData", \
-		"LightData", \
+		"ShadingLightData", \
 		"VerticesDatas", \
 		"IdxData", \
 		"LineVisibilityBuffer", \
@@ -403,7 +403,7 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 	m_VertexShadingCS.LineIdxData = m_apHairIdxArray;
 
 	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairConstData"), m_HairConstData);
-	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "LightData"), m_LightData);
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "ShadingLightData"), m_LightData);
 
 	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "VerticesDatas"), \
 		m_GetLineVisibilityCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
@@ -866,7 +866,7 @@ void Diligent::HairRender::RunDrawLineFromWorkQueueCS(ITexture *pRTView)
 
 void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_proj, const float4x4 &inv_view_proj, \
 	ITexture *pRTView, const float3 &camera_forward, const float3 &cam_pos, \
-	const float4 &dir_light_dir, const float4 &dir_color)
+	const ShadingLightData &shading_data)
 {
     //float hair_bbox_min_dir_length = length(m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin);
     float3 hair_bbox_min_dir = (m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin);// / hair_bbox_min_dir_length;
@@ -908,9 +908,11 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
         CBConstants->CameraForward = float4(camera_forward, 1.0f);
         CBConstants->CameraWPos = float4(cam_pos, 1.0f);
 
-		MapHelper<LightData> LightCBConstants(m_pDeviceCtx, m_LightData, MAP_WRITE, MAP_FLAG_DISCARD);
-		LightCBConstants->DirectionLightDir = dir_light_dir;
-		LightCBConstants->DirectionLightColor = dir_color;
+		MapHelper<ShadingLightData> LightCBConstants(m_pDeviceCtx, m_LightData, MAP_WRITE, MAP_FLAG_DISCARD);
+		LightCBConstants->DirectionLightDir = shading_data.DirectionLightDir;
+		LightCBConstants->DirectionLightColor = shading_data.DirectionLightColor;
+		LightCBConstants->HairColor = shading_data.HairColor;
+		LightCBConstants->HairRoughness = shading_data.HairRoughness;
     }
 
     RunDownSampledDepthMapCS();

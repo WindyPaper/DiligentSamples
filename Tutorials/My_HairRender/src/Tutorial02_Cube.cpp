@@ -347,6 +347,8 @@ void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
     CreateOfflineRT();
     CreateRenderTargetPSO();
 
+	m_DirLightIntensity = 1.0f;
+
     float NearPlane = 10.0f;
     float FarPlane = 10000.f;
     float AspectRatio = static_cast<float>(m_pSwapChain->GetDesc().Width) / static_cast<float>(m_pSwapChain->GetDesc().Height);
@@ -401,9 +403,11 @@ void Tutorial02_Cube::Render()
     m_pImmediateContext->DrawIndexed(DrawAttrs); 
 
     //m_pHairRender->HWRender(m_Camera.GetViewProjMatrix());
+	ShadingLightData copy_t = m_DirectionalLightData;
+	copy_t.DirectionLightColor *= m_DirLightIntensity;
     m_pHairRender->RunCS(m_Camera.GetViewMatrix(), m_Camera.GetViewProjMatrix(), m_Camera.GetViewProjMatrix().Inverse(), \
 		m_pColorRT, m_Camera.GetWorldAhead(), m_Camera.GetPos(), \
-	m_DirectionalLightData.DirectionalLightDir, m_DirectionalLightData.DirectionalColor);
+		copy_t);
 
     //transition depth buffer from SRV to Depth write
     std::vector<StateTransitionDesc> Barriers;
@@ -467,9 +471,14 @@ void Tutorial02_Cube::UpdateUI()
 		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
 		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);*/
 
-		ImGui::gizmo3D("Directional Light", m_DirectionalLightData.DirectionalLightDir, ImGui::GetTextLineHeight() * 10);
+		ImGui::gizmo3D("Directional Light", m_DirectionalLightData.DirectionLightDir, ImGui::GetTextLineHeight() * 10);
 		//ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);		
-		ImGui::ColorEdit4("Color", &m_DirectionalLightData.DirectionalColor[0]);
+		ImGui::ColorEdit4("LightColor", &m_DirectionalLightData.DirectionLightColor[0]);
+		ImGui::SliderFloat("LightIntensity", &m_DirLightIntensity, 0.01f, 20.0f);
+
+		ImGui::ColorEdit3("HairColor", &m_DirectionalLightData.HairColor[0]);
+
+		ImGui::SliderFloat("HairRoughness", &m_DirectionalLightData.HairRoughness, 0.01f, 1.0f);
 	}
 	ImGui::End();
 
