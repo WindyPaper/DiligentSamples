@@ -34,15 +34,19 @@ struct ShadingLightData
 	float4 DirectionLightDir;
 	float4 DirectionLightColor;
 	float3 HairColor;
-	float HairRoughness;
+	float  HairRoughness;
+	float  HairAlpha;
+	float3 _pad;
 
 	ShadingLightData()
 	{
-		DirectionLightDir = float4(0.5f, -0.5f, 0.5f, 1.0f);
+		DirectionLightDir   = float4(0.5f, -0.5f, 0.5f, 1.0f);
 		DirectionLightColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
 
-		HairColor = float3(0.8f, 0.8f, 0.8f);
+		HairColor     = float3(0.8f, 0.8f, 0.8f);
 		HairRoughness = 0.4f;
+		HairAlpha     = 0.07f;
+		_pad          = float3(0.0f, 0.0f, 0.0f);
 	}
 };
 
@@ -140,7 +144,11 @@ struct DrawLineFromWorkQueueCS : public PassBaseData
 struct PrecomputeLUTForShadingCS : public PassBaseData
 {
 	AutoPtrBuffer PrecomputeLUTData;
-	AutoPtrTex OutHairAveragePrecomputeData;
+	AutoPtrTex    OutHairAveragePrecomputeData;
+	AutoPtrTex    OutHairNTTPrecomputeData;
+
+	RefCntAutoPtr<IPipelineState>         PSO_NTT;
+	RefCntAutoPtr<IShaderResourceBinding> SRB_NTT;
 };
 
 struct VertexShadingCS : public PassBaseData

@@ -19,25 +19,25 @@ float Hair_F(float CosTheta)
 	return F0 + (1 - F0) * Pow5(1 - CosTheta);
 }
 
-// float3 KajiyaKayDiffuseAttenuation(FGBufferData GBuffer, float3 L, float3 V, half3 N, float Shadow)
-// {
-// 	// Use soft Kajiya Kay diffuse attenuation
-// 	float KajiyaDiffuse = 1 - abs(dot(N, L));
+float3 KajiyaKayDiffuseAttenuation(FGBufferData GBuffer, float3 L, float3 V, half3 N, float Shadow)
+{
+	// Use soft Kajiya Kay diffuse attenuation
+	float KajiyaDiffuse = 1 - abs(dot(N, L));
 
-// 	float3 FakeNormal = normalize(V - N * dot(V, N));
-// 	//N = normalize( DiffuseN + FakeNormal * 2 );
-// 	N = FakeNormal;
+	// float3 FakeNormal = normalize(V - N * dot(V, N));
+	// //N = normalize( DiffuseN + FakeNormal * 2 );
+	// N = FakeNormal;
 
-// 	// Hack approximation for multiple scattering.
-// 	float MinValue = 0.0001f;
-// 	float Wrap = 1;
-// 	float NoL = saturate((dot(N, L) + Wrap) / Square(1 + Wrap));
-// 	float DiffuseScatter = (1 / PI) * lerp(NoL, KajiyaDiffuse, 0.33) * GBuffer.Metallic;
-// 	float Luma = Luminance(GBuffer.BaseColor);
-//     float3 BaseOverLuma = abs(GBuffer.BaseColor / max(Luma, MinValue));
-// 	float3 ScatterTint = Shadow < 1 ? pow(BaseOverLuma, 1 - Shadow) : 1;
-// 	return sqrt(abs(GBuffer.BaseColor)) * DiffuseScatter * ScatterTint;
-// }
+	// Hack approximation for multiple scattering.
+	float MinValue = 0.0001f;
+	float WrapValue = 1;
+	float NoL = saturate((dot(N, L) + WrapValue) / Square(1 + WrapValue));
+	float DiffuseScatter = (1 / PI) * lerp(NoL, KajiyaDiffuse, 0.33) * 0.2f;//GBuffer.Metallic;	
+	float Luma = Luminance(GBuffer.BaseColor);
+    float3 BaseOverLuma = abs(GBuffer.BaseColor / max(Luma, MinValue));
+	float3 ScatterTint = float3(1.0f, 1.0f, 1.0f);// Shadow < 1 ? pow(BaseOverLuma, 1 - Shadow) : 1;
+	return sqrt(abs(GBuffer.BaseColor)) * DiffuseScatter * ScatterTint;	
+}
 
 // float3 EvaluateHairMultipleScattering(
 // 	const FHairTransmittanceData TransmittanceData,
@@ -154,8 +154,7 @@ float3 Attenuation(uint p, float h, float3 Color, FHairTemp HairTemp)
 		float yt = asin(h / HairTemp.n_prime);
 
 		float f = Hair_F(HairTemp.CosThetaD * sqrt(1 - h * h));		// (14)
-		//float3 T = exp( -2 * ua_prime * ( 1 + cos(2*yt) ) );
-		float3 T = exp(-2 * ua_prime * cos(yt));
+		float3 T = exp(-2 * ua_prime * (1 + cos(2 * yt)));
 		if (p == 1)
 			A = Pow2(1 - f) * T;		// (13)
 		else
@@ -214,7 +213,9 @@ float3 HairShadingRef(FGBufferData GBuffer, float3 L, float3 V, half3 N, uint2 R
 
 	float3 Lp = L - HairTemp.SinThetaL * N;
 	float3 Vp = V - HairTemp.SinThetaV * N;
-	HairTemp.CosPhi = dot(Lp, Vp) * rsqrt(dot(Lp, Lp) * dot(Vp, Vp));
+	float LpLp = max(dot(Lp, Lp), 1e-8f);
+	float VpVp = max(dot(Vp, Vp), 1e-8f);
+	HairTemp.CosPhi = clamp(dot(Lp, Vp) * rsqrt(LpLp * VpVp), -1.f, 1.f);
 	HairTemp.CosHalfPhi = sqrt(0.5 + 0.5 * HairTemp.CosPhi);
 
 	HairTemp.n_prime = sqrt(n * n - 1 + Pow2(HairTemp.CosThetaD)) / HairTemp.CosThetaD;
@@ -265,10 +266,10 @@ float3 HairShadingRef(FGBufferData GBuffer, float3 L, float3 V, half3 N, uint2 R
 #endif
 
 ///////////////
-float Hair_g2(float Variance,float Theta)
+float Hair_g2(float Variance, float Theta)
 {
-	//const float A = 1.f / sqrt(2 * PI * Variance);
-	const float A = 1.f;
+	Variance = max(Variance, 1e-5f);
+	const float A = 1.f / sqrt(2 * PI * Variance);
 	return A * exp(-0.5 * Pow2(Theta) / Variance);
 }
 
@@ -391,7 +392,7 @@ float3 HairShading( FGBufferData GBuffer, float3 L, float3 V, half3 N, float Sha
 	// if (HairTransmittance.ScatteringComponent & HAIR_COMPONENT_MULTISCATTER)
 	// {
 	S  = EvaluateHairMultipleScattering(HairTransmittance, S);
-	// 	S += KajiyaKayDiffuseAttenuation(GBuffer, L, V, N, Shadow);
+	S += KajiyaKayDiffuseAttenuation(GBuffer, L, V, N, 1);
 	// }
 
 	S = -min(-S, 0.0);

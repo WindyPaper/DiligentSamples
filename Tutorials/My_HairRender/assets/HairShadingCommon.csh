@@ -153,3 +153,57 @@ float3 GetHairColorFromMelanin(float InMelanin, float InRedness, float3 InDyeCol
 
 	return HairAbsorptionToColor(Absorption + DyeAbsorption);
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Compute-path utilities  (used by HairShadeCS.csh)
+
+// ---- sRGB -> linear (IEC 61966-2-1) ----
+float SrgbToLinear(float c)
+{
+    return (c <= 0.04045f)
+        ? (c * 0.0773994f)
+        : exp2(log2((c + 0.055f) * 0.947867f) * 2.4f);
+}
+
+float3 SrgbToLinear3(float3 c)
+{
+    return float3(SrgbToLinear(c.x), SrgbToLinear(c.y), SrgbToLinear(c.z));
+}
+
+// ---- HSV -> RGB (branch-free, frac/saturate) ----
+float3 HsvToRgb(float h, float s, float v)
+{
+    float3 rgb;
+    rgb.x = saturate(abs(frac(h)          * 6.0f - 3.0f) - 1.0f);
+    rgb.y = saturate(abs(frac(h + 0.6667f) * 6.0f - 3.0f) - 1.0f);
+    rgb.z = saturate(abs(frac(h + 0.3333f) * 6.0f - 3.0f) - 1.0f);
+    return ((rgb - 1.0f) * s + 1.0f) * v;
+}
+
+// ---- Pack R11G11B10 (half-float bit-shift) ----
+uint PackR11G11B10(float r, float g, float b)
+{
+    uint pr = (f32tof16(r) >> 4) & 0x7FFu;
+    uint pg = (f32tof16(g) >> 4) & 0x7FFu;
+    uint pb = (f32tof16(b) >> 5) & 0x3FFu;
+    return pr | (pg << 11u) | (pb << 22u);
+}
+
+// ---- NaN-safe helpers ----
+float SafeMax(float a, float b)
+{
+    return (isnan(a)) ? b : (isnan(b) ? a : max(a, b));
+}
+
+float SafeMin(float a, float b)
+{
+    return (isnan(a)) ? b : (isnan(b) ? a : min(a, b));
+}
+
+// ---- Marschner longitudinal Gaussian (exp2/log2 form) ----
+// N(x; 0, variance) unnormalized term:  exp(-x^2 / (2*variance)) / sqrt(2*pi*variance)
+float LongitudinalGaussian(float h_minus_mean, float variance)
+{
+    return exp2((-(h_minus_mean * h_minus_mean) / (variance * 2.0f)) * 1.44269502f)
+         / sqrt(variance * 6.28318548f);
+}

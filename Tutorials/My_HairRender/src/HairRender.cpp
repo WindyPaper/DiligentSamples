@@ -1,6 +1,7 @@
 ﻿#include "HairRender.h"
 
 #include "MapHelper.hpp"
+#include "ShaderMacroHelper.hpp"
 #include "../../../../DiligentCore/ThirdParty/glew/include/GL/glew.h"
 
 
@@ -302,7 +303,7 @@ void Diligent::HairRender::CreatePrecomputeForShadingPSO()
 	// to change on a per-instance basis
 	std::vector<std::string> ParamNames = { \
 		"PrecomputeLUTData", \
-		"OutputColor"		
+		"OutputColor"
 	};
 	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
 
@@ -334,10 +335,49 @@ void Diligent::HairRender::CreatePrecomputeForShadingPSO()
 	PrecomputeLUTTextureDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
 	m_pDevice->CreateTexture(PrecomputeLUTTextureDesc, nullptr, &m_PrecomputeLUTForShadingCS.OutHairAveragePrecomputeData);
 
+	// NTT LUT 2D texture
+	TextureDesc NTTTextureDesc;
+	NTTTextureDesc.Name      = "Precompute NTT 2D Texture";
+	NTTTextureDesc.Type      = RESOURCE_DIM_TEX_2D;
+	NTTTextureDesc.Width     = 64;
+	NTTTextureDesc.Height    = 64;
+	NTTTextureDesc.Format    = TEX_FORMAT_RGBA16_FLOAT;
+	NTTTextureDesc.Usage     = USAGE_DYNAMIC;
+	NTTTextureDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
+	m_pDevice->CreateTexture(NTTTextureDesc, nullptr, &m_PrecomputeLUTForShadingCS.OutHairNTTPrecomputeData);
+
 	SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "PrecomputeLUTData"), \
 		m_PrecomputeLUTForShadingCS.PrecomputeLUTData);
 	SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputColor"), \
 		m_PrecomputeLUTForShadingCS.OutHairAveragePrecomputeData->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+	// --- NTT LUT precompute PSO (PERMUTATION_LUT_TYPE_NTT) ---
+	{
+		ShaderMacroHelper NTTMacros;
+		NTTMacros.AddShaderMacro("PERMUTATION_LUT_TYPE", 2); // PERMUTATION_LUT_TYPE_NTT
+		NTTMacros.Finalize();
+		AutoPtrShader ap_ntt_lut = CreateShader("CSMain", "./HairStrandsLUT.csh", \
+			"precompute NTT LUT CS", SHADER_TYPE_COMPUTE, &NTTMacros);
+
+		ComputePipelineStateCreateInfo NTTPSOCreateInfo;
+		// clang-format off
+		std::vector<std::string> NTTParamNames = { \
+			"PrecomputeLUTData", \
+			"OutputNTT"
+		};
+		// clang-format on
+		std::vector<ShaderResourceVariableDesc> NTTVarsVec = GenerateCSDynParams(NTTParamNames);
+		NTTPSOCreateInfo.PSODesc = CreatePSODescAndParam(&NTTVarsVec[0], (int)NTTVarsVec.size(), "Precompute NTT LUT PSO");
+		NTTPSOCreateInfo.pCS = ap_ntt_lut;
+		m_pDevice->CreateComputePipelineState(NTTPSOCreateInfo, &m_PrecomputeLUTForShadingCS.PSO_NTT);
+
+		m_PrecomputeLUTForShadingCS.PSO_NTT->CreateShaderResourceBinding(&m_PrecomputeLUTForShadingCS.SRB_NTT, true);
+
+		SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB_NTT->GetVariableByName(SHADER_TYPE_COMPUTE, "PrecomputeLUTData"), \
+			m_PrecomputeLUTForShadingCS.PrecomputeLUTData);
+		SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB_NTT->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputNTT"), \
+			m_PrecomputeLUTForShadingCS.OutHairNTTPrecomputeData->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
 }
 
 void Diligent::HairRender::CreateVertexShadingPSO()
@@ -357,7 +397,8 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 		"IdxData", \
 		"LineVisibilityBuffer", \
 		"OutHairVertexShadeData", \
-		"DSLut3D"
+		"DSLut3D", \
+		"DSLutNTT"
 	};
 	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
 
@@ -386,7 +427,7 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 	};
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{SHADER_TYPE_COMPUTE, "DSLut3D", SamLinearClampDesc},
+		{SHADER_TYPE_COMPUTE, "DSLut3D_sampler", SamLinearClampDesc},
 	};
 	// clang-format on
 	ResourceLayout.ImmutableSamplers = ImtblSamplers;
@@ -421,6 +462,8 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 
 	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSLut3D"), \
 		m_PrecomputeLUTForShadingCS.OutHairAveragePrecomputeData->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSLutNTT"), \
+		m_PrecomputeLUTForShadingCS.OutHairNTTPrecomputeData->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void Diligent::HairRender::CreateGetWorkQueuePSO()
@@ -803,6 +846,17 @@ void Diligent::HairRender::RunPrecomputeForShadingCS()
 		const DispatchComputeAttribs attr(precompute_lut_gx, precompute_lut_gy, precompute_lut_gz);
 		m_pDeviceCtx->DispatchCompute(attr);
 
+		// NTT LUT dispatch (2D)
+		{
+			m_pDeviceCtx->SetPipelineState(m_PrecomputeLUTForShadingCS.PSO_NTT);
+			m_pDeviceCtx->CommitShaderResources(m_PrecomputeLUTForShadingCS.SRB_NTT, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+			uint ntt_gx = (uint)ceil(m_PrecomputeLutConfigData.ThetaCount / 8.0);
+			uint ntt_gy = (uint)ceil(m_PrecomputeLutConfigData.RoughnessCount / 8.0);
+			const DispatchComputeAttribs ntt_attr(ntt_gx, ntt_gy, 1);
+			m_pDeviceCtx->DispatchCompute(ntt_attr);
+		}
+
 		run_once = true;
 	}
 }
@@ -913,6 +967,7 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
 		LightCBConstants->DirectionLightColor = shading_data.DirectionLightColor;
 		LightCBConstants->HairColor = shading_data.HairColor;
 		LightCBConstants->HairRoughness = shading_data.HairRoughness;
+		LightCBConstants->HairAlpha     = shading_data.HairAlpha;
     }
 
     RunDownSampledDepthMapCS();

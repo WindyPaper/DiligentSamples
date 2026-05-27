@@ -15,6 +15,7 @@
 
 #define PERMUTATION_LUT_TYPE_DUALSCATTERING 1
 #define PERMUTATION_LUT_TYPE_MEAN_ENERGY 0
+#define PERMUTATION_LUT_TYPE_NTT 2
 
 #define PERMUTATION_LUT_TYPE PERMUTATION_LUT_TYPE_MEAN_ENERGY
 
@@ -287,6 +288,89 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 		saturate(TT_Output / SampleCount),
 		saturate(TRT_Output / SampleCount),
 		1);
+}
+
+#endif
+
+#if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_NTT
+
+// NTT LUT: 2D azimuthal TT pre-integration
+//   X axis: U = 0.5 - cosThI * 0.5,  maps sinθ_i ∈ [0, 1]
+//   Y axis: V = sqrt(betaTT),         maps roughness ∈ [0, sqrt(0.5)]
+//   Output: .x = nttA (azimuthal TT coefficient), .y = nttB
+
+RWTexture2D<float4> OutputNTT;
+
+[numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, 1)]
+void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
+{
+    const uint2 PixelCoord = DispatchThreadId.xy;
+    if (PixelCoord.x >= ThetaCount || PixelCoord.y >= RoughnessCount)
+        return;
+
+    // Reverse the UV mapping used in LineVertexShading.csh:
+    //   nttUV = float2(0.5f - cosThI * 0.5f, sqrt(betaTT))
+    const float U = saturate(float(PixelCoord.x + 0.5f) / ThetaCount);
+    const float CosThI = 1.0f - 2.0f * U;
+    const float SinThI = sqrt(saturate(1.0f - CosThI * CosThI));
+
+    const float V_LUT = saturate(float(PixelCoord.y + 0.5f) / RoughnessCount);
+    // V_LUT = sqrt(betaTT) = sqrt(roughness² * 0.5)  →  roughness = V_LUT * sqrt(2)
+    const float Roughness = clamp(V_LUT * 1.41421356f, 0.001f, 1.0f);
+
+    const float3 N = float3(0, 0, 1);
+    // View direction: align theta_v with theta_i so half-angle θ_h ≈ θ_i
+    const float3 V = float3(CosThI, 0, SinThI);
+
+    // Unit absorption → Attenuation yields (1-F)² absorption-free TT
+    FGBufferData GBufferData;
+    GBufferData.BaseColor  = float3(1.0f, 1.0f, 1.0f);
+    GBufferData.Specular   = 0.5f;
+    GBufferData.Metallic   = 0;
+    GBufferData.Roughness  = Roughness;
+    GBufferData.CustomData = float4(0, 0, 1, 0);
+
+    float nttA = 0;
+    float nttB = 0;
+    uint  SampleCount = 0;
+
+    const uint LocalThetaSampleCount = max(1u, SampleCountScale * lerp(128, 64, Roughness));
+    const uint LocalPhiSampleCount   = max(1u, SampleCountScale * lerp(128, 32, Roughness));
+
+    for (uint SampleItY = 0; SampleItY < LocalPhiSampleCount; ++SampleItY)
+    for (uint SampleItX = 0; SampleItX < LocalThetaSampleCount; ++SampleItX)
+    {
+        const float2 jitter = R2Sequence(SampleItX + SampleItY * LocalThetaSampleCount);
+        const float2 u = (float2(SampleItX, SampleItY) + jitter) / float2(LocalThetaSampleCount, LocalPhiSampleCount);
+        const float4 SampleDir = UniformSampleSphere(u.yx);
+        const float  SamplePdf = SampleDir.w;
+        const float3 L = SampleDir.xyz;
+
+        // TT-only BSDF via reference path (HAIR_COMPONENT_TT)
+        float3 BSDF_TT = HairShadingRef(GBufferData, L, V, N, uint2(0, 0), HAIR_COMPONENT_TT);
+
+        // Divide by runtime longitudinal Gaussian to extract azimuthal coefficient.
+        // Parameters match LineVertexShading.csh:
+        //   betaTT_w = Roughness² * 0.5
+        //   M_TT = LongitudinalGaussian(thetaH - shift*0.5, betaTT_w² * 0.5)
+        float SinThL = dot(N, L);
+        float SinThV = dot(N, V);
+        float ThetaI = asin(clamp(SinThL, -1.0f, 1.0f));
+        float ThetaR = asin(clamp(SinThV, -1.0f, 1.0f));
+        float ThetaH = (ThetaI + ThetaR) * 0.5f;
+        const float Shift    = 0.035f;
+        float BetaTT_w       = Roughness * Roughness * 0.5f;
+        float VarTT          = BetaTT_w * BetaTT_w * 0.5f;
+        float M_TT           = LongitudinalGaussian(ThetaH - Shift * 0.5f, VarTT);
+        M_TT                 = max(M_TT, 1e-10f);
+
+        nttA += BSDF_TT.x / (M_TT * SamplePdf);
+        nttB += BSDF_TT.y / (M_TT * SamplePdf);
+        ++SampleCount;
+    }
+
+    const float Norm = 1.0f / max(float(SampleCount), 1.0f);
+    OutputNTT[PixelCoord] = float4(nttA * Norm, nttB * Norm, 0, 1);
 }
 
 #endif
