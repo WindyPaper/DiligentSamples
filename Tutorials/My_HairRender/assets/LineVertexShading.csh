@@ -55,7 +55,7 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     // 1. 解码 strand 索引包（高 4 位 = 类型/标志，低 28 位 = 顶点索引）
     // --------------------------------------------------------
     uint packedInfo  = IdxData[id.x];
-    uint VertexType  = packedInfo >> 28u;           // root=1 / normal=0
+    uint strandFlags = packedInfo >> 28u;           // bit0=root, bit1=tip
     uint VertexIdx0  = packedInfo & 0x0FFFFFFFu;
 
     HairVertexData V0 = VerticesDatas[VertexIdx0];
@@ -65,9 +65,25 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     HairVertexData V1 = VerticesDatas[VertexIdx0 + 1];
 
     // --------------------------------------------------------
-    // 2. 基础方向向量
+    // 2. Strand tangent（Marschner 平滑切线：前后段平均）
     // --------------------------------------------------------
-    float3 T = normalize(V1.Pos - V0.Pos);                   // hair tangent
+    float3 tangPrev = float3(0, 0, 0);
+    if ((strandFlags & 1u) == 0u)   // not root: compute backward tangent
+    {
+        HairVertexData Vprev = VerticesDatas[VertexIdx0 - 1];
+        float3 dPrev  = V0.Pos - Vprev.Pos;
+        tangPrev      = dPrev * rsqrt(dot(dPrev, dPrev));
+    }
+
+    float3 tangNext = float3(0, 0, 0);
+    if ((strandFlags & 2u) == 0u)   // not tip: compute forward tangent
+    {
+        float3 dNext  = V1.Pos - V0.Pos;
+        tangNext      = dNext * rsqrt(dot(dNext, dNext));
+    }
+
+    float3 tangSum = tangPrev + tangNext;
+    float3 T       = tangSum * rsqrt(dot(tangSum, tangSum));   // averaged hair tangent
     float3 V = normalize(CameraWPos.xyz - V1.Pos);           // view vector
     float3 L = normalize(DirectionLightDir.xyz);             // light direction
 
@@ -183,7 +199,10 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     // --------------------------------------------------------
     OutHairVertexShadeData[VertexIdx0 + 1] = PackR11G11B10F(hair_dir_fs);
 
-    if (VertexType == 1u)
+    // Copy to current CP if root strand or previous strand inactive
+    bool prevInactive = (id.x == 0u) ||
+        ((LineVisibilityBuffer[(id.x - 1u) >> 5u] & (1u << ((id.x - 1u) & 31u))) == 0u);
+    if ((strandFlags == 1u) || prevInactive)
     {
         OutHairVertexShadeData[VertexIdx0] = PackR11G11B10F(hair_dir_fs);
     }

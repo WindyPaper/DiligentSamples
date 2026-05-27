@@ -17,7 +17,9 @@
 #define PERMUTATION_LUT_TYPE_MEAN_ENERGY 0
 #define PERMUTATION_LUT_TYPE_NTT 2
 
+#ifndef PERMUTATION_LUT_TYPE
 #define PERMUTATION_LUT_TYPE PERMUTATION_LUT_TYPE_MEAN_ENERGY
+#endif
 
 cbuffer PrecomputeLUTData
 {
@@ -27,7 +29,9 @@ cbuffer PrecomputeLUTData
 	uint SampleCountScale;
 };
 
-RWTexture3D<float4>	OutputColor;
+// #if PERMUTATION_LUT_TYPE != PERMUTATION_LUT_TYPE_NTT
+// RWTexture3D<float4>	OutputColor;
+// #endif
 
  float radicalInverse_VdC(uint bits) {
 	bits = (bits << 16u) | (bits >> 16u);
@@ -78,7 +82,7 @@ float3 ToLinearAbsorption(float3 In) { return In*In; }
 // static int32 GHairLUTIncidentAngleCount = 64;
 // static int32 GHairLUTRoughnessCount = 64;
 // static int32 GHairLUTAbsorptionCount = 16;
-
+RWTexture3D<float4>	OutputColor;
 [numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, TILE_PIXEL_SIZE)]
 void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 {
@@ -193,7 +197,7 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 
 #if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_MEAN_ENERGY
-
+RWTexture3D<float4>	OutputColor;
 [numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, TILE_PIXEL_SIZE)]
 void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 {

@@ -427,7 +427,8 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 	};
 	ImmutableSamplerDesc ImtblSamplers[] =
 	{
-		{SHADER_TYPE_COMPUTE, "DSLut3D_sampler", SamLinearClampDesc},
+		{SHADER_TYPE_COMPUTE, "DSLut3D",  SamLinearClampDesc},
+		{SHADER_TYPE_COMPUTE, "DSLutNTT", SamLinearClampDesc},
 	};
 	// clang-format on
 	ResourceLayout.ImmutableSamplers = ImtblSamplers;
