@@ -35,31 +35,11 @@ RWStructuredBuffer<uint>         OutHairVertexShadeData;
 Texture3D<float4>  DSLut3D;
 SamplerState       DSLut3D_sampler;
 
-// DSLutNTT: 2D azimuthal NTT LUT  (used for TT lobe)
-//   UV = (x-mode(sinThetaI), roughness)
-//   .x = N_r, .y = N_tt
+// DSLutNTT: 2D reparameterized TT azimuthal LUT
+//   UV = (theta_o/(PI/2), roughness)
+//   .x = a (peak amplitude), .y = b (gaussian falloff)
 Texture2D<float4>  DSLutNTT;
 // (reuses DSLut3D_sampler – same linear + clamp settings)
-
-#define NTT_X_COORD_SIGNED_REMAP 0
-#define NTT_X_COORD_ABS_SAT      1
-#define NTT_X_COORD_DIRECT_01    2
-
-#ifndef NTT_X_COORD_MODE
-// Keep same default as HairStrandsLUT.csh
-#define NTT_X_COORD_MODE NTT_X_COORD_SIGNED_REMAP
-#endif
-
-float EncodeNttLutX(float sinThetaI)
-{
-#if NTT_X_COORD_MODE == NTT_X_COORD_SIGNED_REMAP
-    return saturate(sinThetaI * 0.5f + 0.5f);
-#elif NTT_X_COORD_MODE == NTT_X_COORD_ABS_SAT
-    return saturate(abs(sinThetaI));
-#else // NTT_X_COORD_DIRECT_01
-    return saturate(sinThetaI);
-#endif
-}
 
 float3 FromLinearAbsorption(float3 In) { return sqrt(In); }
 
@@ -158,14 +138,20 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float  cosPhi  = dot(Li_perp, Lr_perp) * rsqrt(max(lenLiLr, 1e-8f));
     float  phi_o   = acos(clamp(cosPhi, -1.0f, 1.0f));   // ∈ [0, π]
 
-    // 4.5 NTT LUT sampling: UV = (sinThetaI remapped, roughness)
-    //     Must match HairStrandsLUT.csh default mode:
-    //       NTT_X_COORD_SIGNED_REMAP -> x = sinThetaI * 0.5 + 0.5
-    float2 nttUV    = float2(EncodeNttLutX(cosThI),
-                             saturate(HairRoughness));
+    static const float NTT_HALF_PI = 1.5707963f;
+    static const float NTT_TWO_PI = 6.2831853f;
+
+    // 4.5 NTT LUT sampling: UV = (theta_o normalized, roughness)
+    //     theta_o follows Frostbite presentation parameterization.
+    float thetaO = abs(thetaR);
+    float2 nttUV = float2(saturate(thetaO / NTT_HALF_PI),
+                          saturate(HairRoughness));
     float4 nttSmp   = DSLutNTT.SampleLevel(DSLut3D_sampler, nttUV, 0.0f);
-    float  N_r_lut  = nttSmp.x;
-    float  N_tt_lut = nttSmp.y;
+    float  nttA     = max(nttSmp.x, 0.0f);
+    float  nttB     = max(nttSmp.y, 0.01f);
+    float  dphiTT   = phi_o - PI;
+    dphiTT         -= NTT_TWO_PI * round(dphiTT / NTT_TWO_PI); // wrap [-pi, pi]
+    float  N_tt_fit = nttA * exp(-nttB * dphiTT * dphiTT);
 
     // 4.6 A_TT_h0：h=0 近似的 TT 吸收项
     //     eta_p = Bravais 等效折射率（斜入射修正）
@@ -219,10 +205,10 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 T_TRT    = T_single * T_single * T_single * T_single;
 
     // 4.10 方位角分量
-    float3 az_R   = N_r_lut.xxx;
+    float3 az_R   = float3(lut3dR.z,  lut3dG.z,  lut3dBv.z);
     float3 az_TRT = float3(lut3dR.w,  lut3dG.w,  lut3dBv.w);
-    // TT 方位角：N_tt × A_TT（A_TT 已含 (1-F)^2 和透射衰减）
-    float3 az_TT  = N_tt_lut.xxx * A_TT;
+    // TT 方位角：N_tt_fit × A_TT（A_TT 已含 (1-F)^2 和透射衰减）
+    float3 az_TT  = N_tt_fit.xxx * A_TT;
 
     // 4.11 三瓣 Marschner 单散射
     //   R   : 外表面 Fresnel 反射

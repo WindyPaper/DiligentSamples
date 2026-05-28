@@ -298,24 +298,22 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 #if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_NTT
 
-// NTT LUT: 2D azimuthal pre-integration for runtime usage:
-//   float2 lutNtt = Lut_Ntt.SampleLevel(..., float2(sinThetaI, lutV), 0);
-//   N_r_lut  = lutNtt.x
-//   N_tt_lut = lutNtt.y
+// NTT LUT: 2D reparameterized TT azimuthal model
+//   For each (theta_o, roughness) slice, fit gaussian:
+//      D_TT(phi) ~= a * exp(-b * deltaPhi^2)
+//   Store fitted (a,b) into 2-channel texture.
 //
 // Axes:
-//   X = sinThetaI domain is selectable via NTT_X_COORD_MODE
-//   Y = betaN in [0,1]          (runtime hm_sqrt_roughness)
+//   X = theta_o in [0, PI/2] (stored as normalized u = theta_o / (PI/2))
+//   Y = betaN in [0,1]       (runtime hm_sqrt_roughness)
 //
 // Output:
-//   .x = N_r   (R azimuthal term amplitude at peak phi=0)
-//   .y = N_tt  (TT azimuthal term amplitude at peak phi=PI)
+//   .x = a (TT azimuthal peak amplitude)
+//   .y = b (TT azimuthal gaussian falloff)
 //   .zw unused
 //
-// Coordinate mode switch (for runtime alignment):
-//   0: NTT_X_COORD_SIGNED_REMAP   -> LUT x stores u=(sinThetaI*0.5+0.5), runtime should sample with (sin*0.5+0.5)
-//   1: NTT_X_COORD_ABS_SAT        -> LUT x stores u=saturate(abs(sinThetaI)), runtime should sample with saturate(abs(sin))
-//   2: NTT_X_COORD_DIRECT_01      -> LUT x stores u=saturate(sinThetaI), runtime should sample with saturate(sin)
+// Legacy coordinate-mode macros kept for compatibility with shared compile definitions.
+// Current NTT implementation uses theta_o axis and does not use these modes.
 
 RWTexture2D<float4> OutputNTT;
 
@@ -323,19 +321,21 @@ static const float TWO_PI    = 6.28318530717959f;
 static const float HALF_PI   = 1.57079632679490f;
 static const float INV_SQTPI = 0.39894228040143f;  // 1/sqrt(2π)
 
-#define N_H 512
+#define N_H   512
+#define N_PHI 128
 
 #define NTT_X_COORD_SIGNED_REMAP 0
 #define NTT_X_COORD_ABS_SAT      1
 #define NTT_X_COORD_DIRECT_01    2
 
 #ifndef NTT_X_COORD_MODE
-// Default aligns with common Marschner usage and keeps negative/positive incident angles.
+// Kept for compatibility with shared compile definitions; NTT now uses theta_o axis.
 #define NTT_X_COORD_MODE NTT_X_COORD_SIGNED_REMAP
 #endif
 
 float DecodeSinThetaIFromU(float u)
 {
+    // Deprecated in current NTT path; retained for compatibility.
 #if NTT_X_COORD_MODE == NTT_X_COORD_SIGNED_REMAP
     return u * 2.0f - 1.0f;
 #elif NTT_X_COORD_MODE == NTT_X_COORD_ABS_SAT
@@ -375,10 +375,8 @@ float WrapPi(float x)
     return x - PI;
 }
 
-float IntegrateAzimuthalPeak(bool bTT, float betaN, float etaP)
+float IntegrateNTTAtPhi(float phi_o, float betaN, float etaP)
 {
-    const float phiPeak = bTT ? PI : 0.0f;
-
     float accum = 0.0f;
     float dh = 2.0f / float(N_H);
 
@@ -386,27 +384,15 @@ float IntegrateAzimuthalPeak(bool bTT, float betaN, float etaP)
     {
         float h = -1.0f + (hi + 0.5f) * dh;
 
-        // Transmission branch valid range
         float sin_gt = h / etaP;
-        if (bTT && abs(sin_gt) >= 1.0f)
+        if (abs(sin_gt) >= 1.0f)
             continue;
 
         float gamma_i = asin(clamp(h, -1.0f, 1.0f));
-        float phi;
+        float gamma_t = asin(clamp(sin_gt, -1.0f, 1.0f));
+        float phi_tt  = PI + 2.0f * gamma_t - 2.0f * gamma_i;
 
-        if (bTT)
-        {
-            float gamma_t = asin(clamp(sin_gt, -1.0f, 1.0f));
-            // Marschner TT azimuthal shift
-            phi = PI + 2.0f * gamma_t - 2.0f * gamma_i;
-        }
-        else
-        {
-            // Marschner R azimuthal shift
-            phi = -2.0f * gamma_i;
-        }
-
-        float dphi = WrapPi(phiPeak - phi);
+        float dphi = WrapPi(phi_o - phi_tt);
         accum += WrappedGaussian(betaN, dphi) * dh;
     }
 
@@ -423,20 +409,59 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     if (xi >= ThetaCount || yi >= RoughnessCount)
         return;
 
-    // Runtime sampling convention controlled by NTT_X_COORD_MODE
-    // Build LUT-u from texel center, then decode back to physical sinThetaI.
-    float uX       = (xi + 0.5f) / max(1.0f, (float)ThetaCount);
-    float sinThetaI = DecodeSinThetaIFromU(uX);
-    float betaN     = max((yi + 0.5f) / max(1.0f, (float)RoughnessCount), 0.01f);
+    // Frostbite-style parameterization: X axis is theta_o normalized to [0,1]
+    float thetaO = ((xi + 0.5f) / max(1.0f, (float)ThetaCount)) * HALF_PI;
+    float betaN  = max((yi + 0.5f) / max(1.0f, (float)RoughnessCount), 0.01f);
 
-    // Bravais eta from incident longitudinal angle (use |sin| for stability/symmetry)
-    float thetaI = asin(clamp(abs(sinThetaI), 0.0f, 1.0f));
-    float etaP   = BravisEtaPerp(1.55f, thetaI);
+    // Bravais eta from outgoing longitudinal angle
+    float etaP   = BravisEtaPerp(1.55f, thetaO);
 
-    float N_r  = IntegrateAzimuthalPeak(false, betaN, etaP);
-    float N_tt = IntegrateAzimuthalPeak(true,  betaN, etaP);
+    // Fit gaussian parameters for TT azimuthal slice:
+    //   D_TT(phi) ~= a * exp(-b * deltaPhi^2)
+    // where deltaPhi is wrapped distance to peak.
+    const float dphiStep = TWO_PI / float(N_PHI);
 
-    OutputNTT[uint2(xi, yi)] = float4(saturate(N_r), saturate(N_tt), 0.0f, 1.0f);
+    float a = 0.0f;
+    float phiPeak = PI;
+
+    // Pass 1: sample full curve, find peak amplitude/location
+    for (int pi = 0; pi < N_PHI; ++pi)
+    {
+        float phi = (pi + 0.5f) * dphiStep;
+        float val = IntegrateNTTAtPhi(phi, betaN, etaP);
+        if (val > a)
+        {
+            a = val;
+            phiPeak = phi;
+        }
+    }
+
+    // Pass 2: least-squares fit in log domain
+    //   log(val/a) = -b * x^2,  x = wrapped(phi - phiPeak)
+    float sum_x4 = 0.0f;
+    float sum_x2y = 0.0f;
+    float thresh = max(1e-8f, a * 1e-5f);
+
+    for (int pi = 0; pi < N_PHI; ++pi)
+    {
+        float phi = (pi + 0.5f) * dphiStep;
+        float val = IntegrateNTTAtPhi(phi, betaN, etaP);
+        if (val < thresh)
+            continue;
+
+        float x = WrapPi(phi - phiPeak);
+        float x2 = x * x;
+        float y = log(max(val / max(a, 1e-8f), 1e-8f));
+
+        sum_x4  += x2 * x2;
+        sum_x2y += x2 * y;
+    }
+
+    float b = (sum_x4 > 1e-8f) ? (-sum_x2y / sum_x4) : 1.0f;
+
+    float a_safe = max(a, 0.0f);
+    float b_safe = max(b, 0.01f);
+    OutputNTT[uint2(xi, yi)] = float4(a_safe, b_safe, 0.0f, 1.0f);
 }
 
 #endif
