@@ -36,10 +36,30 @@ Texture3D<float4>  DSLut3D;
 SamplerState       DSLut3D_sampler;
 
 // DSLutNTT: 2D azimuthal NTT LUT  (used for TT lobe)
-//   UV = (0.5 - cosθ_i * 0.5,  sqrt(betaTT))
-//   .x = nttA (azimuthal TT coefficient), .y = nttB
+//   UV = (x-mode(sinThetaI), roughness)
+//   .x = N_r, .y = N_tt
 Texture2D<float4>  DSLutNTT;
 // (reuses DSLut3D_sampler – same linear + clamp settings)
+
+#define NTT_X_COORD_SIGNED_REMAP 0
+#define NTT_X_COORD_ABS_SAT      1
+#define NTT_X_COORD_DIRECT_01    2
+
+#ifndef NTT_X_COORD_MODE
+// Keep same default as HairStrandsLUT.csh
+#define NTT_X_COORD_MODE NTT_X_COORD_SIGNED_REMAP
+#endif
+
+float EncodeNttLutX(float sinThetaI)
+{
+#if NTT_X_COORD_MODE == NTT_X_COORD_SIGNED_REMAP
+    return saturate(sinThetaI * 0.5f + 0.5f);
+#elif NTT_X_COORD_MODE == NTT_X_COORD_ABS_SAT
+    return saturate(abs(sinThetaI));
+#else // NTT_X_COORD_DIRECT_01
+    return saturate(sinThetaI);
+#endif
+}
 
 float3 FromLinearAbsorption(float3 In) { return sqrt(In); }
 
@@ -112,78 +132,105 @@ void CSMain(uint3 id : SV_DispatchThreadID,
         HairRoughness, V, L, T, A_front, A_back);
 
     // --------------------------------------------------------
-    // 4. Marschner 单散射 BSDF（LUT-based，三瓣分通道）
-    //    替换原 HairShadingRef 路径
+    // 4. Marschner 单散射 BSDF
     // --------------------------------------------------------
 
     // 4.1 纵向角（T 作切线，dot 值 = sinθ in Marschner notation）
-    float cosThI  = dot(T, L);      // ≡ sinθ_i  (angle from normal plane)
-    float cosThR  = dot(T, V);      // ≡ sinθ_r
+    float cosThI  = dot(T, L);      // sinθ_i
+    float cosThR  = dot(T, V);      // sinθ_r
 
-    // 4.2 各通道吸收系数 σ = log2(c) * 0.11771371
-    float sigmaR = log2(max(HairColor.r, 1e-6f)) * 0.11771371f;
-    float sigmaG = log2(max(HairColor.g, 1e-6f)) * 0.11771371f;
-    float sigmaB = log2(max(HairColor.b, 1e-6f)) * 0.11771371f;
-    float sigRsq = sigmaR * sigmaR;
-    float sigGsq = sigmaG * sigmaG;
-    float sigBsq = sigmaB * sigmaB;
+    // 4.2 纵向 half-angle → 用于 M 瓣
+    float thetaI  = asin(clamp(cosThI, -1.0f, 1.0f));
+    float thetaR  = asin(clamp(cosThR, -1.0f, 1.0f));
+    float thetaH  = (thetaI + thetaR) * 0.5f;
 
-    // 4.3 三瓣宽度（与 HairBsdf.csh 的 B[] 一致）
-    float roughSq  = HairRoughness * HairRoughness;
-    float betaR_w  = roughSq;           // R  lobe width
-    float betaTT_w = roughSq * 0.5f;    // TT lobe width
-    float betaTRT_w= roughSq * 2.0f;    // TRT lobe width
+    // 4.3 三瓣宽度
+    float roughSq   = HairRoughness * HairRoughness;
+    float betaR_w   = roughSq;
+    float betaTT_w  = roughSq * 0.5f;
+    float betaTRT_w = roughSq * 2.0f;
 
-    // 4.4 NTT LUT 采样（TT 方位角，UV = (0.5 - cosThI*0.5, sqrt(betaTT))）
-    float2 nttUV  = float2(0.5f - cosThI * 0.5f, sqrt(betaTT_w));
-    float4 nttSmp = DSLutNTT.SampleLevel(DSLut3D_sampler, nttUV, 0.0f);
-    float  nttA   = nttSmp.x;   // azimuthal TT coefficient
+    // 4.4 方位角差 φ_d（L 与 V 在法平面的投影夹角）
+    //     TT 峰值在 φ_d ≈ π（正向透射）
+    float3 Li_perp = L - cosThI * T;
+    float3 Lr_perp = V - cosThR * T;
+    float  lenLiLr = dot(Li_perp, Li_perp) * dot(Lr_perp, Lr_perp);
+    float  cosPhi  = dot(Li_perp, Lr_perp) * rsqrt(max(lenLiLr, 1e-8f));
+    float  phi_o   = acos(clamp(cosPhi, -1.0f, 1.0f));   // ∈ [0, π]
 
-    // 4.5 3D LUT 采样（Fresnel 权重 + 方位角 R/TRT，按各瓣 beta 分通道）
-    float cosThAbs = saturate(abs(cosThI));
+    // 4.5 NTT LUT sampling: UV = (sinThetaI remapped, roughness)
+    //     Must match HairStrandsLUT.csh default mode:
+    //       NTT_X_COORD_SIGNED_REMAP -> x = sinThetaI * 0.5 + 0.5
+    float2 nttUV    = float2(EncodeNttLutX(cosThI),
+                             saturate(HairRoughness));
+    float4 nttSmp   = DSLutNTT.SampleLevel(DSLut3D_sampler, nttUV, 0.0f);
+    float  N_r_lut  = nttSmp.x;
+    float  N_tt_lut = nttSmp.y;
+
+    // 4.6 A_TT_h0：h=0 近似的 TT 吸收项
+    //     eta_p = Bravais 等效折射率（斜入射修正）
+    //     F     = Schlick Fresnel @ h=0 (cos γ_i = 1) = R0
+    //     T     = exp(-2σ_a / cos γ_t)
+    float  eta_hair    = 1.55f;
+    float  sinTh_abs   = abs(cosThR);   // |sinθ_r|
+    float  cosTh_abs   = sqrt(max(1.0f - sinTh_abs * sinTh_abs, 0.0f));
+    float  eta_p       = sqrt(max(eta_hair * eta_hair - sinTh_abs * sinTh_abs, 1e-6f))
+                         / max(cosTh_abs, 1e-4f);
+    float  R0          = (eta_p - 1.0f) / (eta_p + 1.0f);
+    R0                *= R0;            // Schlick R0；h=0 → (1-cosγ_i)^5=0 → F=R0
+    float  one_mF      = 1.0f - R0;
+    float  cos_gt      = sqrt(max(1.0f - 1.0f / (eta_p * eta_p), 0.0f));
+    float3 sigma_a     = -log(max(HairColor, 1e-6f));   // 正值吸收系数
+    float3 T_abs       = exp(-2.0f * sigma_a / max(cos_gt, 0.01f));
+    float3 A_TT        = one_mF * one_mF * T_abs;       // (1-F)² · T
+
+    // 4.7 3D LUT 采样（双散射权重 A_front/A_back 已在第3步用过；
+    //     这里复用 MEAN_ENERGY 通道的 Fresnel/方位角权重给 R/TRT）
+    //     各通道对应不同 beta（R / TRT 分别用自己的宽度）
+    float  cosThAbs    = saturate(abs(cosThI));
     float4 lut3dR  = DSLut3D.SampleLevel(DSLut3D_sampler,
-        float3(cosThAbs, saturate(betaR_w),   saturate(sqrt(max(sigmaR, 0.0f)))), 0.0f);
+        float3(cosThAbs, saturate(betaR_w),
+               saturate(RemappedAbsorption.r)), 0.0f);
     float4 lut3dG  = DSLut3D.SampleLevel(DSLut3D_sampler,
-        float3(cosThAbs, saturate(betaTT_w),  saturate(sqrt(max(sigmaG, 0.0f)))), 0.0f);
+        float3(cosThAbs, saturate(betaR_w),
+               saturate(RemappedAbsorption.g)), 0.0f);
     float4 lut3dBv = DSLut3D.SampleLevel(DSLut3D_sampler,
-        float3(cosThAbs, saturate(betaTRT_w), saturate(sqrt(max(sigmaB, 0.0f)))), 0.0f);
+        float3(cosThAbs, saturate(betaR_w),
+               saturate(RemappedAbsorption.b)), 0.0f);
 
     // Fresnel 钳位 [0, 0.99]
-    float3 fresnel0 = float3(min(lut3dR.x,  0.99f), min(lut3dG.x,  0.99f), min(lut3dBv.x, 0.99f));
-    float3 fresnel1 = float3(min(lut3dR.y,  0.99f), min(lut3dG.y,  0.99f), min(lut3dBv.y, 0.99f));
+    float3 fresnel0 = float3(min(lut3dR.x,  0.99f),
+                             min(lut3dG.x,  0.99f),
+                             min(lut3dBv.x, 0.99f));
+    float3 fresnel1 = float3(min(lut3dR.y,  0.99f),
+                             min(lut3dG.y,  0.99f),
+                             min(lut3dBv.y, 0.99f));
     float3 one_f0   = 1.0f - fresnel0;
 
-    // 4.6 纵向角转换 → half-angle θ_H
-    float thetaI = asin(clamp(cosThI, -1.0f, 1.0f));
-    float thetaR = asin(clamp(cosThR, -1.0f, 1.0f));
-    float thetaH = (thetaI + thetaR) * 0.5f;
+    // 4.8 各瓣纵向高斯 M
+    float shift  = HairAlpha;
+    float M_R    = LongitudinalGaussian(thetaH - shift,        betaR_w   * betaR_w);
+    float M_TT   = LongitudinalGaussian(thetaH - shift * 0.5f, betaTT_w  * betaTT_w  * 0.5f);
+    float M_TRT  = LongitudinalGaussian(thetaH + shift * 1.5f, betaTRT_w * betaTRT_w * 2.0f);
 
-    // 4.7 各瓣纵向高斯 M（均值偏移对齐 HairShadeCS.csh 约定）
-    float shift    = HairAlpha;                   // >0, e.g. 0.07
-    float M_R   = LongitudinalGaussian(thetaH - shift,          betaR_w  * betaR_w);
-    float M_TT  = LongitudinalGaussian(thetaH - shift * 0.5f,   betaTT_w * betaTT_w * 0.5f);
-    float M_TRT = LongitudinalGaussian(thetaH + shift * 1.5f,   betaTRT_w* betaTRT_w * 2.0f);
+    // 4.9 TRT 吸收（4次透射）
+    //     复用 sigma_a 已算好
+    float3 T_single = exp(-sigma_a / max(cos_gt, 0.01f));   // 单次穿透
+    float3 T_TRT    = T_single * T_single * T_single * T_single;
 
-    // 4.8 各通道吸收衰减（exp2 形式）
-    float absR = exp2(sigRsq * (-1.44269502f));
-    float absG = exp2(sigGsq * (-1.44269502f));
-    float absB = exp2(sigBsq * (-1.44269502f));
+    // 4.10 方位角分量
+    float3 az_R   = N_r_lut.xxx;
+    float3 az_TRT = float3(lut3dR.w,  lut3dG.w,  lut3dBv.w);
+    // TT 方位角：N_tt × A_TT（A_TT 已含 (1-F)^2 和透射衰减）
+    float3 az_TT  = N_tt_lut.xxx * A_TT;
 
-    float3 T_TT  = float3(absR * absR,    absG * absG,    absB * absB);    // TT:  (1-pass)^2
-    float3 T_TRT = float3(T_TT.r * T_TT.r, T_TT.g * T_TT.g, T_TT.b * T_TT.b); // TRT: (1-pass)^4
-
-    // 4.9 方位角分量（LUT3D .z=R, .w=TRT；NTT for TT）
-    float3 az_R   = float3(lut3dR.z,   lut3dG.z,   lut3dBv.z);
-    float3 az_TRT = float3(lut3dR.w,   lut3dG.w,   lut3dBv.w);
-    float3 az_TT  = float3(nttA * absR, nttA * absG, nttA * absB);
-
-    // 4.10 三瓣分通道 Marschner 单散射
-    //   R   : Fresnel 反射
-    //   TT  : 透射^2 × 方位角（透过纤维）
-    //   TRT : 内部反射 × 透射^4 × 方位角
-    float3 bsdf_R   = M_R   * fresnel0             * az_R;
-    float3 bsdf_TT  = M_TT  * (one_f0 * one_f0)   * T_TT  * az_TT;
-    float3 bsdf_TRT = M_TRT * (one_f0 * one_f0)   * fresnel1 * T_TRT * az_TRT;
+    // 4.11 三瓣 Marschner 单散射
+    //   R   : 外表面 Fresnel 反射
+    //   TT  : 方位角 D_TT × 吸收 A_TT（h=0 近似，与 LUT 解耦）
+    //   TRT : 内反射 × 透射^4 × 方位角权重
+    float3 bsdf_R   = M_R   * fresnel0                       * az_R;
+    float3 bsdf_TT  = M_TT  * az_TT;
+    float3 bsdf_TRT = M_TRT * (one_f0 * one_f0) * fresnel1 * T_TRT * az_TRT;
 
     float3 marschner_fs = bsdf_R + bsdf_TT + bsdf_TRT;
 

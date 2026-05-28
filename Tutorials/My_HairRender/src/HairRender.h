@@ -144,6 +144,7 @@ struct DrawLineFromWorkQueueCS : public PassBaseData
 struct PrecomputeLUTForShadingCS : public PassBaseData
 {
 	AutoPtrBuffer PrecomputeLUTData;
+	AutoPtrBuffer PrecomputeLUTDataNTT;
 	AutoPtrTex    OutHairAveragePrecomputeData;
 	AutoPtrTex    OutHairNTTPrecomputeData;
 

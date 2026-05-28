@@ -298,83 +298,145 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 #if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_NTT
 
-// NTT LUT: 2D azimuthal TT pre-integration
-//   X axis: U = 0.5 - cosThI * 0.5,  maps sinθ_i ∈ [0, 1]
-//   Y axis: V = sqrt(betaTT),         maps roughness ∈ [0, sqrt(0.5)]
-//   Output: .x = nttA (azimuthal TT coefficient), .y = nttB
+// NTT LUT: 2D azimuthal pre-integration for runtime usage:
+//   float2 lutNtt = Lut_Ntt.SampleLevel(..., float2(sinThetaI, lutV), 0);
+//   N_r_lut  = lutNtt.x
+//   N_tt_lut = lutNtt.y
+//
+// Axes:
+//   X = sinThetaI domain is selectable via NTT_X_COORD_MODE
+//   Y = betaN in [0,1]          (runtime hm_sqrt_roughness)
+//
+// Output:
+//   .x = N_r   (R azimuthal term amplitude at peak phi=0)
+//   .y = N_tt  (TT azimuthal term amplitude at peak phi=PI)
+//   .zw unused
+//
+// Coordinate mode switch (for runtime alignment):
+//   0: NTT_X_COORD_SIGNED_REMAP   -> LUT x stores u=(sinThetaI*0.5+0.5), runtime should sample with (sin*0.5+0.5)
+//   1: NTT_X_COORD_ABS_SAT        -> LUT x stores u=saturate(abs(sinThetaI)), runtime should sample with saturate(abs(sin))
+//   2: NTT_X_COORD_DIRECT_01      -> LUT x stores u=saturate(sinThetaI), runtime should sample with saturate(sin)
 
 RWTexture2D<float4> OutputNTT;
 
-[numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, 1)]
-void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
+static const float TWO_PI    = 6.28318530717959f;
+static const float HALF_PI   = 1.57079632679490f;
+static const float INV_SQTPI = 0.39894228040143f;  // 1/sqrt(2π)
+
+#define N_H 512
+
+#define NTT_X_COORD_SIGNED_REMAP 0
+#define NTT_X_COORD_ABS_SAT      1
+#define NTT_X_COORD_DIRECT_01    2
+
+#ifndef NTT_X_COORD_MODE
+// Default aligns with common Marschner usage and keeps negative/positive incident angles.
+#define NTT_X_COORD_MODE NTT_X_COORD_SIGNED_REMAP
+#endif
+
+float DecodeSinThetaIFromU(float u)
 {
-    const uint2 PixelCoord = DispatchThreadId.xy;
-    if (PixelCoord.x >= ThetaCount || PixelCoord.y >= RoughnessCount)
-        return;
+#if NTT_X_COORD_MODE == NTT_X_COORD_SIGNED_REMAP
+    return u * 2.0f - 1.0f;
+#elif NTT_X_COORD_MODE == NTT_X_COORD_ABS_SAT
+    return saturate(u);
+#else // NTT_X_COORD_DIRECT_01
+    return saturate(u);
+#endif
+}
 
-    // Reverse the UV mapping used in LineVertexShading.csh:
-    //   nttUV = float2(0.5f - cosThI * 0.5f, sqrt(betaTT))
-    const float U = saturate(float(PixelCoord.x + 0.5f) / ThetaCount);
-    const float CosThI = 1.0f - 2.0f * U;
-    const float SinThI = sqrt(saturate(1.0f - CosThI * CosThI));
+float BravisEtaPerp(float eta, float theta)
+{
+    float s = sin(theta);
+    float c = max(cos(theta), 1e-4f);
+    return sqrt(max(eta * eta - s * s, 1e-6f)) / c;
+}
 
-    const float V_LUT = saturate(float(PixelCoord.y + 0.5f) / RoughnessCount);
-    // V_LUT = sqrt(betaTT) = sqrt(roughness² * 0.5)  →  roughness = V_LUT * sqrt(2)
-    const float Roughness = clamp(V_LUT * 1.41421356f, 0.001f, 1.0f);
+float WrappedGaussian(float beta, float delta_phi)
+{
+    float b = max(beta, 1e-4f);
+    float inv2b2 = 0.5f / (b * b);
+    float norm   = INV_SQTPI / b;
+    float sum = 0.0f;
 
-    const float3 N = float3(0, 0, 1);
-    // View direction: align theta_v with theta_i so half-angle θ_h ≈ θ_i
-    const float3 V = float3(CosThI, 0, SinThI);
-
-    // Unit absorption → Attenuation yields (1-F)² absorption-free TT
-    FGBufferData GBufferData;
-    GBufferData.BaseColor  = float3(1.0f, 1.0f, 1.0f);
-    GBufferData.Specular   = 0.5f;
-    GBufferData.Metallic   = 0;
-    GBufferData.Roughness  = Roughness;
-    GBufferData.CustomData = float4(0, 0, 1, 0);
-
-    float nttA = 0;
-    float nttB = 0;
-    uint  SampleCount = 0;
-
-    const uint LocalThetaSampleCount = max(1u, SampleCountScale * lerp(128, 64, Roughness));
-    const uint LocalPhiSampleCount   = max(1u, SampleCountScale * lerp(128, 32, Roughness));
-
-    for (uint SampleItY = 0; SampleItY < LocalPhiSampleCount; ++SampleItY)
-    for (uint SampleItX = 0; SampleItX < LocalThetaSampleCount; ++SampleItX)
+    [unroll]
+    for (int k = -2; k <= 2; ++k)
     {
-        const float2 jitter = R2Sequence(SampleItX + SampleItY * LocalThetaSampleCount);
-        const float2 u = (float2(SampleItX, SampleItY) + jitter) / float2(LocalThetaSampleCount, LocalPhiSampleCount);
-        const float4 SampleDir = UniformSampleSphere(u.yx);
-        const float  SamplePdf = SampleDir.w;
-        const float3 L = SampleDir.xyz;
+        float d = delta_phi - k * TWO_PI;
+        sum += exp(-d * d * inv2b2);
+    }
+    return sum * norm;
+}
 
-        // TT-only BSDF via reference path (HAIR_COMPONENT_TT)
-        float3 BSDF_TT = HairShadingRef(GBufferData, L, V, N, uint2(0, 0), HAIR_COMPONENT_TT);
+float WrapPi(float x)
+{
+    x = fmod(x + PI, TWO_PI);
+    if (x < 0.0f) x += TWO_PI;
+    return x - PI;
+}
 
-        // Divide by runtime longitudinal Gaussian to extract azimuthal coefficient.
-        // Parameters match LineVertexShading.csh:
-        //   betaTT_w = Roughness² * 0.5
-        //   M_TT = LongitudinalGaussian(thetaH - shift*0.5, betaTT_w² * 0.5)
-        float SinThL = dot(N, L);
-        float SinThV = dot(N, V);
-        float ThetaI = asin(clamp(SinThL, -1.0f, 1.0f));
-        float ThetaR = asin(clamp(SinThV, -1.0f, 1.0f));
-        float ThetaH = (ThetaI + ThetaR) * 0.5f;
-        const float Shift    = 0.035f;
-        float BetaTT_w       = Roughness * Roughness * 0.5f;
-        float VarTT          = BetaTT_w * BetaTT_w * 0.5f;
-        float M_TT           = LongitudinalGaussian(ThetaH - Shift * 0.5f, VarTT);
-        M_TT                 = max(M_TT, 1e-10f);
+float IntegrateAzimuthalPeak(bool bTT, float betaN, float etaP)
+{
+    const float phiPeak = bTT ? PI : 0.0f;
 
-        nttA += BSDF_TT.x / (M_TT * SamplePdf);
-        nttB += BSDF_TT.y / (M_TT * SamplePdf);
-        ++SampleCount;
+    float accum = 0.0f;
+    float dh = 2.0f / float(N_H);
+
+    for (int hi = 0; hi < N_H; ++hi)
+    {
+        float h = -1.0f + (hi + 0.5f) * dh;
+
+        // Transmission branch valid range
+        float sin_gt = h / etaP;
+        if (bTT && abs(sin_gt) >= 1.0f)
+            continue;
+
+        float gamma_i = asin(clamp(h, -1.0f, 1.0f));
+        float phi;
+
+        if (bTT)
+        {
+            float gamma_t = asin(clamp(sin_gt, -1.0f, 1.0f));
+            // Marschner TT azimuthal shift
+            phi = PI + 2.0f * gamma_t - 2.0f * gamma_i;
+        }
+        else
+        {
+            // Marschner R azimuthal shift
+            phi = -2.0f * gamma_i;
+        }
+
+        float dphi = WrapPi(phiPeak - phi);
+        accum += WrappedGaussian(betaN, dphi) * dh;
     }
 
-    const float Norm = 1.0f / max(float(SampleCount), 1.0f);
-    OutputNTT[PixelCoord] = float4(nttA * Norm, nttB * Norm, 0, 1);
+    // 0.5 keeps energy scale stable for h-domain [-1,1]
+    return 0.5f * accum;
+}
+
+[numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, 1)]
+void CSMain(uint3 DTid : SV_DispatchThreadID)
+{
+    uint xi = DTid.x;
+    uint yi = DTid.y;
+
+    if (xi >= ThetaCount || yi >= RoughnessCount)
+        return;
+
+    // Runtime sampling convention controlled by NTT_X_COORD_MODE
+    // Build LUT-u from texel center, then decode back to physical sinThetaI.
+    float uX       = (xi + 0.5f) / max(1.0f, (float)ThetaCount);
+    float sinThetaI = DecodeSinThetaIFromU(uX);
+    float betaN     = max((yi + 0.5f) / max(1.0f, (float)RoughnessCount), 0.01f);
+
+    // Bravais eta from incident longitudinal angle (use |sin| for stability/symmetry)
+    float thetaI = asin(clamp(abs(sinThetaI), 0.0f, 1.0f));
+    float etaP   = BravisEtaPerp(1.55f, thetaI);
+
+    float N_r  = IntegrateAzimuthalPeak(false, betaN, etaP);
+    float N_tt = IntegrateAzimuthalPeak(true,  betaN, etaP);
+
+    OutputNTT[uint2(xi, yi)] = float4(saturate(N_r), saturate(N_tt), 0.0f, 1.0f);
 }
 
 #endif

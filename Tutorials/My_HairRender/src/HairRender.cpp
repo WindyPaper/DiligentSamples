@@ -316,12 +316,19 @@ void Diligent::HairRender::CreatePrecomputeForShadingPSO()
 	//SRB
 	m_PrecomputeLUTForShadingCS.PSO->CreateShaderResourceBinding(&m_PrecomputeLUTForShadingCS.SRB, true);
 
-	m_PrecomputeLutConfigData.ThetaCount = 64;
-	m_PrecomputeLutConfigData.RoughnessCount = 64;
-	m_PrecomputeLutConfigData.AbsorptionCount = 16;
-	m_PrecomputeLutConfigData.SampleCountScale = 1;
+		m_PrecomputeLutConfigData.ThetaCount = 64;
+		m_PrecomputeLutConfigData.RoughnessCount = 64;
+		m_PrecomputeLutConfigData.AbsorptionCount = 16;
+		m_PrecomputeLutConfigData.SampleCountScale = 1;
 
-	m_PrecomputeLUTForShadingCS.PrecomputeLUTData = CreateConstBuffer(sizeof(m_PrecomputeLutConfigData), &m_PrecomputeLutConfigData, "Precompute LUT Data");
+		m_PrecomputeLUTForShadingCS.PrecomputeLUTData = CreateConstBuffer(sizeof(m_PrecomputeLutConfigData), &m_PrecomputeLutConfigData, "Precompute LUT Data");
+
+		// NTT pass uses dedicated 2D resolution (128x128), keep 3D LUT config unchanged.
+		PrecomputeLUTData nttLutConfigData = m_PrecomputeLutConfigData;
+		nttLutConfigData.ThetaCount = 128;
+		nttLutConfigData.RoughnessCount = 128;
+		nttLutConfigData.AbsorptionCount = 1;
+		m_PrecomputeLUTForShadingCS.PrecomputeLUTDataNTT = CreateConstBuffer(sizeof(nttLutConfigData), &nttLutConfigData, "Precompute NTT LUT Data");
 
 	float3 ScrPixelSize = float3(m_PrecomputeLutConfigData.ThetaCount, m_PrecomputeLutConfigData.RoughnessCount, m_PrecomputeLutConfigData.AbsorptionCount);
 	TextureDesc PrecomputeLUTTextureDesc;
@@ -339,8 +346,10 @@ void Diligent::HairRender::CreatePrecomputeForShadingPSO()
 	TextureDesc NTTTextureDesc;
 	NTTTextureDesc.Name      = "Precompute NTT 2D Texture";
 	NTTTextureDesc.Type      = RESOURCE_DIM_TEX_2D;
-	NTTTextureDesc.Width     = 64;
-	NTTTextureDesc.Height    = 64;
+		// NTT LUT fixed resolution for this iteration
+		constexpr Uint32 NTTLutResolution = 128;
+		NTTTextureDesc.Width     = NTTLutResolution;
+		NTTTextureDesc.Height    = NTTLutResolution;
 	NTTTextureDesc.Format    = TEX_FORMAT_RGBA16_FLOAT;
 	NTTTextureDesc.Usage     = USAGE_DYNAMIC;
 	NTTTextureDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
@@ -374,7 +383,7 @@ void Diligent::HairRender::CreatePrecomputeForShadingPSO()
 		m_PrecomputeLUTForShadingCS.PSO_NTT->CreateShaderResourceBinding(&m_PrecomputeLUTForShadingCS.SRB_NTT, true);
 
 		SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB_NTT->GetVariableByName(SHADER_TYPE_COMPUTE, "PrecomputeLUTData"), \
-			m_PrecomputeLUTForShadingCS.PrecomputeLUTData);
+			m_PrecomputeLUTForShadingCS.PrecomputeLUTDataNTT);
 		SET_SHADER_PARAM_SAFE(m_PrecomputeLUTForShadingCS.SRB_NTT->GetVariableByName(SHADER_TYPE_COMPUTE, "OutputNTT"), \
 			m_PrecomputeLUTForShadingCS.OutHairNTTPrecomputeData->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 	}
@@ -852,8 +861,9 @@ void Diligent::HairRender::RunPrecomputeForShadingCS()
 			m_pDeviceCtx->SetPipelineState(m_PrecomputeLUTForShadingCS.PSO_NTT);
 			m_pDeviceCtx->CommitShaderResources(m_PrecomputeLUTForShadingCS.SRB_NTT, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 
-			uint ntt_gx = (uint)ceil(m_PrecomputeLutConfigData.ThetaCount / 8.0);
-			uint ntt_gy = (uint)ceil(m_PrecomputeLutConfigData.RoughnessCount / 8.0);
+			const auto& nttDesc = m_PrecomputeLUTForShadingCS.OutHairNTTPrecomputeData->GetDesc();
+			uint ntt_gx = (uint)ceil(nttDesc.Width / 8.0);
+			uint ntt_gy = (uint)ceil(nttDesc.Height / 8.0);
 			const DispatchComputeAttribs ntt_attr(ntt_gx, ntt_gy, 1);
 			m_pDeviceCtx->DispatchCompute(ntt_attr);
 		}
