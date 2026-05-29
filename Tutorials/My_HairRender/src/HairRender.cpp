@@ -979,6 +979,7 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
 		LightCBConstants->HairColor = shading_data.HairColor;
 		LightCBConstants->HairRoughness = shading_data.HairRoughness;
 		LightCBConstants->HairAlpha     = shading_data.HairAlpha;
+		LightCBConstants->HairUseRefMarschner = shading_data.HairUseRefMarschner;
     }
 
     RunDownSampledDepthMapCS();

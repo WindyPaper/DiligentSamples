@@ -13,7 +13,8 @@ cbuffer ShadingLightData
     // Typical value ≈ 0.07 (~4°, matching Marschner shift convention).
     // Maps to: R shift = -HairAlpha, TT = -HairAlpha*0.5, TRT = +HairAlpha*1.5
     float  HairAlpha;
-    float3 _pad;
+    float  HairUseRefMarschner;
+    float2 _pad;
 };
 
 struct HairVertexData
@@ -218,7 +219,15 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 bsdf_TT  = M_TT  * az_TT;
     float3 bsdf_TRT = M_TRT * (one_f0 * one_f0) * fresnel1 * T_TRT * az_TRT;
 
-    float3 marschner_fs = bsdf_R + bsdf_TT + bsdf_TRT;
+    float3 marschner_fs_lut = bsdf_R + bsdf_TT + bsdf_TRT;
+
+    // Optional compare path: use HairShadingRef single-scattering instead of LUT-NTT reconstructed marschner_fs.
+    uint2 randRef = uint2(id.x, VertexIdx0);
+    float3 marschner_fs_ref = HairShadingRef(hair_gb, L, V, T, randRef,
+        HAIR_COMPONENT_R | HAIR_COMPONENT_TT | HAIR_COMPONENT_TRT);
+
+    float useRef = step(0.5f, HairUseRefMarschner);
+    float3 marschner_fs = lerp(marschner_fs_lut, marschner_fs_ref, useRef);
 
     // --------------------------------------------------------
     // 5. 双散射包装 + Kajiya-Kay 漫射

@@ -479,6 +479,12 @@ void Tutorial02_Cube::UpdateUI()
 		ImGui::ColorEdit3("HairColor", &m_DirectionalLightData.HairColor[0]);
 
 		ImGui::SliderFloat("HairRoughness", &m_DirectionalLightData.HairRoughness, 0.01f, 1.0f);
+		ImGui::SliderFloat("HairAlpha", &m_DirectionalLightData.HairAlpha, 0.0f, 0.2f);
+		bool UseRefCompare = (m_DirectionalLightData.HairUseRefMarschner > 0.5f);
+		if (ImGui::Checkbox("Use HairShadingRef (compare)", &UseRefCompare))
+		{
+			m_DirectionalLightData.HairUseRefMarschner = UseRefCompare ? 1.0f : 0.0f;
+		}
 	}
 	ImGui::End();
 

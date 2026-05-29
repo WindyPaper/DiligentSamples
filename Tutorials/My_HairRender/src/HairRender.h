@@ -36,7 +36,8 @@ struct ShadingLightData
 	float3 HairColor;
 	float  HairRoughness;
 	float  HairAlpha;
-	float3 _pad;
+	float  HairUseRefMarschner;
+	float2 _pad;
 
 	ShadingLightData()
 	{
@@ -45,8 +46,9 @@ struct ShadingLightData
 
 		HairColor     = float3(0.8f, 0.8f, 0.8f);
 		HairRoughness = 0.4f;
-		HairAlpha     = 0.07f;
-		_pad          = float3(0.0f, 0.0f, 0.0f);
+			HairAlpha     = 0.07f;
+			HairUseRefMarschner = 0.0f;
+			_pad          = float2(0.0f, 0.0f);
 	}
 };
 
