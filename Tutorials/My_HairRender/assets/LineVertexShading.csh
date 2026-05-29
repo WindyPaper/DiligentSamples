@@ -14,7 +14,8 @@ cbuffer ShadingLightData
     // Maps to: R shift = -HairAlpha, TT = -HairAlpha*0.5, TRT = +HairAlpha*1.5
     float  HairAlpha;
     float  HairUseRefMarschner;
-    float2 _pad;
+    float  HairEnableMultiScattering;
+    float  _pad;
 };
 
 struct HairVertexData
@@ -232,9 +233,13 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     // --------------------------------------------------------
     // 5. 双散射包装 + Kajiya-Kay 漫射
     // --------------------------------------------------------
-    float3 hair_dir_fs = EvaluateHairMultipleScattering(TransData, marschner_fs);
-    hair_dir_fs       += KajiyaKayDiffuseAttenuation(hair_gb, L, V, T, 1.0f);
-    hair_dir_fs        = max(hair_dir_fs, 0.0f);
+    float3 hair_single_scatter = marschner_fs + KajiyaKayDiffuseAttenuation(hair_gb, L, V, T, 1.0f);
+    float3 hair_multi_scatter  = EvaluateHairMultipleScattering(TransData, marschner_fs)
+                               + KajiyaKayDiffuseAttenuation(hair_gb, L, V, T, 1.0f);
+
+    float useMulti = step(0.5f, HairEnableMultiScattering);
+    float3 hair_dir_fs = lerp(hair_single_scatter, hair_multi_scatter, useMulti);
+    hair_dir_fs = max(hair_dir_fs, 0.0f);
 
     // --------------------------------------------------------
     // 6. 打包输出

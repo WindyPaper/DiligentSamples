@@ -485,6 +485,12 @@ void Tutorial02_Cube::UpdateUI()
 		{
 			m_DirectionalLightData.HairUseRefMarschner = UseRefCompare ? 1.0f : 0.0f;
 		}
+
+		bool EnableMultiScatter = (m_DirectionalLightData.HairEnableMultiScattering > 0.5f);
+		if (ImGui::Checkbox("Enable Hair Multi Scattering", &EnableMultiScatter))
+		{
+			m_DirectionalLightData.HairEnableMultiScattering = EnableMultiScatter ? 1.0f : 0.0f;
+		}
 	}
 	ImGui::End();
 
