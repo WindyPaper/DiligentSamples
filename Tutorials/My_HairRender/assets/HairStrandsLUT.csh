@@ -298,53 +298,36 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 #if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_NTT
 
-// NTT LUT: 2D reparameterized TT azimuthal model
-//   For each (theta_o, roughness) slice, fit gaussian:
-//      D_TT(phi) ~= a * exp(-b * deltaPhi^2)
-//   Store fitted (a,b) into 2-channel texture.
+// NTT LUT: Frostbite-style TT azimuthal distribution (physical formula).
+// For each (theta_o, betaN) we integrate the TT azimuthal distribution over the
+// fiber offset h and fit a gaussian centered at the forward direction phi = PI:
 //
-// Axes:
-//   X = theta_o in [0, PI/2] (stored as normalized u = theta_o / (PI/2))
-//   Y = betaN in [0,1]       (runtime hm_sqrt_roughness)
+//   D_TT(phi)   = 0.5 * integral_{-1}^{1} N_g(betaN; phi - Phi_TT(h)) dh
+//   Phi_TT(h)   = PI + 2*gamma_t - 2*gamma_i,  gamma_i=asin(h), gamma_t=asin(h/etaP)
+//   fit  g(phi) = a * exp(-b * (phi - PI)^2)
 //
-// Output:
-//   .x = a (TT azimuthal peak amplitude)
-//   .y = b (TT azimuthal gaussian falloff)
-//   .zw unused
+// Axes / parameterization (matches Frostbite presentation):
+//   X = theta_o in [0, PI/2]  (first param)  -> Bravais index etaP(theta_o)
+//   Y = betaN   in [0, 1]     (second param, azimuthal roughness)
+// Output: .x = a (peak amplitude), .y = b (gaussian falloff), .zw unused.
 //
-// Legacy coordinate-mode macros kept for compatibility with shared compile definitions.
-// Current NTT implementation uses theta_o axis and does not use these modes.
+// D_TT is symmetric about phi = PI (Phi_TT(-h) = 2*PI - Phi_TT(h)) and TT has no
+// caustic, so the peak sits at PI; a = D_TT(PI) and b is a peak-weighted fit.
+// Attenuation A_TT (Fresnel + absorption) is NOT baked here; the PDF applies it
+// separately at runtime at h = 0. Expect a in ~[0.25,0.70], b in ~[0.2,1.4]; this
+// is physically correct but dimmer/broader than the old ntt_yes (a up to 20), so
+// the runtime TT gain / M_TT may need to be re-tuned.
 
 RWTexture2D<float4> OutputNTT;
 
 static const float TWO_PI    = 6.28318530717959f;
 static const float HALF_PI   = 1.57079632679490f;
-static const float INV_SQTPI = 0.39894228040143f;  // 1/sqrt(2π)
+static const float INV_SQTPI = 0.39894228040143f;  // 1/sqrt(2*PI)
 
-#define N_H   512
-#define N_PHI 128
+#define N_H   256   // fiber-offset (h) integration steps
+#define N_PHI 128   // azimuthal samples used for the gaussian fit
 
-#define NTT_X_COORD_SIGNED_REMAP 0
-#define NTT_X_COORD_ABS_SAT      1
-#define NTT_X_COORD_DIRECT_01    2
-
-#ifndef NTT_X_COORD_MODE
-// Kept for compatibility with shared compile definitions; NTT now uses theta_o axis.
-#define NTT_X_COORD_MODE NTT_X_COORD_SIGNED_REMAP
-#endif
-
-float DecodeSinThetaIFromU(float u)
-{
-    // Deprecated in current NTT path; retained for compatibility.
-#if NTT_X_COORD_MODE == NTT_X_COORD_SIGNED_REMAP
-    return u * 2.0f - 1.0f;
-#elif NTT_X_COORD_MODE == NTT_X_COORD_ABS_SAT
-    return saturate(u);
-#else // NTT_X_COORD_DIRECT_01
-    return saturate(u);
-#endif
-}
-
+// Bravais (virtual) index of refraction for the perpendicular component.
 float BravisEtaPerp(float eta, float theta)
 {
     float s = sin(theta);
@@ -352,13 +335,13 @@ float BravisEtaPerp(float eta, float theta)
     return sqrt(max(eta * eta - s * s, 1e-6f)) / c;
 }
 
+// Normalized wrapped gaussian roughness lobe of width beta (radians).
 float WrappedGaussian(float beta, float delta_phi)
 {
     float b = max(beta, 1e-4f);
     float inv2b2 = 0.5f / (b * b);
     float norm   = INV_SQTPI / b;
     float sum = 0.0f;
-
     [unroll]
     for (int k = -2; k <= 2; ++k)
     {
@@ -375,29 +358,24 @@ float WrapPi(float x)
     return x - PI;
 }
 
+// D_TT(phi) = 0.5 * integral_h N_g(betaN; phi - Phi_TT(h)) dh
 float IntegrateNTTAtPhi(float phi_o, float betaN, float etaP)
 {
     float accum = 0.0f;
     float dh = 2.0f / float(N_H);
-
+    [loop]
     for (int hi = 0; hi < N_H; ++hi)
     {
         float h = -1.0f + (hi + 0.5f) * dh;
-
         float sin_gt = h / etaP;
         if (abs(sin_gt) >= 1.0f)
             continue;
-
-        float gamma_i = asin(clamp(h, -1.0f, 1.0f));
+        float gamma_i = asin(clamp(h,      -1.0f, 1.0f));
         float gamma_t = asin(clamp(sin_gt, -1.0f, 1.0f));
         float phi_tt  = PI + 2.0f * gamma_t - 2.0f * gamma_i;
-
-        float dphi = WrapPi(phi_o - phi_tt);
-        accum += WrappedGaussian(betaN, dphi) * dh;
+        accum += WrappedGaussian(betaN, WrapPi(phi_o - phi_tt)) * dh;
     }
-
-    // 0.5 keeps energy scale stable for h-domain [-1,1]
-    return 0.5f * accum;
+    return 0.5f * accum;   // 0.5 keeps the h-domain [-1,1] energy scale
 }
 
 [numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, 1)]
@@ -409,59 +387,34 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     if (xi >= ThetaCount || yi >= RoughnessCount)
         return;
 
-    // Frostbite-style parameterization: X axis is theta_o normalized to [0,1]
+    // First param: theta_o -> Bravais index. Second param: azimuthal roughness.
     float thetaO = ((xi + 0.5f) / max(1.0f, (float)ThetaCount)) * HALF_PI;
     float betaN  = max((yi + 0.5f) / max(1.0f, (float)RoughnessCount), 0.01f);
-
-    // Bravais eta from outgoing longitudinal angle
     float etaP   = BravisEtaPerp(1.55f, thetaO);
 
-    // Fit gaussian parameters for TT azimuthal slice:
-    //   D_TT(phi) ~= a * exp(-b * deltaPhi^2)
-    // where deltaPhi is wrapped distance to peak.
+    // Peak amplitude at the forward direction (symmetry => peak at PI).
+    float a = IntegrateNTTAtPhi(PI, betaN, etaP);
+
+    // Peak-weighted least squares for the falloff b of a*exp(-b*(phi-PI)^2):
+    //   ln(D/a) = -b * x^2  =>  b = -sum(w x^2 ln(D/a)) / sum(w x^4),  w = D
     const float dphiStep = TWO_PI / float(N_PHI);
-
-    float a = 0.0f;
-    float phiPeak = PI;
-
-    // Pass 1: sample full curve, find peak amplitude/location
-    for (int pi = 0; pi < N_PHI; ++pi)
+    float sum_wx4  = 0.0f;
+    float sum_wx2y = 0.0f;
+    [loop]
+    for (int si = 0; si < N_PHI; ++si)
     {
-        float phi = (pi + 0.5f) * dphiStep;
+        float phi = (si + 0.5f) * dphiStep;
         float val = IntegrateNTTAtPhi(phi, betaN, etaP);
-        if (val > a)
-        {
-            a = val;
-            phiPeak = phi;
-        }
+        float x   = WrapPi(phi - PI);
+        float x2  = x * x;
+        float w   = val;
+        float y   = log(max(val, 1e-8f) / max(a, 1e-8f));
+        sum_wx4  += w * x2 * x2;
+        sum_wx2y += w * x2 * y;
     }
+    float b = (sum_wx4 > 1e-12f) ? (-sum_wx2y / sum_wx4) : 1.0f;
 
-    // Pass 2: least-squares fit in log domain
-    //   log(val/a) = -b * x^2,  x = wrapped(phi - phiPeak)
-    float sum_x4 = 0.0f;
-    float sum_x2y = 0.0f;
-    float thresh = max(1e-8f, a * 1e-5f);
-
-    for (int pi = 0; pi < N_PHI; ++pi)
-    {
-        float phi = (pi + 0.5f) * dphiStep;
-        float val = IntegrateNTTAtPhi(phi, betaN, etaP);
-        if (val < thresh)
-            continue;
-
-        float x = WrapPi(phi - phiPeak);
-        float x2 = x * x;
-        float y = log(max(val / max(a, 1e-8f), 1e-8f));
-
-        sum_x4  += x2 * x2;
-        sum_x2y += x2 * y;
-    }
-
-    float b = (sum_x4 > 1e-8f) ? (-sum_x2y / sum_x4) : 1.0f;
-
-    float a_safe = max(a, 0.0f);
-    float b_safe = max(b, 0.01f);
-    OutputNTT[uint2(xi, yi)] = float4(a_safe, b_safe, 0.0f, 1.0f);
+    OutputNTT[uint2(xi, yi)] = float4(max(a, 0.0f), max(b, 0.01f), 0.0f, 1.0f);
 }
 
 #endif

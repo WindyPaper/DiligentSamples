@@ -73,6 +73,9 @@ private:
     void CreateIndexBuffer();
     void CreateOfflineRT();
 
+    void CreateHeadMesh();
+    void RenderHeadMesh(ITextureView* pTargetRTV, ITextureView* pDSV);
+
     RefCntAutoPtr<IShaderSourceInputStreamFactory> m_pShaderSourceFactory;
 
     RefCntAutoPtr<IPipelineState>         m_pPSO;
@@ -89,6 +92,18 @@ private:
     HairRender *m_pHairRender;
 	ShadingLightData m_DirectionalLightData;
 	float m_DirLightIntensity;
+
+    // Head mesh
+    RefCntAutoPtr<IPipelineState>         m_pHeadPSO;
+    RefCntAutoPtr<IShaderResourceBinding> m_pHeadSRB;
+    RefCntAutoPtr<IBuffer>                m_HeadVSConstants;
+    RefCntAutoPtr<IBuffer>                m_HeadPositionBuffer;
+    RefCntAutoPtr<IBuffer>                m_HeadTexcoordBuffer;
+    RefCntAutoPtr<IBuffer>                m_HeadNormalTangentBuffer;
+    RefCntAutoPtr<IBuffer>                m_HeadIndexBuffer;
+    Uint32                                m_HeadIndexCount = 0;
+    float3                                m_HeadOffset = float3(0.0f, -1.923f, -0.370f);
+
     
 };
 

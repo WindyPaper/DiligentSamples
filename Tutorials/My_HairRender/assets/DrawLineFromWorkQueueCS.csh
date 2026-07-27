@@ -216,11 +216,11 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
 
         float4 VNDC0 = mul(float4(V0.Pos, 1.0f), ViewProj);
         VNDC0.xyz /= VNDC0.w;
-        VNDC0.xy = VNDC0.xy * 0.5f + float2(0.5f, 0.5f);
+        VNDC0.xy = VNDC0.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
         //VNDC0.xy = saturate(VNDC0.xy);
         float4 VNDC1 = mul(float4(V1.Pos, 1.0f), ViewProj);
         VNDC1.xyz /= VNDC1.w;
-        VNDC1.xy = VNDC1.xy * 0.5f + float2(0.5f, 0.5f);
+        VNDC1.xy = VNDC1.xy * float2(0.5f, -0.5f) + float2(0.5f, 0.5f);
         //VNDC1.xy = saturate(VNDC1.xy);
         if((abs(VNDC1.x - VNDC0.x) < 0.001f) && (abs(VNDC1.y - VNDC0.y) < 0.001f)) //in same pos
         {
@@ -230,7 +230,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
         {        
             float2 StartPixelCoord = (VNDC0.xy * ScreenSize);
             float2 OffsetStartPixelCoord = StartPixelCoord + float2(0.5f, 0.5f);
-            float2 OffsetStartPixelNDCXY = OffsetStartPixelCoord / ScreenSize * 2.0f - 1.0f;
+            float2 OffsetStartPixelNDCXY = OffsetStartPixelCoord / ScreenSize * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f);
             float4 OffsetStartPos4 = mul(float4(OffsetStartPixelNDCXY, VNDC0.z, 1.0f), InvViewProj);
             OffsetStartPos4.xyz = OffsetStartPos4.xyz / OffsetStartPos4.w;
             float V0Alpha = length(OffsetStartPos4.xyz - V0.Pos) * hair_v0_width;
@@ -239,7 +239,7 @@ void DrawSoftLine(HairVertexData V0, HairVertexData V1, float3 HairColor0, float
 
             float2 EndPixelCoord = (VNDC1.xy * ScreenSize);
             float2 OffsetEndPixelCoord = EndPixelCoord + float2(0.5f, 0.5f);
-            float2 OffsetEndPixelNDCXY = OffsetEndPixelCoord / ScreenSize * 2.0f - 1.0f;
+            float2 OffsetEndPixelNDCXY = OffsetEndPixelCoord / ScreenSize * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f);
             float4 OffsetEndPos4 = mul(float4(OffsetEndPixelNDCXY, VNDC1.z, 1.0f), InvViewProj);
             OffsetEndPos4.xyz = OffsetEndPos4.xyz / OffsetEndPos4.w;
             float V1Alpha = length(OffsetEndPos4.xyz - V1.Pos) * hair_v1_width;

@@ -337,6 +337,180 @@ void Tutorial02_Cube::CreateOfflineRT()
     m_pColorRT = pRTColor;
 }
 
+static std::vector<char> ReadBinaryFile(const char* path)
+{
+    FILE* f = nullptr;
+    fopen_s(&f, path, "rb");
+    VERIFY(f != nullptr, "Failed to open ", path);
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    std::vector<char> data(sz);
+    fread(data.data(), 1, sz, f);
+    fclose(f);
+    return data;
+}
+
+void Tutorial02_Cube::CreateHeadMesh()
+{
+    struct HeadPosition      { float x, y, z; };
+    struct HeadTexcoord      { float u, v; };
+    struct HeadNormalTangent { int8_t nx, ny, nz, nw, tx, ty, tz, tw; };
+
+    std::vector<char> PosRaw = ReadBinaryFile("./head_position.bin");
+    std::vector<char> TcRaw  = ReadBinaryFile("./head_texcoord.bin");
+    std::vector<char> NtRaw  = ReadBinaryFile("./head_vertices_normal_tangent.bin");
+    std::vector<char> IdxRaw = ReadBinaryFile("./head_idx.bin");
+
+    const Uint32 PosCount = static_cast<Uint32>(PosRaw.size() / sizeof(HeadPosition));
+    const Uint32 TcCount  = static_cast<Uint32>(TcRaw.size() / sizeof(HeadTexcoord));
+    const Uint32 NtCount  = static_cast<Uint32>(NtRaw.size() / sizeof(HeadNormalTangent));
+    m_HeadIndexCount      = static_cast<Uint32>(IdxRaw.size() / sizeof(Uint16));
+
+    // Positions are kept in raw model space. The UI-controlled offset and the
+    // 100x scale are applied per-frame in the head vertex shader.
+
+    // Position structured buffer (float3)
+    {
+        BufferDesc Desc;
+        Desc.Name              = "Head position buffer";
+        Desc.Usage             = USAGE_IMMUTABLE;
+        Desc.BindFlags         = BIND_SHADER_RESOURCE;
+        Desc.Mode              = BUFFER_MODE_STRUCTURED;
+        Desc.ElementByteStride = sizeof(HeadPosition);
+        Desc.uiSizeInBytes     = PosCount * sizeof(HeadPosition);
+        BufferData BData{PosRaw.data(), Desc.uiSizeInBytes};
+        m_pDevice->CreateBuffer(Desc, &BData, &m_HeadPositionBuffer);
+    }
+    // Texcoord structured buffer (float2)
+    {
+        BufferDesc Desc;
+        Desc.Name              = "Head texcoord buffer";
+        Desc.Usage             = USAGE_IMMUTABLE;
+        Desc.BindFlags         = BIND_SHADER_RESOURCE;
+        Desc.Mode              = BUFFER_MODE_STRUCTURED;
+        Desc.ElementByteStride = sizeof(HeadTexcoord);
+        Desc.uiSizeInBytes     = TcCount * sizeof(HeadTexcoord);
+        BufferData BData{TcRaw.data(), Desc.uiSizeInBytes};
+        m_pDevice->CreateBuffer(Desc, &BData, &m_HeadTexcoordBuffer);
+    }
+    // Normal + tangent structured buffer (float4 + float4)
+    {
+        BufferDesc Desc;
+        Desc.Name              = "Head normal tangent buffer";
+        Desc.Usage             = USAGE_IMMUTABLE;
+        Desc.BindFlags         = BIND_SHADER_RESOURCE;
+        Desc.Mode              = BUFFER_MODE_STRUCTURED;
+        Desc.ElementByteStride = sizeof(HeadNormalTangent);
+        Desc.uiSizeInBytes     = NtCount * sizeof(HeadNormalTangent);
+        BufferData BData{NtRaw.data(), Desc.uiSizeInBytes};
+        m_pDevice->CreateBuffer(Desc, &BData, &m_HeadNormalTangentBuffer);
+    }
+    // Index buffer (uint16, DX12 triangle list)
+    {
+        BufferDesc Desc;
+        Desc.Name          = "Head index buffer";
+        Desc.Usage         = USAGE_IMMUTABLE;
+        Desc.BindFlags     = BIND_INDEX_BUFFER;
+        Desc.uiSizeInBytes = m_HeadIndexCount * sizeof(Uint16);
+        BufferData BData{IdxRaw.data(), Desc.uiSizeInBytes};
+        m_pDevice->CreateBuffer(Desc, &BData, &m_HeadIndexBuffer);
+    }
+
+    // VS constants
+    {
+        BufferDesc CBDesc;
+        CBDesc.Name           = "Head VS constants CB";
+        CBDesc.uiSizeInBytes  = sizeof(float4x4) + sizeof(float4);
+        CBDesc.Usage          = USAGE_DYNAMIC;
+        CBDesc.BindFlags      = BIND_UNIFORM_BUFFER;
+        CBDesc.CPUAccessFlags = CPU_ACCESS_WRITE;
+        m_pDevice->CreateBuffer(CBDesc, nullptr, &m_HeadVSConstants);
+    }
+
+    // PSO
+    GraphicsPipelineStateCreateInfo PSOCreateInfo;
+    PSOCreateInfo.PSODesc.Name                                  = "Head PSO";
+    PSOCreateInfo.PSODesc.PipelineType                          = PIPELINE_TYPE_GRAPHICS;
+    PSOCreateInfo.GraphicsPipeline.NumRenderTargets             = 1;
+    PSOCreateInfo.GraphicsPipeline.RTVFormats[0]                = m_pSwapChain->GetDesc().ColorBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.DSVFormat                    = m_pSwapChain->GetDesc().DepthBufferFormat;
+    PSOCreateInfo.GraphicsPipeline.PrimitiveTopology            = PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    PSOCreateInfo.GraphicsPipeline.RasterizerDesc.CullMode      = CULL_MODE_NONE;
+    PSOCreateInfo.GraphicsPipeline.DepthStencilDesc.DepthEnable = True;
+
+    ShaderCreateInfo ShaderCI;
+    ShaderCI.SourceLanguage             = SHADER_SOURCE_LANGUAGE_HLSL;
+    ShaderCI.UseCombinedTextureSamplers = true;
+    ShaderCI.pShaderSourceStreamFactory = m_pShaderSourceFactory;
+
+    RefCntAutoPtr<IShader> pVS;
+    {
+        ShaderCI.Desc.ShaderType = SHADER_TYPE_VERTEX;
+        ShaderCI.EntryPoint      = "main";
+        ShaderCI.Desc.Name       = "Head VS";
+        ShaderCI.FilePath        = "head.vsh";
+        m_pDevice->CreateShader(ShaderCI, &pVS);
+    }
+    RefCntAutoPtr<IShader> pPS;
+    {
+        ShaderCI.Desc.ShaderType = SHADER_TYPE_PIXEL;
+        ShaderCI.EntryPoint      = "main";
+        ShaderCI.Desc.Name       = "Head PS";
+        ShaderCI.FilePath        = "head.psh";
+        m_pDevice->CreateShader(ShaderCI, &pPS);
+    }
+
+    PSOCreateInfo.pVS = pVS;
+    PSOCreateInfo.pPS = pPS;
+
+    ShaderResourceVariableDesc Vars[] =
+    {
+        {SHADER_TYPE_VERTEX, "PositionArray",      SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+        {SHADER_TYPE_VERTEX, "TexcoordArray",      SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+        {SHADER_TYPE_VERTEX, "NormalTangentArray", SHADER_RESOURCE_VARIABLE_TYPE_MUTABLE},
+    };
+    PSOCreateInfo.PSODesc.ResourceLayout.Variables            = Vars;
+    PSOCreateInfo.PSODesc.ResourceLayout.NumVariables         = _countof(Vars);
+    PSOCreateInfo.PSODesc.ResourceLayout.DefaultVariableType  = SHADER_RESOURCE_VARIABLE_TYPE_STATIC;
+
+    m_pDevice->CreateGraphicsPipelineState(PSOCreateInfo, &m_pHeadPSO);
+
+    if (auto* pCB = m_pHeadPSO->GetStaticVariableByName(SHADER_TYPE_VERTEX, "Constants"))
+        pCB->Set(m_HeadVSConstants);
+
+    m_pHeadPSO->CreateShaderResourceBinding(&m_pHeadSRB, true);
+    m_pHeadSRB->GetVariableByName(SHADER_TYPE_VERTEX, "PositionArray")->Set(m_HeadPositionBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_pHeadSRB->GetVariableByName(SHADER_TYPE_VERTEX, "TexcoordArray")->Set(m_HeadTexcoordBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+    m_pHeadSRB->GetVariableByName(SHADER_TYPE_VERTEX, "NormalTangentArray")->Set(m_HeadNormalTangentBuffer->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+}
+
+void Tutorial02_Cube::RenderHeadMesh(ITextureView* pTargetRTV, ITextureView* pDSV)
+{
+    {
+        struct HeadCB
+        {
+            float4x4 WorldViewProj;
+            float4   Offset;
+        };
+        MapHelper<HeadCB> CBConstants(m_pImmediateContext, m_HeadVSConstants, MAP_WRITE, MAP_FLAG_DISCARD);
+        CBConstants->WorldViewProj = m_Camera.GetViewProjMatrix().Transpose();
+        CBConstants->Offset        = float4(m_HeadOffset, 0.0f);
+    }
+
+    m_pImmediateContext->SetRenderTargets(1, &pTargetRTV, pDSV, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+    m_pImmediateContext->SetIndexBuffer(m_HeadIndexBuffer, 0, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    m_pImmediateContext->SetPipelineState(m_pHeadPSO);
+    m_pImmediateContext->CommitShaderResources(m_pHeadSRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+    DrawIndexedAttribs DrawAttrs;
+    DrawAttrs.IndexType  = VT_UINT16;
+    DrawAttrs.NumIndices = m_HeadIndexCount;
+    DrawAttrs.Flags      = DRAW_FLAG_VERIFY_ALL;
+    m_pImmediateContext->DrawIndexed(DrawAttrs);
+}
+
 void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
 {
     SampleBase::Initialize(InitInfo);
@@ -363,6 +537,8 @@ void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
     //m_HairRender.CreateHWPSO();
     m_pHairRender = new HairRender(m_pImmediateContext, m_pDevice, m_pShaderSourceFactory, m_pSwapChain);
     m_pHairRender->InitPSO();
+
+    CreateHeadMesh();
 }
 
 // Render a frame
@@ -401,6 +577,8 @@ void Tutorial02_Cube::Render()
     // Verify the state of vertex and index buffers
     DrawAttrs.Flags = DRAW_FLAG_VERIFY_ALL;
     m_pImmediateContext->DrawIndexed(DrawAttrs); 
+
+    RenderHeadMesh(pTargetRTV, pDSV);
 
     //m_pHairRender->HWRender(m_Camera.GetViewProjMatrix());
 	ShadingLightData copy_t = m_DirectionalLightData;
@@ -491,6 +669,8 @@ void Tutorial02_Cube::UpdateUI()
 		{
 			m_DirectionalLightData.HairEnableMultiScattering = EnableMultiScatter ? 1.0f : 0.0f;
 		}
+
+		ImGui::SliderFloat3("Head Offset", &m_HeadOffset[0], -4.0f, 4.0f);
 	}
 	ImGui::End();
 
