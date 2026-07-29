@@ -1,4 +1,4 @@
-﻿#include "HairData.h"
+#include "HairData.h"
 
 #include <limits>
 

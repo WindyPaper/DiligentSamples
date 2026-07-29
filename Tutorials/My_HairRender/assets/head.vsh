@@ -47,15 +47,19 @@ void main(in VSInput VSIn, out PSInput PSIn)
 {
     uint idx = VSIn.VertexIdx;
 
-    float3 P = PositionArray[idx].Pos;
+    float3 P = PositionArray[idx].Pos + g_Offset.xyz;
+    // Rotate 90 degrees around Y axis, then scale by 100
+    float3 R;
+    R.x =  P.z;
+    R.y =  P.y;
+    R.z = -P.x;
     float3 VPos;
-    // VPos.x = (P.x + g_Offset.x) * 100.0;
-    // VPos.y = (P.y + g_Offset.y) * 100.0;
-    // VPos.z = (P.z + g_Offset.z) * 100.0;
-    VPos.x = (P.x) * 100.0;
-    VPos.y = (P.y) * 100.0;
-    VPos.z = (P.z) * 100.0;
+    VPos.x = R.x * 100.0;
+    VPos.y = R.y * 100.0;
+    VPos.z = R.z * 100.0;
     float3 VNormal = UnpackSByte4(NormalTangentArray[idx].PackedNormal);
+    // Apply the same 90-degree Y rotation to the normal
+    VNormal = float3(VNormal.z, VNormal.y, -VNormal.x);
     float2 VUV = TexcoordArray[idx].UV;
 
     PSIn.Pos    = mul(float4(VPos, 1.0), g_WorldViewProj);

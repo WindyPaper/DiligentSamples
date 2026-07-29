@@ -43,6 +43,73 @@ SamplerState       DSLut3D_sampler;
 Texture2D<float4>  DSLutNTT;
 // (reuses DSLut3D_sampler – same linear + clamp settings)
 
+// DSVolumeTexture: 3D deep-shadow volume (R32_UINT).
+//   Per voxel packed value:
+//     low 24 bits = accumulated hair density
+//     top  8 bits = coverage/opacity  (coverage = ((v>>24)/255))
+// Ported from hair_shade_result1.hlsl DSVolumeTexture ray-march:
+//   march from the shaded point toward the light, accumulate density and
+//   track max coverage; stop when coverage saturates. Convert accumulated
+//   density to Beer-Lambert transmittance.
+cbuffer DSVolumeInfo
+{
+    float4 DSV_mMinAABB;         // [0] xyz
+    float4 DSV_mMaxAABB;         // [1] xyz
+    uint4  DSV_mResolution;      // [2] xyz
+    uint4  DSV_mClearResolution; // [3] xyz
+    float4 DSV_mScale;           // [4] xyz
+    float4 DSV_mInvLength;       // [5] xyz = 1/(max-min)
+    float4 DSV_mInvResolution;   // [6] xyz = 1/res
+};
+Texture3D<uint>    DSVolumeTexture;
+
+static const uint  DSV_MAX_STEPS   = 64u;
+static const float DSV_DENSITY_MUL = 0.003257f;   // ≈ 0x3F50624DE... (density -> optical depth)
+
+float3 DeepShadowTransmittance(float3 worldPos, float3 sigma_a)
+{
+    float3 extent = max(DSV_mMaxAABB.xyz - DSV_mMinAABB.xyz, 1e-6f);
+    float3 invLen = 1.0f / extent;
+
+    // March direction = toward the light source (opposite to light travel dir).
+    float3 dirW    = normalize(-DirectionLightDir.xyz);
+    float3 voxelSz = extent * DSV_mInvResolution.xyz;
+    float  stepLen = min(min(voxelSz.x, voxelSz.y), voxelSz.z);
+
+    float  accumDensity = 0.0f;
+    float  maxCoverage  = 0.0f;
+    int3   prevCoord    = int3(-1, -1, -1);
+
+    [loop]
+    for (uint s = 0u; s < DSV_MAX_STEPS; ++s)
+    {
+        float3 p     = worldPos + dirW * (stepLen * ((float)s + 0.5f));
+        float3 uvw   = (p - DSV_mMinAABB.xyz) * invLen;
+        if (any(uvw < 0.0f) || any(uvw >= 1.0f))
+            break;
+
+        int3 coord = (int3)(uvw * (float3)DSV_mResolution.xyz);
+        if (all(coord == prevCoord))
+            continue;                       // skip re-sampling same voxel
+        prevCoord = coord;
+
+        uint  packed   = DSVolumeTexture.Load(int4(coord, 0));
+        float density  = (float)(packed & 0x00FFFFFFu);
+        float coverage = saturate((float)((packed >> 24u) & 0xFFu) * (1.0f / 255.0f));
+
+        accumDensity += density * DSV_DENSITY_MUL;
+        maxCoverage   = max(maxCoverage, coverage);
+
+        if (maxCoverage >= 1.0f)            // fully occluded – stop marching
+            break;
+    }
+
+    // Combine coverage-based occlusion with density-based Beer-Lambert.
+    float  occl = saturate(maxCoverage);
+    float3 beer = exp(-2.0f * sigma_a * accumDensity);
+    return beer * (1.0f - occl) + occl * exp(-2.0f * sigma_a);
+}
+
 float3 FromLinearAbsorption(float3 In) { return sqrt(In); }
 
 [numthreads(64, 1, 1)]
@@ -240,6 +307,9 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float useMulti = step(0.5f, HairEnableMultiScattering);
     float3 hair_dir_fs = lerp(hair_single_scatter, hair_multi_scatter, useMulti);
     hair_dir_fs = max(hair_dir_fs, 0.0f);
+
+    // Deep-shadow self-occlusion transmittance from DSVolumeTexture.
+    hair_dir_fs *= DeepShadowTransmittance(V1.Pos, sigma_a);
 
     // --------------------------------------------------------
     // 6. 打包输出

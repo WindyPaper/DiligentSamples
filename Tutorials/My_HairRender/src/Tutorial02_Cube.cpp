@@ -529,9 +529,10 @@ void Tutorial02_Cube::Initialize(const SampleInitInfo& InitInfo)
     m_Camera.SetProjAttribs(NearPlane, FarPlane, AspectRatio, PI_F / 4.f,
         m_pSwapChain->GetDesc().PreTransform, m_pDevice->GetDeviceCaps().IsGLDevice());
     m_Camera.SetSpeedUpScales(100.0f, 1000.0f);
-    m_Camera.SetPos(float3(-5.07728338, -23.9018879, -67.6912384));
+    m_Camera.SetPos(float3(70.5500031f, 176.880005f, 43.4500008f));
     m_Camera.SetMoveSpeed(10.0f);
-    m_Camera.SetLookAt(float3(0.834758162, -0.444662303, 0.32473737));
+    m_Camera.SetLookAt(float3(70.5500031f, 176.880005f, 43.4500008f) +
+                       float3(0.632606089f, -0.167878374f, -0.756059825f));
     m_Camera.InvalidUpdate();
 
     //m_HairRender.CreateHWPSO();
@@ -645,9 +646,9 @@ void Tutorial02_Cube::UpdateUI()
 	{
 		float3 CamPos = m_Camera.GetPos();
 		ImGui::Text("Cam pos %.2f, %.2f, %.2f", CamPos.x, CamPos.y, CamPos.z);
-		/*float3 CamForward = m_Camera.GetWorldAhead();
-		ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
-		ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);*/
+		//float3 CamForward = m_Camera.GetWorldAhead();
+		//ImGui::Text("Cam Forward %.2f, %.2f, %.2f", CamForward.x, CamForward.y, CamForward.z);
+		//ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 
 		ImGui::gizmo3D("Directional Light", m_DirectionalLightData.DirectionLightDir, ImGui::GetTextLineHeight() * 10);
 		//ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);		
@@ -670,7 +671,7 @@ void Tutorial02_Cube::UpdateUI()
 			m_DirectionalLightData.HairEnableMultiScattering = EnableMultiScatter ? 1.0f : 0.0f;
 		}
 
-		ImGui::SliderFloat3("Head Offset", &m_HeadOffset[0], -4.0f, 4.0f);
+		ImGui::SliderFloat3("Head Offset", &m_HeadOffset[0], -1.0f, 1.0f);
 	}
 	ImGui::End();
 

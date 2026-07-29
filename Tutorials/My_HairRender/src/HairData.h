@@ -43,7 +43,7 @@ int ReadFile(std::string filename, std::vector<T> &Array)
 struct HairData
 {
     HairData();
-    
+
     std::vector<int> HairIdxDataArray;
     std::vector<HairVertexData> HairVertexDataArray;
 

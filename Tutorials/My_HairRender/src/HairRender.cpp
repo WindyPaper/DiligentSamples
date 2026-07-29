@@ -35,6 +35,7 @@ void Diligent::HairRender::InitPSO()
     CreateGetLineOffsetAndCounterPSO();
     CreateGetLineVisibilityPSO();
 	CreatePrecomputeForShadingPSO();
+	CreateGenerateDSVolumePSO();
 	CreateVertexShadingPSO();
     CreateGetWorkQueuePSO();
     CreateDrawLineFromWorkQueueCS();
@@ -389,6 +390,139 @@ void Diligent::HairRender::CreatePrecomputeForShadingPSO()
 	}
 }
 
+void Diligent::HairRender::CreateGenerateDSVolumePSO()
+{
+	AutoPtrShader ap_gen_dsvolume = CreateShader("CSMain", "./GenerateDSVolumeTexture.csh", \
+		"Generate DS Volume CS", SHADER_TYPE_COMPUTE);
+
+	ComputePipelineStateCreateInfo PSOCreateInfo;
+	std::vector<std::string> ParamNames = { \
+		"DSVolumeSceneInfo", \
+		"DSVolumeInfo", \
+		"SceneDepth", \
+		"DSVolumeTexture"
+	};
+	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
+	PSOCreateInfo.PSODesc = CreatePSODescAndParam(&VarsVec[0], (int)VarsVec.size(), "Generate DS Volume PSO");
+
+	PSOCreateInfo.pCS = ap_gen_dsvolume;
+	m_pDevice->CreateComputePipelineState(PSOCreateInfo, &m_GenerateDSVolumeCS.PSO);
+
+	m_GenerateDSVolumeCS.PSO->CreateShaderResourceBinding(&m_GenerateDSVolumeCS.SRB, true);
+
+	// 3D deep-shadow volume texture (R32_UINT, atomically OR-ed)
+	const Uint32 kVolumeRes  = 128;
+	const Uint32 kVolumeMips = 6;   // 128,64,32,16,8,4
+	TextureDesc DSVolumeTexDesc;
+	DSVolumeTexDesc.Name      = "DS Volume Texture";
+	DSVolumeTexDesc.Type      = RESOURCE_DIM_TEX_3D;
+	DSVolumeTexDesc.Width     = kVolumeRes;
+	DSVolumeTexDesc.Height    = kVolumeRes;
+	DSVolumeTexDesc.Depth     = kVolumeRes;
+	DSVolumeTexDesc.MipLevels = kVolumeMips;
+	DSVolumeTexDesc.Format    = TEX_FORMAT_R32_UINT;
+	DSVolumeTexDesc.Usage     = USAGE_DEFAULT;
+	DSVolumeTexDesc.BindFlags = BIND_SHADER_RESOURCE | BIND_UNORDERED_ACCESS;
+	m_pDevice->CreateTexture(DSVolumeTexDesc, nullptr, &m_GenerateDSVolumeCS.DSVolumeTexture);
+
+	// DSVolumeInfo cbuffer computed from hair BBox
+	float3 bboxMin = m_HairRawData.HairBBoxMin;
+	float3 bboxMax = m_HairRawData.HairBBoxMax;
+
+	DSVolumeInfoCB dsInfo{};
+	dsInfo.mMinAABB         = float4(bboxMin, 0.0f);
+	dsInfo.mMaxAABB         = float4(bboxMax, 0.0f);
+	dsInfo.mResolution      = uint4(kVolumeRes, kVolumeRes, kVolumeRes, 0);
+	dsInfo.mClearResolution = uint4(kVolumeRes, kVolumeRes, kVolumeRes, 0);
+	dsInfo.mScale           = float4(1.0f, 1.0f, 1.0f, 0.0f); // DXIL _m0[4]: thread->voxel scale
+	{
+		float3 extent = bboxMax - bboxMin;
+		dsInfo.mInvLength = float4(
+			extent.x > 0.0f ? 1.0f / extent.x : 0.0f,
+			extent.y > 0.0f ? 1.0f / extent.y : 0.0f,
+			extent.z > 0.0f ? 1.0f / extent.z : 0.0f, 0.0f);
+	}
+	dsInfo.mInvResolution   = float4(1.0f / kVolumeRes, 1.0f / kVolumeRes, 1.0f / kVolumeRes, 0.0f);
+	m_GenerateDSVolumeCS.DSVolumeInfoBuffer = CreateConstBuffer(sizeof(DSVolumeInfoCB), &dsInfo, "DS Volume Info");
+
+	// DSVolumeSceneInfo cbuffer (dynamic, filled per-frame in RunCS)
+	m_GenerateDSVolumeCS.DSVolumeSceneInfoBuffer = CreateConstBuffer(sizeof(DSVolumeSceneInfoCB), nullptr, "DS Volume Scene Info");
+
+	SET_SHADER_PARAM_SAFE(m_GenerateDSVolumeCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeSceneInfo"), \
+		m_GenerateDSVolumeCS.DSVolumeSceneInfoBuffer);
+	SET_SHADER_PARAM_SAFE(m_GenerateDSVolumeCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeInfo"), \
+		m_GenerateDSVolumeCS.DSVolumeInfoBuffer);
+	SET_SHADER_PARAM_SAFE(m_GenerateDSVolumeCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "SceneDepth"), \
+		m_pSwapChain->GetDepthTexture()->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+	SET_SHADER_PARAM_SAFE(m_GenerateDSVolumeCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeTexture"), \
+		m_GenerateDSVolumeCS.DSVolumeTexture->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+
+	// Clear PSO (zeros the volume each frame before accumulation)
+	{
+		AutoPtrShader ap_clear = CreateShader("CSClear", "./GenerateDSVolumeTexture.csh", \
+			"Clear DS Volume CS", SHADER_TYPE_COMPUTE);
+
+		ComputePipelineStateCreateInfo ClearPSOCreateInfo;
+		std::vector<std::string> ClearParamNames = { "DSVolumeInfo", "DSVolumeTexture" };
+		std::vector<ShaderResourceVariableDesc> ClearVarsVec = GenerateCSDynParams(ClearParamNames);
+		ClearPSOCreateInfo.PSODesc = CreatePSODescAndParam(&ClearVarsVec[0], (int)ClearVarsVec.size(), "Clear DS Volume PSO");
+		ClearPSOCreateInfo.pCS = ap_clear;
+		m_pDevice->CreateComputePipelineState(ClearPSOCreateInfo, &m_GenerateDSVolumeCS.PSO_Clear);
+
+		m_GenerateDSVolumeCS.PSO_Clear->CreateShaderResourceBinding(&m_GenerateDSVolumeCS.SRB_Clear, true);
+		SET_SHADER_PARAM_SAFE(m_GenerateDSVolumeCS.SRB_Clear->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeInfo"), \
+			m_GenerateDSVolumeCS.DSVolumeInfoBuffer);
+		SET_SHADER_PARAM_SAFE(m_GenerateDSVolumeCS.SRB_Clear->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeTexture"), \
+			m_GenerateDSVolumeCS.DSVolumeTexture->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
+
+	// Mip-chain downsample PSO + per-mip views (128 -> 64 -> 32 -> 16 -> 8 -> 4)
+	{
+		AutoPtrShader ap_ds = CreateShader("CSMain", "./DepthVolumeDownsample.csh", \
+			"DS Volume Downsample CS", SHADER_TYPE_COMPUTE);
+
+		ComputePipelineStateCreateInfo DSPSOCreateInfo;
+		std::vector<std::string> DSParamNames = { "DownsampleInfo", "DSVolumeInfo", "SrcVolume", "DstVolume" };
+		std::vector<ShaderResourceVariableDesc> DSVarsVec = GenerateCSDynParams(DSParamNames);
+		DSPSOCreateInfo.PSODesc = CreatePSODescAndParam(&DSVarsVec[0], (int)DSVarsVec.size(), "DS Volume Downsample PSO");
+		DSPSOCreateInfo.pCS = ap_ds;
+		m_pDevice->CreateComputePipelineState(DSPSOCreateInfo, &m_GenerateDSVolumeCS.PSO_Downsample);
+
+		// Per-mip SRV/UAV views.
+		m_GenerateDSVolumeCS.MipSRVs.resize(kVolumeMips);
+		m_GenerateDSVolumeCS.MipUAVs.resize(kVolumeMips);
+		for (Uint32 mip = 0; mip < kVolumeMips; ++mip)
+		{
+			TextureViewDesc SrvDesc(TEXTURE_VIEW_SHADER_RESOURCE, RESOURCE_DIM_TEX_3D, TEX_FORMAT_R32_UINT, mip, 1);
+			m_GenerateDSVolumeCS.DSVolumeTexture->CreateView(SrvDesc, &m_GenerateDSVolumeCS.MipSRVs[mip]);
+
+			TextureViewDesc UavDesc(TEXTURE_VIEW_UNORDERED_ACCESS, RESOURCE_DIM_TEX_3D, TEX_FORMAT_R32_UINT, mip, 1);
+			m_GenerateDSVolumeCS.DSVolumeTexture->CreateView(UavDesc, &m_GenerateDSVolumeCS.MipUAVs[mip]);
+		}
+
+		// One SRB + cbuffer per downsample step (dst mip = 1..kVolumeMips-1).
+		m_GenerateDSVolumeCS.SRB_Downsample.resize(kVolumeMips);
+		m_GenerateDSVolumeCS.DownsampleInfoBuffers.resize(kVolumeMips);
+		for (Uint32 dstMip = 1; dstMip < kVolumeMips; ++dstMip)
+		{
+			DownsampleInfoCB info{};
+			info.DstMipLevel = uint4(dstMip, 0, 0, 0);
+			m_GenerateDSVolumeCS.DownsampleInfoBuffers[dstMip] = CreateConstBuffer(sizeof(DownsampleInfoCB), &info, "DS Downsample Info");
+
+			m_GenerateDSVolumeCS.PSO_Downsample->CreateShaderResourceBinding(&m_GenerateDSVolumeCS.SRB_Downsample[dstMip], true);
+			auto* pSRB = m_GenerateDSVolumeCS.SRB_Downsample[dstMip].RawPtr();
+			SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DownsampleInfo"), \
+				m_GenerateDSVolumeCS.DownsampleInfoBuffers[dstMip]);
+			SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeInfo"), \
+				m_GenerateDSVolumeCS.DSVolumeInfoBuffer);
+			SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "SrcVolume"), \
+				m_GenerateDSVolumeCS.MipSRVs[dstMip - 1]);
+			SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DstVolume"), \
+				m_GenerateDSVolumeCS.MipUAVs[dstMip]);
+		}
+	}
+}
+
 void Diligent::HairRender::CreateVertexShadingPSO()
 {
 	//uint RenderQueueBufferCount = m_GetLineOffsetCounterCS.CountCPUData[0];
@@ -407,7 +541,9 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 		"LineVisibilityBuffer", \
 		"OutHairVertexShadeData", \
 		"DSLut3D", \
-		"DSLutNTT"
+		"DSLutNTT", \
+		"DSVolumeInfo", \
+		"DSVolumeTexture"
 	};
 	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
 
@@ -474,6 +610,11 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 		m_PrecomputeLUTForShadingCS.OutHairAveragePrecomputeData->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSLutNTT"), \
 		m_PrecomputeLUTForShadingCS.OutHairNTTPrecomputeData->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
+
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeInfo"), \
+		m_GenerateDSVolumeCS.DSVolumeInfoBuffer);
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeTexture"), \
+		m_GenerateDSVolumeCS.DSVolumeTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }
 
 void Diligent::HairRender::CreateGetWorkQueuePSO()
@@ -872,6 +1013,37 @@ void Diligent::HairRender::RunPrecomputeForShadingCS()
 	}
 }
 
+void Diligent::HairRender::RunGenerateDSVolumeCS()
+{
+	const uint kVolumeRes = 128;
+
+	// Clear volume.
+	m_pDeviceCtx->SetPipelineState(m_GenerateDSVolumeCS.PSO_Clear);
+	m_pDeviceCtx->CommitShaderResources(m_GenerateDSVolumeCS.SRB_Clear, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+	const uint clearGroups = (uint)ceil(kVolumeRes / 4.0);
+	m_pDeviceCtx->DispatchCompute(DispatchComputeAttribs(clearGroups, clearGroups, clearGroups));
+
+	// Rasterize deep-shadow volume (one thread per voxel).
+	m_pDeviceCtx->SetPipelineState(m_GenerateDSVolumeCS.PSO);
+	m_pDeviceCtx->CommitShaderResources(m_GenerateDSVolumeCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+	const uint groups = (uint)ceil(kVolumeRes / 4.0);
+	m_pDeviceCtx->DispatchCompute(DispatchComputeAttribs(groups, groups, groups));
+
+	// Build the mip chain (128 -> 64 -> ... -> 4).
+	const uint kVolumeMips = 6;
+	m_pDeviceCtx->SetPipelineState(m_GenerateDSVolumeCS.PSO_Downsample);
+	for (uint dstMip = 1; dstMip < kVolumeMips; ++dstMip)
+	{
+		m_pDeviceCtx->CommitShaderResources(m_GenerateDSVolumeCS.SRB_Downsample[dstMip], RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+
+		uint dstRes = kVolumeRes >> dstMip;
+		uint g = (uint)ceil(dstRes / 4.0);
+		if (g == 0) g = 1;
+		m_pDeviceCtx->DispatchCompute(DispatchComputeAttribs(g, g, g));
+	}
+}
+
 void Diligent::HairRender::RunVertexShadingCS()
 {
 	m_pDeviceCtx->SetPipelineState(m_VertexShadingCS.PSO);
@@ -983,6 +1155,15 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
 		LightCBConstants->HairEnableMultiScattering = shading_data.HairEnableMultiScattering;
     }
 
+    {
+        MapHelper<DSVolumeSceneInfoCB> DSVSceneCB(m_pDeviceCtx, m_GenerateDSVolumeCS.DSVolumeSceneInfoBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
+        DSVSceneCB->ViewProj    = viwe_proj.Transpose();
+        DSVSceneCB->InvViewProj = inv_view_proj.Transpose();
+        DSVSceneCB->LightDir    = float4(normalize(float3(shading_data.DirectionLightDir.x, shading_data.DirectionLightDir.y, shading_data.DirectionLightDir.z)), 1.0f);
+        DSVSceneCB->DepthSize   = float4((float)m_pSwapChain->GetDesc().Width, (float)m_pSwapChain->GetDesc().Height, 0.0f, 0.0f);
+        DSVSceneCB->Tolerance   = float4(50.0f, 0.0f, 0.0f, 0.0f);
+    }
+
     RunDownSampledDepthMapCS();
     RunDrawLineCS();
 
@@ -990,6 +1171,7 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
     RunGetLineOffsetAndCounterCS();
     RunGetLineVisibilityCS();
 	RunPrecomputeForShadingCS();
+	RunGenerateDSVolumeCS();
 	RunVertexShadingCS();
     RunGetWorkQueueCS();
     RunDrawLineFromWorkQueueCS(pRTView);

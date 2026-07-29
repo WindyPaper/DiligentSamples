@@ -62,6 +62,35 @@ struct PrecomputeLUTData
 	uint SampleCountScale;
 };
 
+// Mirrors cbuffer DSVolumeInfo in GenerateDSVolumeTexture.csh / LineVertexShading.csh
+// Row order matches DSDepthGenerate.dxil SSBO layout so shader indices line up.
+struct DSVolumeInfoCB
+{
+	float4 mMinAABB;         // [0] xyz = min corner
+	float4 mMaxAABB;         // [1] xyz = max corner
+	uint4  mResolution;      // [2] xyz = voxel resolution
+	uint4  mClearResolution; // [3] xyz = clear resolution (== mResolution)
+	float4 mScale;           // [4] xyz = thread->voxel scale (DXIL _m0[4], {1,1,1})
+	float4 mInvLength;       // [5] xyz = 1 / (max-min)
+	float4 mInvResolution;   // [6] xyz = 1 / resolution
+};
+
+// Mirrors cbuffer DSVolumeSceneInfo in GenerateDSVolumeTexture.csh
+struct DSVolumeSceneInfoCB
+{
+	float4x4 ViewProj;
+	float4x4 InvViewProj;
+	float4   LightDir;
+	float4   DepthSize;
+	float4   Tolerance;
+};
+
+// Mirrors cbuffer DownsampleInfo in DepthVolumeDownsample.csh
+struct DownsampleInfoCB
+{
+	uint4 DstMipLevel;
+};
+
 struct PassBaseData
 {
     RefCntAutoPtr<IPipelineState>         PSO;
@@ -156,8 +185,24 @@ struct PrecomputeLUTForShadingCS : public PassBaseData
 	RefCntAutoPtr<IShaderResourceBinding> SRB_NTT;
 };
 
-struct VertexShadingCS : public PassBaseData
+struct GenerateDSVolumeCS : public PassBaseData
 {
+	AutoPtrTex    DSVolumeTexture;
+	AutoPtrBuffer DSVolumeInfoBuffer;
+	AutoPtrBuffer DSVolumeSceneInfoBuffer;
+
+	RefCntAutoPtr<IPipelineState>         PSO_Clear;
+	RefCntAutoPtr<IShaderResourceBinding> SRB_Clear;
+
+	// Mip-chain downsample
+	RefCntAutoPtr<IPipelineState>                       PSO_Downsample;
+	std::vector<RefCntAutoPtr<IShaderResourceBinding>>  SRB_Downsample;   // one per dst mip
+	std::vector<AutoPtrBuffer>                          DownsampleInfoBuffers;
+	std::vector<RefCntAutoPtr<ITextureView>>            MipSRVs;           // per-mip SRV
+	std::vector<RefCntAutoPtr<ITextureView>>            MipUAVs;           // per-mip UAV
+};
+
+struct VertexShadingCS : public PassBaseData{
 	AutoPtrBuffer VerticesData;
 	AutoPtrBuffer LineIdxData;
 
@@ -186,6 +231,7 @@ public:
     void CreateGetLineOffsetAndCounterPSO();
     void CreateGetLineVisibilityPSO();
 	void CreatePrecomputeForShadingPSO();
+	void CreateGenerateDSVolumePSO();
 	void CreateVertexShadingPSO();
     void CreateGetWorkQueuePSO();
     void CreateDrawLineFromWorkQueueCS();
@@ -199,6 +245,7 @@ public:
     void RunGetLineOffsetAndCounterCS();
     void RunGetLineVisibilityCS();
 	void RunPrecomputeForShadingCS();
+	void RunGenerateDSVolumeCS();
 	void RunVertexShadingCS();
     void RunGetWorkQueueCS();
     void RunDrawLineFromWorkQueueCS(ITexture *pRTView);
@@ -232,6 +279,7 @@ private:
     GetLineVisibilityCS m_GetLineVisibilityCS;
 	PrecomputeLUTForShadingCS m_PrecomputeLUTForShadingCS;
 	PrecomputeLUTData m_PrecomputeLutConfigData;
+	GenerateDSVolumeCS m_GenerateDSVolumeCS;
 	VertexShadingCS m_VertexShadingCS;
     int m_VisibilityLineCount;
     GetWorkQueueCS m_GetWorkQueueCS;
