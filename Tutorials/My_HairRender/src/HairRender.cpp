@@ -457,6 +457,58 @@ void Diligent::HairRender::CreateGenerateDSVolumePSO()
 	SET_SHADER_PARAM_SAFE(m_GenerateDSVolumeCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeTexture"), \
 		m_GenerateDSVolumeCS.DSVolumeTexture->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
 
+	// FromHair PSO (splats hair strand density into the volume before rasterization)
+	{
+		AutoPtrShader ap_from_hair = CreateShader("CSGenerateFromHair", "./GenerateDSVolumeTexture.csh", \
+			"Generate DS Volume From Hair CS", SHADER_TYPE_COMPUTE);
+
+		ComputePipelineStateCreateInfo FromHairPSOCreateInfo;
+		std::vector<std::string> FromHairParamNames = { \
+			"HairStrandCountInfo", \
+			"DSInfo", \
+			"DSVolumeInfo", \
+			"HairStrandIdxData", \
+			"HairVerticesDatas", \
+			"DSVolumeTexture"
+		};
+		std::vector<ShaderResourceVariableDesc> FromHairVarsVec = GenerateCSDynParams(FromHairParamNames);
+		FromHairPSOCreateInfo.PSODesc = CreatePSODescAndParam(&FromHairVarsVec[0], (int)FromHairVarsVec.size(), "Generate DS Volume From Hair PSO");
+		FromHairPSOCreateInfo.pCS = ap_from_hair;
+		m_pDevice->CreateComputePipelineState(FromHairPSOCreateInfo, &m_GenerateDSVolumeCS.PSO_FromHair);
+
+		m_GenerateDSVolumeCS.PSO_FromHair->CreateShaderResourceBinding(&m_GenerateDSVolumeCS.SRB_FromHair, true);
+
+		// DSInfo cbuffer (VoxelWorldSize / VolumePageResolution / RasterDepthThreshold).
+		DSInfoCB dsCfg{};
+		dsCfg.Row0 = float4(0.3f, 0.0f, 0.0f, 0.0f);   // VoxelWorldSize
+		dsCfg.Row1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+		dsCfg.Row2 = float4(0.0f, 32.0f, 0.0f, 0.0f);  // VolumePageResolution
+		dsCfg.Row3 = float4(0.05f, 0.0f, 0.0f, 0.0f);  // RasterDepthThreshold
+		m_GenerateDSVolumeCS.DSInfoBuffer = CreateConstBuffer(sizeof(DSInfoCB), &dsCfg, "DS Info");
+
+		// Strand count cbuffer.
+		HairStrandCountCB strandCB{};
+		strandCB.HairStrandCount = uint4((uint)m_HairRawData.HairIdxDataArray.size(), 0, 0, 0);
+		m_GenerateDSVolumeCS.StrandCountBuffer = CreateConstBuffer(sizeof(HairStrandCountCB), &strandCB, "Hair Strand Count");
+
+		m_GenerateDSVolumeCS.VerticesData = m_apHairVertexArray;
+		m_GenerateDSVolumeCS.LineIdxData  = m_apHairIdxArray;
+
+		auto* pSRB = m_GenerateDSVolumeCS.SRB_FromHair.RawPtr();
+		SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairStrandCountInfo"), \
+			m_GenerateDSVolumeCS.StrandCountBuffer);
+		SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSInfo"), \
+			m_GenerateDSVolumeCS.DSInfoBuffer);
+		SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeInfo"), \
+			m_GenerateDSVolumeCS.DSVolumeInfoBuffer);
+		SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairStrandIdxData"), \
+			m_GenerateDSVolumeCS.LineIdxData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+		SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "HairVerticesDatas"), \
+			m_GenerateDSVolumeCS.VerticesData->GetDefaultView(BUFFER_VIEW_SHADER_RESOURCE));
+		SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeTexture"), \
+			m_GenerateDSVolumeCS.DSVolumeTexture->GetDefaultView(TEXTURE_VIEW_UNORDERED_ACCESS));
+	}
+
 	// Clear PSO (zeros the volume each frame before accumulation)
 	{
 		AutoPtrShader ap_clear = CreateShader("CSClear", "./GenerateDSVolumeTexture.csh", \
@@ -1023,6 +1075,16 @@ void Diligent::HairRender::RunGenerateDSVolumeCS()
 	const uint clearGroups = (uint)ceil(kVolumeRes / 4.0);
 	m_pDeviceCtx->DispatchCompute(DispatchComputeAttribs(clearGroups, clearGroups, clearGroups));
 
+	// Splat hair strand density into the volume (one thread per strand).
+	{
+		m_pDeviceCtx->SetPipelineState(m_GenerateDSVolumeCS.PSO_FromHair);
+		m_pDeviceCtx->CommitShaderResources(m_GenerateDSVolumeCS.SRB_FromHair, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
+		const uint strandCount = (uint)m_HairRawData.HairIdxDataArray.size();
+		const uint fromHairGroups = (uint)ceil(strandCount / 64.0);
+		if (fromHairGroups > 0)
+			m_pDeviceCtx->DispatchCompute(DispatchComputeAttribs(fromHairGroups, 1, 1));
+	}
+
 	// Rasterize deep-shadow volume (one thread per voxel).
 	m_pDeviceCtx->SetPipelineState(m_GenerateDSVolumeCS.PSO);
 	m_pDeviceCtx->CommitShaderResources(m_GenerateDSVolumeCS.SRB, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
@@ -1161,7 +1223,7 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
         DSVSceneCB->InvViewProj = inv_view_proj.Transpose();
         DSVSceneCB->LightDir    = float4(normalize(float3(shading_data.DirectionLightDir.x, shading_data.DirectionLightDir.y, shading_data.DirectionLightDir.z)), 1.0f);
         DSVSceneCB->DepthSize   = float4((float)m_pSwapChain->GetDesc().Width, (float)m_pSwapChain->GetDesc().Height, 0.0f, 0.0f);
-        DSVSceneCB->Tolerance   = float4(50.0f, 0.0f, 0.0f, 0.0f);
+        DSVSceneCB->Tolerance   = float4(0.05f, 0.0f, 0.0f, 0.0f); // DSInfo_RasterDepthThreshold; shader applies *100
     }
 
     RunDownSampledDepthMapCS();

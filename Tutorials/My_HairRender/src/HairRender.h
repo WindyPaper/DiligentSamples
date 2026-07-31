@@ -91,6 +91,22 @@ struct DownsampleInfoCB
 	uint4 DstMipLevel;
 };
 
+// Mirrors cbuffer DSInfo in GenerateDSVolumeTexture.csh (CSGenerateFromHair).
+// Only positional rows used by the shader; matches DXIL _33 layout.
+struct DSInfoCB
+{
+	float4 Row0;   // x = DSInfo_VoxelWorldSize
+	float4 Row1;
+	float4 Row2;   // y = DSInfo_VolumePageResolution
+	float4 Row3;   // x = DSInfo_RasterDepthThreshold
+};
+
+// Mirrors cbuffer HairStrandCountInfo in GenerateDSVolumeTexture.csh.
+struct HairStrandCountCB
+{
+	uint4 HairStrandCount;   // x = number of strands
+};
+
 struct PassBaseData
 {
     RefCntAutoPtr<IPipelineState>         PSO;
@@ -190,6 +206,14 @@ struct GenerateDSVolumeCS : public PassBaseData
 	AutoPtrTex    DSVolumeTexture;
 	AutoPtrBuffer DSVolumeInfoBuffer;
 	AutoPtrBuffer DSVolumeSceneInfoBuffer;
+
+	// FromHair pass: splats hair strand density into the volume.
+	RefCntAutoPtr<IPipelineState>         PSO_FromHair;
+	RefCntAutoPtr<IShaderResourceBinding> SRB_FromHair;
+	AutoPtrBuffer DSInfoBuffer;
+	AutoPtrBuffer StrandCountBuffer;
+	AutoPtrBuffer VerticesData;
+	AutoPtrBuffer LineIdxData;
 
 	RefCntAutoPtr<IPipelineState>         PSO_Clear;
 	RefCntAutoPtr<IShaderResourceBinding> SRB_Clear;
