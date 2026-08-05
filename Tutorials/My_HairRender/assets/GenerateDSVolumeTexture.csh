@@ -69,14 +69,18 @@ cbuffer HairStrandCountInfo
 
 // DSInfo cbuffer (DXIL _33). Only the members used by this entry are named.
 //   _33._m0[0].x = DSInfo_VoxelWorldSize
+//   _33._m0[1].x = DSInfo_VolumeTracingOffsetScale (used by shading)
+//   _33._m0[1].w = DSInfo_VolumeTracingIBLDelta (used by shading)
+//   _33._m0[2].x = DSInfo_VolumeTracingDelta (used by shading)
 //   _33._m0[2].y = DSInfo_VolumePageResolution
 //   _33._m0[3].x = DSInfo_RasterDepthThreshold
+//   _33._m0[3].y = Material.hm_backscatterScale (used by shading)
 cbuffer DSInfo
 {
     float4 DSInfo_Row0;   // x = VoxelWorldSize
-    float4 DSInfo_Row1;
-    float4 DSInfo_Row2;   // y = VolumePageResolution
-    float4 DSInfo_Row3;   // x = RasterDepthThreshold
+    float4 DSInfo_Row1;   // x = VolumeTracingOffsetScale, w = VolumeTracingIBLDelta
+    float4 DSInfo_Row2;   // x = VolumeTracingDelta, y = VolumePageResolution
+    float4 DSInfo_Row3;   // x = RasterDepthThreshold, y = BackscatterScale
 };
 
 // Strand -> first-vertex index list (DXIL SSBO _9). idx = value & 0x0FFFFFFF.

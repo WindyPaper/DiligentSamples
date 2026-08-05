@@ -479,11 +479,23 @@ void Diligent::HairRender::CreateGenerateDSVolumePSO()
 		m_GenerateDSVolumeCS.PSO_FromHair->CreateShaderResourceBinding(&m_GenerateDSVolumeCS.SRB_FromHair, true);
 
 		// DSInfo cbuffer (VoxelWorldSize / VolumePageResolution / RasterDepthThreshold).
+		// VoxelWorldSize derived from hair AABB: largest extent / volume resolution,
+		// so one voxel maps to the actual hair world size instead of a hardcoded value.
 		DSInfoCB dsCfg{};
-		dsCfg.Row0 = float4(0.3f, 0.0f, 0.0f, 0.0f);   // VoxelWorldSize
-		dsCfg.Row1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
-		dsCfg.Row2 = float4(0.0f, 32.0f, 0.0f, 0.0f);  // VolumePageResolution
-		dsCfg.Row3 = float4(0.05f, 0.0f, 0.0f, 0.0f);  // RasterDepthThreshold
+		{
+			float3 aabbExtent   = m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin;
+			float  maxExtent    = std::max(aabbExtent.x, std::max(aabbExtent.y, aabbExtent.z));
+			float  voxelWorldSz = maxExtent > 0.0f ? maxExtent / float(kVolumeRes) : 0.3f;
+			dsCfg.Row0 = float4(voxelWorldSz, 0.0f, 0.0f, 0.0f);   // VoxelWorldSize
+		}
+		// Row1.x = VolumeTracingOffsetScale; Row1.w = VolumeTracingIBLDelta.
+		// Row2.x = VolumeTracingDelta; Row2.y = VolumePageResolution. The DSVolumeTex3D
+		// path offsets the start by one voxel and grows the step by 1.1, as in the reference.
+		dsCfg.Row1 = float4(1.0f, 0.0f, 0.0f, 1.1f);
+		dsCfg.Row2 = float4(1.1f, 32.0f, 0.0f, 0.0f);
+		// Row3.x = RasterDepthThreshold; Row3.y = BackscatterScale (multiple-
+		// scattering glow amount, Material.hm_backscatterScale in the reference).
+		dsCfg.Row3 = float4(0.05f, 0.1f, 0.0f, 0.0f);
 		m_GenerateDSVolumeCS.DSInfoBuffer = CreateConstBuffer(sizeof(DSInfoCB), &dsCfg, "DS Info");
 
 		// Strand count cbuffer.
@@ -595,6 +607,7 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 		"DSLut3D", \
 		"DSLutNTT", \
 		"DSVolumeInfo", \
+		"DSInfo", \
 		"DSVolumeTexture"
 	};
 	std::vector<ShaderResourceVariableDesc> VarsVec = GenerateCSDynParams(ParamNames);
@@ -665,6 +678,8 @@ void Diligent::HairRender::CreateVertexShadingPSO()
 
 	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeInfo"), \
 		m_GenerateDSVolumeCS.DSVolumeInfoBuffer);
+	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSInfo"), \
+		m_GenerateDSVolumeCS.DSInfoBuffer);
 	SET_SHADER_PARAM_SAFE(m_VertexShadingCS.SRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeTexture"), \
 		m_GenerateDSVolumeCS.DSVolumeTexture->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE));
 }

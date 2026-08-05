@@ -96,9 +96,9 @@ struct DownsampleInfoCB
 struct DSInfoCB
 {
 	float4 Row0;   // x = DSInfo_VoxelWorldSize
-	float4 Row1;
-	float4 Row2;   // y = DSInfo_VolumePageResolution
-	float4 Row3;   // x = DSInfo_RasterDepthThreshold
+	float4 Row1;   // x = DSInfo_VolumeTracingOffsetScale, w = DSInfo_VolumeTracingIBLDelta
+	float4 Row2;   // x = DSInfo_VolumeTracingDelta, y = DSInfo_VolumePageResolution
+	float4 Row3;   // x = DSInfo_RasterDepthThreshold, y = Material.hm_backscatterScale
 };
 
 // Mirrors cbuffer HairStrandCountInfo in GenerateDSVolumeTexture.csh.

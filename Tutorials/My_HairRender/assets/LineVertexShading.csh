@@ -47,67 +47,162 @@ Texture2D<float4>  DSLutNTT;
 //   Per voxel packed value:
 //     low 24 bits = accumulated hair density
 //     top  8 bits = coverage/opacity  (coverage = ((v>>24)/255))
-// Ported from hair_shade_result1.hlsl DSVolumeTexture ray-march:
-//   march from the shaded point toward the light, accumulate density and
-//   track max coverage; stop when coverage saturates. Convert accumulated
-//   density to Beer-Lambert transmittance.
+//
+// Ray-march ported 1:1 from hair_shade_result1.hlsl / hair_shade.dxil:
+//   - Clip the shaded-point -> light ray against the volume AABB.
+//   - March in voxel-sized steps; per step pick a mip level from the marched
+//     distance (mip = min(round(log2(dist/VoxelWorldSize)), 5)) and Load the
+//     mip pyramid at coord >> mip.
+//   - Accumulate density (weighted by the per-step voxel run length) and track
+//     max coverage; stop when coverage saturates.
+//   - Combine into per-channel transmittance:
+//       T = (sig^2 - sqrt(sig)) * (1 - coverage) * exp(-max(D - 1, 0)) + sqrt(sig)
 cbuffer DSVolumeInfo
 {
     float4 DSV_mMinAABB;         // [0] xyz
     float4 DSV_mMaxAABB;         // [1] xyz
     uint4  DSV_mResolution;      // [2] xyz
     uint4  DSV_mClearResolution; // [3] xyz
-    float4 DSV_mScale;           // [4] xyz
+    float4 DSV_mScale;           // [4] xyz = coord remap scale
     float4 DSV_mInvLength;       // [5] xyz = 1/(max-min)
     float4 DSV_mInvResolution;   // [6] xyz = 1/res
 };
 Texture3D<uint>    DSVolumeTexture;
 
-static const uint  DSV_MAX_STEPS   = 64u;
-static const float DSV_DENSITY_MUL = 0.003257f;   // ≈ 0x3F50624DE... (density -> optical depth)
-
-float3 DeepShadowTransmittance(float3 worldPos, float3 sigma_a)
+// DSInfo cbuffer (matches GenerateDSVolumeTexture.csh layout).
+//   Row0.x = VoxelWorldSize
+//   Row1.x = VolumeTracingOffsetScale (start offset in voxels)
+//   Row1.w = VolumeTracingIBLDelta (fallback per-step growth factor)
+//   Row2.x = VolumeTracingDelta (per-step growth factor used by DSVolumeTex3D path)
+//   Row2.y = VolumePageResolution (max coarse step clamp)
+//   Row3.x = RasterDepthThreshold (used by DS volume generation)
+//   Row3.y = BackscatterScale (multiple-scattering glow amount, small ~0.1)
+cbuffer DSInfo
 {
-    float3 extent = max(DSV_mMaxAABB.xyz - DSV_mMinAABB.xyz, 1e-6f);
-    float3 invLen = 1.0f / extent;
+    float4 DSInfo_Row0;   // x = VoxelWorldSize
+    float4 DSInfo_Row1;   // x = VolumeTracingOffsetScale, w = VolumeTracingIBLDelta
+    float4 DSInfo_Row2;   // x = VolumeTracingDelta, y = VolumePageResolution
+    float4 DSInfo_Row3;   // x = RasterDepthThreshold, y = BackscatterScale
+};
 
-    // March direction = toward the light source (opposite to light travel dir).
-    float3 dirW    = normalize(-DirectionLightDir.xyz);
-    float3 voxelSz = extent * DSV_mInvResolution.xyz;
-    float  stepLen = min(min(voxelSz.x, voxelSz.y), voxelSz.z);
+static const float DSV_DENSITY_MUL = 0.00100000005f; // DSVolumeTex3D density -> optical depth
+static const float DSV_MAX_MIP     = 5.0f;        // 6-level pyramid: 128..4
 
-    float  accumDensity = 0.0f;
+// DeepShadowScattering: ports the DSVolume "n-term" of the global multiple-
+// scattering approximation (hair_shade.dxil / hair_shade_result1.hlsl).
+//
+// The r32ui volume stores hair OPACITY only:
+//   low 24 bits = accumulated hair density (n = number of hairs toward light)
+//   top  8 bits = head/body scattering-occlusion coverage
+//
+// Ray-shoot from the shading point toward the light, accumulate density (n) and
+// track max coverage, then combine into the per-channel multiple-scattering
+// weight (NOT a plain shadow: denser hair => stronger forward/back scattering
+// glow, matching blonde-hair translucency in the reference):
+//
+//   sig = BackscatterScale
+//   T   = (sig^2 - sqrt(sig)) * saturate(1 - coverage) * exp(-max(D - 1, 0)) + sqrt(sig)
+float3 DeepShadowScattering(float3 worldPos)
+{
+    float  voxelWorldSize = DSInfo_Row0.x;
+    float  offsetScale    = DSInfo_Row1.x;   // VolumeTracingOffsetScale
+    float  stepGrowth     = max((DSInfo_Row2.x > 0.0f) ? DSInfo_Row2.x : DSInfo_Row1.w, 1.0f);
+    float  pageResolution = max(DSInfo_Row2.y, 1.0f); // VolumePageResolution
+    float  backscatter    = DSInfo_Row3.y;   // BackscatterScale (Material.hm_backscatterScale)
+
+    // March direction = toward the light source.
+    float3 dirW = normalize(DirectionLightDir.xyz);
+    float3 rayStart = worldPos + dirW * voxelWorldSize * offsetScale;
+
+    // --- AABB slab clip: find [t0, t1] intersection of the ray with the volume ---
+    float3 invDir = 1.0f / dirW;
+    float3 tA = (DSV_mMinAABB.xyz - rayStart) * invDir;
+    float3 tB = (DSV_mMaxAABB.xyz - rayStart) * invDir;
+    float3 tMin3 = min(tA, tB);
+    float3 tMax3 = max(tA, tB);
+    float  t0 = max(max(tMin3.x, tMin3.y), tMin3.z);
+    float  t1 = min(min(tMax3.x, tMax3.y), tMax3.z);
+    t0 = max(t0, 0.0f);
+
+    // Reference phi defaults when the ray never marches a voxel:
+    //   accumDensity = 0.5, coverage = 0.
+    float  accumDensity = 0.5f;
     float  maxCoverage  = 0.0f;
-    int3   prevCoord    = int3(-1, -1, -1);
 
-    [loop]
-    for (uint s = 0u; s < DSV_MAX_STEPS; ++s)
+    if (t0 < t1)
     {
-        float3 p     = worldPos + dirW * (stepLen * ((float)s + 0.5f));
-        float3 uvw   = (p - DSV_mMinAABB.xyz) * invLen;
-        if (any(uvw < 0.0f) || any(uvw >= 1.0f))
-            break;
+        // Entry point + quantized voxel-sized marching.
+        float3 entry    = rayStart + dirW * t0;
+        float  segLen   = min((t1 - t0), 1e5f);
+        float3 stepDir  = dirW * voxelWorldSize;                 // one unit ~ one voxel
+        float  numSteps = ceil(segLen / max(voxelWorldSize, 1e-6f));
+        float  baseStep = segLen / max(numSteps, 1.0f);
 
-        int3 coord = (int3)(uvw * (float3)DSV_mResolution.xyz);
-        if (all(coord == prevCoord))
-            continue;                       // skip re-sampling same voxel
-        prevCoord = coord;
+        if (numSteps > 0.0f)
+        {
+            accumDensity = 0.0f;
+            int3   prevCoord = int3(-1, -1, -1);
+            float  curStep   = 1.0f;   // grows with distance, weights density
+            float  marched   = 0.0f;   // accumulated voxel-count along the ray
 
-        uint  packed   = DSVolumeTexture.Load(int4(coord, 0));
-        float density  = (float)(packed & 0x00FFFFFFu);
-        float coverage = saturate((float)((packed >> 24u) & 0xFFu) * (1.0f / 255.0f));
+            float3 res_1  = (float3)(DSV_mResolution.xyz - uint3(1u, 1u, 1u));
 
-        accumDensity += density * DSV_DENSITY_MUL;
-        maxCoverage   = max(maxCoverage, coverage);
+            [loop]
+            for (uint s = 0u; marched < numSteps; ++s)
+            {
+                float3 p   = entry + stepDir * marched;
 
-        if (maxCoverage >= 1.0f)            // fully occluded – stop marching
-            break;
+                // uvw must mirror the write mapping in GenerateDSVolumeTexture.csh:
+                //   tc = saturate((wp - min) * invLength); tc.y/z = 1 - tc.y/z;
+                //   voxel = tc * (mResolution - 1)
+                float3 uvw = saturate((p - DSV_mMinAABB.xyz) * DSV_mInvLength.xyz);
+                uvw.y = 1.0f - uvw.y;
+                uvw.z = 1.0f - uvw.z;
+
+                int3 coord = (int3)(uvw * res_1);
+
+                if (all(coord == prevCoord))
+                {
+                    marched += curStep;
+                    continue;
+                }
+                prevCoord = coord;
+
+                // Mip selection from marched distance.
+                float mipRaw = (curStep * baseStep) / max(voxelWorldSize, 1e-6f);
+                uint  mip    = (uint)min(max(round(log2(max(mipRaw, 1e-6f))), 0.0f), DSV_MAX_MIP);
+                uint  mipSh  = mip & 31u;
+
+                int3 mipCoord = int3((uint3)coord >> mipSh);
+                uint packed   = DSVolumeTexture.Load(int4(mipCoord, mip));
+
+                float density  = (float)(packed & 0x00FFFFFFu) * mipRaw;
+                float coverage = saturate((float)((packed >> 24u) & 0xFFu) * (1.0f / 255.0f));
+
+                accumDensity += density * DSV_DENSITY_MUL;
+                maxCoverage   = max(maxCoverage, coverage);
+
+                if (maxCoverage >= 1.0f)
+                    break;
+
+                float nextStep = min(curStep * stepGrowth, pageResolution);
+                marched += nextStep;
+                curStep  = nextStep;
+            }
+        }
+        else
+        {
+            accumDensity = 0.0f;
+        }
     }
 
-    // Combine coverage-based occlusion with density-based Beer-Lambert.
-    float  occl = saturate(maxCoverage);
-    float3 beer = exp(-2.0f * sigma_a * accumDensity);
-    return beer * (1.0f - occl) + occl * exp(-2.0f * sigma_a);
+    // Per-channel multiple-scattering weight (faithful reference combine).
+    float3 sig     = backscatter.xxx;
+    float3 sqrtSig = sqrt(sig);
+    float3 sigSq   = sig * sig;
+    float  oneMCov = saturate(1.0f - maxCoverage);
+    float  falloff = exp(-max(accumDensity - 1.0f, 0.0f));
+    return (sigSq - sqrtSig) * oneMCov * falloff + sqrtSig;
 }
 
 float3 FromLinearAbsorption(float3 In) { return sqrt(In); }
@@ -308,8 +403,9 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 hair_dir_fs = lerp(hair_single_scatter, hair_multi_scatter, useMulti);
     hair_dir_fs = max(hair_dir_fs, 0.0f);
 
-    // Deep-shadow self-occlusion transmittance from DSVolumeTexture.
-    hair_dir_fs *= DeepShadowTransmittance(V1.Pos, sigma_a);
+    // Global multiple-scattering (n-term) weight from the DSVolume, ray-shot
+    // from the shading point toward the light.
+    hair_dir_fs *= DeepShadowScattering(V1.Pos);
 
     // --------------------------------------------------------
     // 6. 打包输出
