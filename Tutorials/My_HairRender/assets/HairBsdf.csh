@@ -273,12 +273,17 @@ float Hair_g2(float Variance, float Theta)
 	return A * exp(-0.5 * Pow2(Theta) / Variance);
 }
 
+// HairCount: number of hair fibers between the shading point and the light,
+// accumulated by the deep-shadow volume ray-march (hair_shade.hlsl `_2798`).
+// It drives the front-scattering attenuation a_f^n and the global spread
+// variance sigma_f^2 = Beta_f^2 * max(1, n).
 FHairTransmittanceData ComputeDualScatteringTerms(float Roughness,
 	const float3 V,
 	const float3 L,
 	const float3 T, 
     float3 A_front,
-    float3 A_back)
+    float3 A_back,
+    float HairCount)
 {
     const float SinThetaL = clamp(dot(T, L), -1, 1);
 	const float SinThetaV = clamp(dot(T, V), -1, 1);
@@ -315,7 +320,7 @@ FHairTransmittanceData ComputeDualScatteringTerms(float Roughness,
 
 	// Always shift the hair count by one to remove self-occlusion/shadow aliasing and have smoother transition
 	// This insure the the pow function always starts at 0 for front facing hair
-	const float HairCount = 0.5f;//max(0, TransmittanceMask.HairCount - 1);
+	HairCount = max(0.0f, HairCount);
 
 	// This is a coarse approximation of eq. 13. Normally, Beta_f should be weighted by the 'normalized' 
 	// R, TT, and TRT terms 
