@@ -4,25 +4,29 @@
 //   - Reconstruct voxel world position by lerping the hair AABB.
 //   - Project to screen via ViewProj, sample scene depth.
 //   - Reconstruct the visible surface world position via InvViewProj.
-//   - If the voxel is occluded (behind surface) and lies close to the surface
-//     along the light direction, mark it by OR-ing the top 8 bits.
+//   - If the voxel is hidden behind the visible surface and within
+//     RasterDepthThreshold of it in linear view depth, mark it by OR-ing the
+//     top 8 bits. NOTE: the reference depth buffer is reversed-Z, ours is
+//     standard Z, so the depth comparison is flipped w.r.t. the DXIL.
 //
 // Runs before LineVertexShading.csh.
 
 #include "CommonCS.csh"
 
-// SceneInfo (matches DXIL cbuffer b0 rows used):
-//   ViewProj      : world -> clip                (DXIL rows 0..3)
-//   LightDir      : light direction (world)      (DXIL row 6)
-//   InvViewProj   : clip -> world                (DXIL rows 14..17)
-//   DepthSize     : depth texture size in texels (DXIL row 23)
+// SceneInfo (matches the reference cbuffer rows used):
+//   ViewProj      : world -> clip                    (row 0..3)
+//   ViewDepthAxis : transposeViewMat row 2 (= view    (row 6)
+//                   matrix 3rd column), so that
+//                   dot(worldPos, xyz) is linear view depth
+//   InvViewProj   : clip -> world                    (row 14..17)
+//   DepthSize     : depth texture size in texels     (row 23)
 cbuffer DSVolumeSceneInfo
 {
-    float4x4 DSV_ViewProj;     // stored transposed; consume via mul(pos, M)
-    float4x4 DSV_InvViewProj;  // stored transposed; consume via mul(pos, M)
-    float4   DSV_LightDir;   // xyz used
-    float4   DSV_DepthSize;  // xy = depth texel size
-    float4   DSV_Tolerance;  // x = distance tolerance along light dir
+    float4x4 DSV_ViewProj;      // stored transposed; consume via mul(pos, M)
+    float4x4 DSV_InvViewProj;   // stored transposed; consume via mul(pos, M)
+    float4   DSV_ViewDepthAxis; // xyz = world-space view Z axis
+    float4   DSV_DepthSize;     // xy = depth texel size
+    float4   DSV_Tolerance;     // x = RasterDepthThreshold (shader applies *100)
 };
 
 // DSVolumeInfo (matches DXIL SSBO _14, uvec3[] laid out as float3/uint3 rows):
@@ -67,20 +71,20 @@ cbuffer HairStrandCountInfo
     uint4 HairStrandCount;   // x = number of strands
 };
 
-// DSInfo cbuffer (DXIL _33). Only the members used by this entry are named.
-//   _33._m0[0].x = DSInfo_VoxelWorldSize
-//   _33._m0[1].x = DSInfo_VolumeTracingOffsetScale (used by shading)
-//   _33._m0[1].w = DSInfo_VolumeTracingIBLDelta (used by shading)
-//   _33._m0[2].x = DSInfo_VolumeTracingDelta (used by shading)
-//   _33._m0[2].y = DSInfo_VolumePageResolution
-//   _33._m0[3].x = DSInfo_RasterDepthThreshold
-//   _33._m0[3].y = Material.hm_backscatterScale (used by shading)
+// DSInfo cbuffer (DXIL _33). Exact reference layout:
+//   Row0 = (VoxelWorldSize, VolumeResolution, VolumePageResolution, RasterDepthThreshold)
+//   Row1 = (LUTThetaCount, LUTRoughnessCount, LUTAbsorptionCount, VolumeTracingOffsetScale)
+//   Row2 = (VolumeTracingDelta, RasterStrandWidthScale, StrandWidthMin, StrandWidthMax)
+//   Row3 = (StrandWidthAve, VolumeTracingIBLDelta, BackscatterScale, pad)
+// NOTE: the density formula below uses Row2.y (RasterStrandWidthScale) and
+// Row3.x (StrandWidthAve). Mistaking them for VolumePageResolution and
+// RasterDepthThreshold makes the density ~416x too small.
 cbuffer DSInfo
 {
-    float4 DSInfo_Row0;   // x = VoxelWorldSize
-    float4 DSInfo_Row1;   // x = VolumeTracingOffsetScale, w = VolumeTracingIBLDelta
-    float4 DSInfo_Row2;   // x = VolumeTracingDelta, y = VolumePageResolution
-    float4 DSInfo_Row3;   // x = RasterDepthThreshold, y = BackscatterScale
+    float4 DSInfo_Row0;
+    float4 DSInfo_Row1;
+    float4 DSInfo_Row2;
+    float4 DSInfo_Row3;
 };
 
 // Strand -> first-vertex index list (DXIL SSBO _9). idx = value & 0x0FFFFFFF.
@@ -120,13 +124,14 @@ void CSGenerateFromHair(uint3 gid : SV_DispatchThreadID)
     if (isnan(p0.x) || isnan(p1.x))
         return;
 
-    float rasterThreshold = DSInfo_Row3.x;   // DSInfo_RasterDepthThreshold
+    float strandWidthAve  = DSInfo_Row3.x;    // DSInfo_StrandWidthAve
     float voxelWorldSize  = DSInfo_Row0.x;    // DSInfo_VoxelWorldSize
-    float pageResolution  = DSInfo_Row2.y;    // DSInfo_VolumePageResolution
+    float widthScale      = DSInfo_Row2.y;    // DSInfo_RasterStrandWidthScale
 
-    // Endpoint widths: low 16 bits -> normalized [0,1] then / RasterDepthThreshold.
-    float w0 = max((float)((uint)V0.Misc & 0xFFFFu) * (1.0f / 65535.0f) / rasterThreshold, 0.0f);
-    float w1 = max((float)((uint)V1.Misc & 0xFFFFu) * (1.0f / 65535.0f) / rasterThreshold, 0.0f);
+    // Endpoint widths: low 16 bits -> width in world units, then normalized by
+    // the average strand width, so w is a relative width around 1.0.
+    float w0 = max((float)((uint)V0.Misc & 0xFFFFu) * (1.0f / 65535.0f) / strandWidthAve, 0.0f);
+    float w1 = max((float)((uint)V1.Misc & 0xFFFFu) * (1.0f / 65535.0f) / strandWidthAve, 0.0f);
 
     // Segment direction / length in unit-scale space.
     float3 seg    = p1 - p0;
@@ -183,7 +188,7 @@ void CSGenerateFromHair(uint3 gid : SV_DispatchThreadID)
 
             // Density value (DXIL _264): lerp widths along the strand, scaled.
             float wLerp = (s / stepCountM1) * (w1 - w0) + w0;
-            float density = wLerp * 0.005f * pageResolution / voxelWorldSize * 1000.0f;
+            float density = wLerp * 0.005f * widthScale / voxelWorldSize * 1000.0f;
 
             // 8-corner trilinear splat (r32ui, additive, 24-bit clamp).
             InterlockedAdd(DSVolumeTexture[uint3(vc.x,  vc.y,  vc.z )], (uint)round(density * frac0.x * frac0.y * frac0.z) & 0x00FFFFFFu);
@@ -235,8 +240,9 @@ void CSMain(uint3 gid : SV_DispatchThreadID)
 
     // Reconstruct the visible surface world position from depth via InvViewProj.
     // InvViewProj is stored transposed too -> row-vector convention mul(pos, M).
-    // DXIL multiplies the reconstructed world position by 100 (unit scale) after
-    // the perspective divide (see _224/_238/_248 = recon * 100.0).
+    // The reference scales the voxel by 0.01 before ViewProj and the result by
+    // 100 after the divide; here world space already is that 100x space, so both
+    // scales cancel out and are omitted.
     float4 reconH = mul(float4(ndc, sceneDepth, 1.0f), DSV_InvViewProj);
     float3 reconW = (reconH.xyz / reconH.w);
 
@@ -247,14 +253,22 @@ void CSMain(uint3 gid : SV_DispatchThreadID)
     // Voxel clip-space depth (for the occlusion test below).
     float voxelClipZ = clip.z / clip.w;
 
-    // Occluded voxel (behind surface) AND within tolerance along light dir.
-    // DXIL compares against (DSInfo_RasterDepthThreshold * 100) -> _28._m0[0].w * 100.
-    float distVoxel  = dot(pos,    DSV_LightDir.xyz);
-    float distRecon  = dot(reconW, DSV_LightDir.xyz);
-    bool  occluded   = sceneDepth > voxelClipZ;
-    bool  nearShadow = abs(distVoxel - distRecon) < (DSV_Tolerance.x * 100.0f);
+    // The reference runs on a reversed-Z depth buffer (near = 1, far = 0), where
+    // its "sceneDepth > voxelClipZ" means the surface is NEARER than the voxel,
+    // i.e. the voxel is HIDDEN BEHIND the visible surface. That is the intent:
+    // mark the shell just inside the opaque geometry so the light march is
+    // blocked by the head, not by the air the hair grows in.
+    // Our depth is standard Z (0 = near), so the test has to be flipped.
+    // Keeping ">" here marks the shell IN FRONT of the head - exactly where the
+    // hair lives - and every light direction ends up with a fixed black region.
+    // The reference dots against transposeViewMat row 2 (view matrix 3rd column)
+    // and compares against DSInfo_RasterDepthThreshold * 100.
+    float distVoxel  = dot(pos,    DSV_ViewDepthAxis.xyz);
+    float distRecon  = dot(reconW, DSV_ViewDepthAxis.xyz);
+    bool  behind     = sceneDepth < voxelClipZ;
+    bool  nearSurf   = abs(distVoxel - distRecon) < (DSV_Tolerance.x * 100.0f);
 
-    if (occluded && nearShadow)
+    if (behind && nearSurf)
     {
         InterlockedOr(DSVolumeTexture[coord], 0xFF000000u);
     }

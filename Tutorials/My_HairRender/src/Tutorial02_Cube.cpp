@@ -651,6 +651,13 @@ void Tutorial02_Cube::UpdateUI()
 		//ImGui::gizmo3D("Cam direction", CamForward, ImGui::GetTextLineHeight() * 10);
 
 		ImGui::gizmo3D("Directional Light", m_DirectionalLightData.DirectionLightDir, ImGui::GetTextLineHeight() * 10);
+		{
+			float3 LightDir = normalize(float3(m_DirectionalLightData.DirectionLightDir.x,
+											   m_DirectionalLightData.DirectionLightDir.y,
+											   m_DirectionalLightData.DirectionLightDir.z));
+			ImGui::Text("Light Dir %.3f, %.3f, %.3f", LightDir.x, LightDir.y, LightDir.z);
+		}
+		ImGui::SliderFloat3("Light Dir XYZ", &m_DirectionalLightData.DirectionLightDir.x, -1.0f, 1.0f);
 		//ImGui::SliderFloat("DL Intensity", &m_LightManager.DirLight.intensity, 0.1f, 10.0f);		
 		ImGui::ColorEdit4("LightColor", &m_DirectionalLightData.DirectionLightColor[0]);
 		ImGui::SliderFloat("LightIntensity", &m_DirLightIntensity, 0.01f, 20.0f);

@@ -5,8 +5,10 @@
 //   - low 24 bits (density) : average of children, min 1 if any non-zero.
 //   Pack: density24 | (coverage << 24).
 //
-// SrcVolume : previous mip (SRV, sampled at Lod 0 of the bound mip view)
+// SrcVolume : previous mip (UAV view of that mip)
 // DstVolume : current  mip (UAV)
+// Both are UAVs so the whole texture stays in UNORDERED_ACCESS and no
+// SRV/UAV state split on the same subresource is required.
 
 cbuffer DownsampleInfo
 {
@@ -26,7 +28,7 @@ cbuffer DSVolumeInfo
     float4 mInvResolution;
 };
 
-Texture3D<uint>   SrcVolume;
+RWTexture3D<uint> SrcVolume;
 RWTexture3D<uint> DstVolume;
 
 [numthreads(4, 4, 4)]
@@ -40,14 +42,14 @@ void CSMain(uint3 gid : SV_DispatchThreadID)
     uint3 c0 = gid << 1u;          // even child coords
     uint3 c1 = c0 | 1u;            // odd  child coords
 
-    uint s0 = SrcVolume.Load(int4(c0.x, c0.y, c0.z, 0)).x;
-    uint s1 = SrcVolume.Load(int4(c1.x, c0.y, c0.z, 0)).x;
-    uint s2 = SrcVolume.Load(int4(c0.x, c1.y, c0.z, 0)).x;
-    uint s3 = SrcVolume.Load(int4(c1.x, c1.y, c0.z, 0)).x;
-    uint s4 = SrcVolume.Load(int4(c0.x, c0.y, c1.z, 0)).x;
-    uint s5 = SrcVolume.Load(int4(c1.x, c0.y, c1.z, 0)).x;
-    uint s6 = SrcVolume.Load(int4(c0.x, c1.y, c1.z, 0)).x;
-    uint s7 = SrcVolume.Load(int4(c1.x, c1.y, c1.z, 0)).x;
+    uint s0 = SrcVolume[uint3(c0.x, c0.y, c0.z)];
+    uint s1 = SrcVolume[uint3(c1.x, c0.y, c0.z)];
+    uint s2 = SrcVolume[uint3(c0.x, c1.y, c0.z)];
+    uint s3 = SrcVolume[uint3(c1.x, c1.y, c0.z)];
+    uint s4 = SrcVolume[uint3(c0.x, c0.y, c1.z)];
+    uint s5 = SrcVolume[uint3(c1.x, c0.y, c1.z)];
+    uint s6 = SrcVolume[uint3(c0.x, c1.y, c1.z)];
+    uint s7 = SrcVolume[uint3(c1.x, c1.y, c1.z)];
 
     // Coverage (top byte).
     uint covSum = (s0 >> 24u) + (s1 >> 24u) + (s2 >> 24u) + (s3 >> 24u)

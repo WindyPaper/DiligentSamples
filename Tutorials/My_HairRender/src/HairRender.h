@@ -42,7 +42,7 @@ struct ShadingLightData
 
 	ShadingLightData()
 	{
-		DirectionLightDir   = float4(0.5f, -0.5f, 0.5f, 1.0f);
+		DirectionLightDir   = float4(0.5f, 0.5f, 0.5f, 1.0f);
 		DirectionLightColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
 
 		HairColor     = float3(0.8f, 0.8f, 0.8f);
@@ -80,7 +80,7 @@ struct DSVolumeSceneInfoCB
 {
 	float4x4 ViewProj;
 	float4x4 InvViewProj;
-	float4   LightDir;
+	float4   ViewDepthAxis;
 	float4   DepthSize;
 	float4   Tolerance;
 };
@@ -92,13 +92,19 @@ struct DownsampleInfoCB
 };
 
 // Mirrors cbuffer DSInfo in GenerateDSVolumeTexture.csh (CSGenerateFromHair).
-// Only positional rows used by the shader; matches DXIL _33 layout.
+// Field order is the reference DXIL _33 layout (see GenerateDSVolumeTextureFromHair.hlsl):
+//   row0 (VoxelWorldSize, VolumeResolution, VolumePageResolution, RasterDepthThreshold)
+//   row1 (LUTThetaCount, LUTRoughnessCount, LUTAbsorptionCount, VolumeTracingOffsetScale)
+//   row2 (VolumeTracingDelta, RasterStrandWidthScale, StrandWidthMin, StrandWidthMax)
+//   row3 (StrandWidthAve, VolumeTracingIBLDelta, <BackscatterScale>, pad)
+// z of row3 is a pad slot in the reference; we reuse it for the material's
+// backscatter scale (the reference reads that from the material cbuffer).
 struct DSInfoCB
 {
-	float4 Row0;   // x = DSInfo_VoxelWorldSize
-	float4 Row1;   // x = DSInfo_VolumeTracingOffsetScale, w = DSInfo_VolumeTracingIBLDelta
-	float4 Row2;   // x = DSInfo_VolumeTracingDelta, y = DSInfo_VolumePageResolution
-	float4 Row3;   // x = DSInfo_RasterDepthThreshold, y = Material.hm_backscatterScale
+	float4 Row0;   // x=VoxelWorldSize y=VolumeResolution z=VolumePageResolution w=RasterDepthThreshold
+	float4 Row1;   // x=LUTThetaCount y=LUTRoughnessCount z=LUTAbsorptionCount w=VolumeTracingOffsetScale
+	float4 Row2;   // x=VolumeTracingDelta y=RasterStrandWidthScale z=StrandWidthMin w=StrandWidthMax
+	float4 Row3;   // x=StrandWidthAve y=VolumeTracingIBLDelta z=BackscatterScale
 };
 
 // Mirrors cbuffer HairStrandCountInfo in GenerateDSVolumeTexture.csh.

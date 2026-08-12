@@ -1,5 +1,8 @@
 ﻿#include "HairRender.h"
 
+#include <cmath>
+#include <limits>
+
 #include "MapHelper.hpp"
 #include "ShaderMacroHelper.hpp"
 #include "../../../../DiligentCore/ThirdParty/glew/include/GL/glew.h"
@@ -478,7 +481,7 @@ void Diligent::HairRender::CreateGenerateDSVolumePSO()
 
 		m_GenerateDSVolumeCS.PSO_FromHair->CreateShaderResourceBinding(&m_GenerateDSVolumeCS.SRB_FromHair, true);
 
-		// DSInfo cbuffer (VoxelWorldSize / VolumePageResolution / RasterDepthThreshold).
+		// DSInfo cbuffer. Layout mirrors the reference DXIL _33 exactly, see DSInfoCB.
 		// VoxelWorldSize derived from hair AABB: largest extent / volume resolution,
 		// so one voxel maps to the actual hair world size instead of a hardcoded value.
 		DSInfoCB dsCfg{};
@@ -486,16 +489,36 @@ void Diligent::HairRender::CreateGenerateDSVolumePSO()
 			float3 aabbExtent   = m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin;
 			float  maxExtent    = std::max(aabbExtent.x, std::max(aabbExtent.y, aabbExtent.z));
 			float  voxelWorldSz = maxExtent > 0.0f ? maxExtent / float(kVolumeRes) : 0.3f;
-			dsCfg.Row0 = float4(voxelWorldSz, 0.0f, 0.0f, 0.0f);   // VoxelWorldSize
+
+			// Strand widths: the vertex Misc low 16 bits hold width * 65535. The
+			// reference normalizes each vertex width by StrandWidthAve, so the
+			// density formula works on a relative width around 1.0. Feeding
+			// RasterDepthThreshold there instead makes the density ~416x too small
+			// and the dual-scattering self-shadow term collapses to 1.
+			float widthMin = std::numeric_limits<float>::max(), widthMax = 0.0f;
+			double widthSum = 0.0;
+			uint   widthCount = 0;
+			for (const HairVertexData& v : m_HairRawData.HairVertexDataArray)
+			{
+				if (std::isnan(v.Pos.x))
+					continue;
+				float w = float(uint(v.Misc) & 0xFFFFu) * (1.0f / 65535.0f);
+				if (w <= 0.0f)
+					continue;
+				widthMin = std::min(widthMin, w);
+				widthMax = std::max(widthMax, w);
+				widthSum += w;
+				++widthCount;
+			}
+			float widthAve = widthCount > 0 ? float(widthSum / widthCount) : 1.0f;
+			if (widthCount == 0)
+				widthMin = 0.0f;
+
+			dsCfg.Row0 = float4(voxelWorldSz, float(kVolumeRes), 32.0f, 0.05f);
+			dsCfg.Row1 = float4(64.0f, 64.0f, 16.0f, 1.0f);
+			dsCfg.Row2 = float4(1.1f, 60.0061f, widthMin, widthMax);
+			dsCfg.Row3 = float4(widthAve, 1.1f, 0.1f, 0.0f);
 		}
-		// Row1.x = VolumeTracingOffsetScale; Row1.w = VolumeTracingIBLDelta.
-		// Row2.x = VolumeTracingDelta; Row2.y = VolumePageResolution. The DSVolumeTex3D
-		// path offsets the start by one voxel and grows the step by 1.1, as in the reference.
-		dsCfg.Row1 = float4(1.0f, 0.0f, 0.0f, 1.1f);
-		dsCfg.Row2 = float4(1.1f, 32.0f, 0.0f, 0.0f);
-		// Row3.x = RasterDepthThreshold; Row3.y = BackscatterScale (multiple-
-		// scattering glow amount, Material.hm_backscatterScale in the reference).
-		dsCfg.Row3 = float4(0.05f, 0.1f, 0.0f, 0.0f);
 		m_GenerateDSVolumeCS.DSInfoBuffer = CreateConstBuffer(sizeof(DSInfoCB), &dsCfg, "DS Info");
 
 		// Strand count cbuffer.
@@ -580,7 +603,7 @@ void Diligent::HairRender::CreateGenerateDSVolumePSO()
 			SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DSVolumeInfo"), \
 				m_GenerateDSVolumeCS.DSVolumeInfoBuffer);
 			SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "SrcVolume"), \
-				m_GenerateDSVolumeCS.MipSRVs[dstMip - 1]);
+				m_GenerateDSVolumeCS.MipUAVs[dstMip - 1]);
 			SET_SHADER_PARAM_SAFE(pSRB->GetVariableByName(SHADER_TYPE_COMPUTE, "DstVolume"), \
 				m_GenerateDSVolumeCS.MipUAVs[dstMip]);
 		}
@@ -1198,7 +1221,7 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
 
     float max_float = std::numeric_limits<float>::max();
     float3 hair_bbox_min_cs = Diligent::float3(max_float, max_float, max_float);
-    float min_float = std::numeric_limits<float>::min();
+    float min_float = std::numeric_limits<float>::lowest();
     float3 hair_bbox_max_cs = Diligent::float3(min_float, min_float, min_float);
     for(int i = 0; i < 8; ++i)
     {
@@ -1236,7 +1259,9 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
         MapHelper<DSVolumeSceneInfoCB> DSVSceneCB(m_pDeviceCtx, m_GenerateDSVolumeCS.DSVolumeSceneInfoBuffer, MAP_WRITE, MAP_FLAG_DISCARD);
         DSVSceneCB->ViewProj    = viwe_proj.Transpose();
         DSVSceneCB->InvViewProj = inv_view_proj.Transpose();
-        DSVSceneCB->LightDir    = float4(normalize(float3(shading_data.DirectionLightDir.x, shading_data.DirectionLightDir.y, shading_data.DirectionLightDir.z)), 1.0f);
+        // Reference dots against transposeViewMat row 2, i.e. the 3rd column of
+        // the view matrix, so that dot(worldPos, axis) is linear view depth.
+        DSVSceneCB->ViewDepthAxis = float4(normalize(float3(view_mat.m02, view_mat.m12, view_mat.m22)), 0.0f);
         DSVSceneCB->DepthSize   = float4((float)m_pSwapChain->GetDesc().Width, (float)m_pSwapChain->GetDesc().Height, 0.0f, 0.0f);
         DSVSceneCB->Tolerance   = float4(0.05f, 0.0f, 0.0f, 0.0f); // DSInfo_RasterDepthThreshold; shader applies *100
     }

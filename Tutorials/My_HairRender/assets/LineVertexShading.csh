@@ -79,17 +79,17 @@ Texture3D<uint>    DSVolumeTexture;
 //   Row3.y = BackscatterScale (multiple-scattering glow amount, small ~0.1)
 cbuffer DSInfo
 {
-    float4 DSInfo_Row0;   // x = VoxelWorldSize
-    float4 DSInfo_Row1;   // x = VolumeTracingOffsetScale, w = VolumeTracingIBLDelta
-    float4 DSInfo_Row2;   // x = VolumeTracingDelta, y = VolumePageResolution
-    float4 DSInfo_Row3;   // x = RasterDepthThreshold, y = BackscatterScale
+    float4 DSInfo_Row0;   // x=VoxelWorldSize y=VolumeResolution z=VolumePageResolution w=RasterDepthThreshold
+    float4 DSInfo_Row1;   // x=LUTThetaCount y=LUTRoughnessCount z=LUTAbsorptionCount w=VolumeTracingOffsetScale
+    float4 DSInfo_Row2;   // x=VolumeTracingDelta y=RasterStrandWidthScale z=StrandWidthMin w=StrandWidthMax
+    float4 DSInfo_Row3;   // x=StrandWidthAve y=VolumeTracingIBLDelta z=BackscatterScale
 };
 
 static const float DSV_DENSITY_MUL = 0.00100000005f; // DSVolumeTex3D density -> optical depth
 static const float DSV_MAX_MIP     = 5.0f;        // 6-level pyramid: 128..4
 
 // DeepShadowScattering: ports the DSVolume ray-march of hair_shade.hlsl
-// (lines 3319..3627 of the dxil-spirv dump, directional-light path).
+// (directional-light path, lines 803..1059 of the dxil-spirv dump).
 //
 // The r32ui volume stores hair OPACITY only:
 //   low 24 bits = accumulated hair density (n = number of hairs toward light)
@@ -105,10 +105,10 @@ static const float DSV_MAX_MIP     = 5.0f;        // 6-level pyramid: 128..4
 float3 DeepShadowScattering(float3 worldPos, out float OutHairCount, out float OutCoverage)
 {
     float  voxelWorldSize = DSInfo_Row0.x;
-    float  offsetScale    = DSInfo_Row1.x;   // VolumeTracingOffsetScale
-    float  stepGrowth     = max((DSInfo_Row2.x > 0.0f) ? DSInfo_Row2.x : DSInfo_Row1.w, 1.0f);
-    float  pageResolution = max(DSInfo_Row2.y, 1.0f); // VolumePageResolution
-    float  backscatter    = DSInfo_Row3.y;   // BackscatterScale (Material.hm_backscatterScale)
+    float  offsetScale    = DSInfo_Row1.w;   // VolumeTracingOffsetScale
+    float  stepGrowth     = max((DSInfo_Row2.x > 0.0f) ? DSInfo_Row2.x : DSInfo_Row3.y, 1.0f);
+    float  pageResolution = max(DSInfo_Row0.z, 1.0f); // VolumePageResolution
+    float  backscatter    = DSInfo_Row3.z;   // BackscatterScale (Material.hm_backscatterScale)
 
     // March direction = toward the light source.
     float3 dirW = normalize(DirectionLightDir.xyz);
@@ -284,8 +284,8 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     FHairTransmittanceData TransData = ComputeDualScatteringTerms(
         HairRoughness, V, L, T, A_front, A_back, ds_hair_count);
 
-    // Reference `_3319 = DS * 0.7*PI` scales the local-scattering lobe that sits
-    // inside the global-scattering bracket (hair_shade.hlsl:3784, 4241).
+    // Reference `_2739 = DS * 0.7*PI` scales the local-scattering lobe that sits
+    // inside the global-scattering bracket (hair_shade.hlsl:1208-1211).
     TransData.LocalScattering *= ds_scatter * 0.7f;
 
     // --------------------------------------------------------
@@ -385,7 +385,7 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 az_R   = float3(lut3dR.z,  lut3dG.z,  lut3dBv.z);
     float3 az_TRT = float3(lut3dR.w,  lut3dG.w,  lut3dBv.w);
     // TT 方位角：N_tt_fit × A_TT × DS（A_TT 已含 (1-F)^2 和透射衰减）
-    // 参考 hair_shade.hlsl:3680 —— DS 只调制 TT 瓣，R / TRT 不受影响。
+    // 参考 hair_shade.hlsl:1106-1108 —— DS 只调制 TT 瓣，R / TRT 不受影响。
     float3 az_TT  = N_tt_fit.xxx * A_TT * ds_scatter;
 
     // 4.11 三瓣 Marschner 单散射
@@ -417,10 +417,11 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 hair_dir_fs = lerp(hair_single_scatter, hair_multi_scatter, useMulti);
     hair_dir_fs = max(hair_dir_fs, 0.0f);
 
-    // Reference `_3335 = saturate(1 - coverage) * cos(theta_i)` (hair_shade.hlsl:3785)
-    // multiplies the whole light contribution: this is the actual shadow term.
+    // Directional light contribution, matching hair_shade.hlsl:1209-1211:
+    //   L = Attenuation * DL_Color.rgb * cos(theta_i) * saturate(1 - coverage) * [bsdf]
+    // (`_2463` = cos(theta_i), `_2213` = saturate(1 - coverage), `_138._m0[5u]` = DL_Color).
     float cosThetaI = sqrt(max(1.0f - cosThI * cosThI, 0.0f));
-    hair_dir_fs *= saturate(1.0f - ds_coverage) * cosThetaI;
+    hair_dir_fs *= DirectionLightColor.rgb * (saturate(1.0f - ds_coverage) * cosThetaI);
 
     // --------------------------------------------------------
     // 6. 打包输出

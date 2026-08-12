@@ -21,7 +21,7 @@ HairData::HairData()
     //cal min/max bbox
     float max_float = std::numeric_limits<float>::max();
     HairBBoxMin = Diligent::float3(max_float, max_float, max_float);
-    float min_float = std::numeric_limits<float>::min();
+    float min_float = std::numeric_limits<float>::lowest();
     HairBBoxMax = Diligent::float3(min_float, min_float, min_float);
     for(int i = 0; i < HairVertexDataArray.size(); ++i)
     {
