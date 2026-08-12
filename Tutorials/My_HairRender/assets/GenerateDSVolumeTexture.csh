@@ -68,7 +68,7 @@ RWTexture3D<uint> DSVolumeTexture;    // r32ui deep-shadow volume (u0)
 // Strand count cbuffer (DXIL _28._m0[0].x, read as uint bits).
 cbuffer HairStrandCountInfo
 {
-    uint4 HairStrandCount;   // x = number of strands
+    uint4 HairStrandCount;   // x = number of strands, y = strands to voxelize
 };
 
 // DSInfo cbuffer (DXIL _33). Exact reference layout:
@@ -103,8 +103,12 @@ StructuredBuffer<DSHairVertexData> HairVerticesDatas;
 [numthreads(64, 1, 1)]
 void CSGenerateFromHair(uint3 gid : SV_DispatchThreadID)
 {
-    // One thread per strand (DXIL: if (strandCount > gid.x)).
-    if (gid.x >= HairStrandCount.x)
+    // One thread per voxelized strand. Only the first HairStrandCount.y strands
+    // are splatted (the source mesh is already evenly decimated, so the leading
+    // slice is a uniform subset). Voxelizing every strand makes the volume ~3x
+    // denser than the reference and the self-shadow term crushes the hair to black.
+    uint count = (HairStrandCount.y > 0u) ? min(HairStrandCount.y, HairStrandCount.x) : HairStrandCount.x;
+    if (gid.x >= count)
         return;
 
     // Strand -> first vertex index.

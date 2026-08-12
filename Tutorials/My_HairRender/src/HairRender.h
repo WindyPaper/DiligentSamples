@@ -110,7 +110,7 @@ struct DSInfoCB
 // Mirrors cbuffer HairStrandCountInfo in GenerateDSVolumeTexture.csh.
 struct HairStrandCountCB
 {
-	uint4 HairStrandCount;   // x = number of strands
+	uint4 HairStrandCount;   // x = number of strands, y = leading strands to voxelize
 };
 
 struct PassBaseData

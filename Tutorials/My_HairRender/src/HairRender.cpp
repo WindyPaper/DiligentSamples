@@ -7,6 +7,12 @@
 #include "ShaderMacroHelper.hpp"
 #include "../../../../DiligentCore/ThirdParty/glew/include/GL/glew.h"
 
+// Only the leading 1/kDSVolumeStrandDivisor of the hair strands are splatted into
+// the deep-shadow volume. The source mesh is already evenly decimated, so the
+// leading slice is a uniform subset; voxelizing every strand makes the volume
+// ~3x denser than the reference.
+static const Diligent::uint kDSVolumeStrandDivisor = 3;
+
 
 namespace Diligent {
 class DeviceContextD3D12Impl;
@@ -482,13 +488,13 @@ void Diligent::HairRender::CreateGenerateDSVolumePSO()
 		m_GenerateDSVolumeCS.PSO_FromHair->CreateShaderResourceBinding(&m_GenerateDSVolumeCS.SRB_FromHair, true);
 
 		// DSInfo cbuffer. Layout mirrors the reference DXIL _33 exactly, see DSInfoCB.
-		// VoxelWorldSize derived from hair AABB: largest extent / volume resolution,
-		// so one voxel maps to the actual hair world size instead of a hardcoded value.
 		DSInfoCB dsCfg{};
 		{
-			float3 aabbExtent   = m_HairRawData.HairBBoxMax - m_HairRawData.HairBBoxMin;
-			float  maxExtent    = std::max(aabbExtent.x, std::max(aabbExtent.y, aabbExtent.z));
-			float  voxelWorldSz = maxExtent > 0.0f ? maxExtent / float(kVolumeRes) : 0.3f;
+			// VoxelWorldSize is the reference constant (0.3), not the AABB voxel size
+			// (extent/128 = 0.2046 here). It feeds three things at once: the splat
+			// step, the per-splat density (/VoxelWorldSize) and the shading march
+			// step, so the accumulated hair density scales with 1/VoxelWorldSize^2.
+			const float voxelWorldSz = 0.3f;
 
 			// Strand widths: the vertex Misc low 16 bits hold width * 65535. The
 			// reference normalizes each vertex width by StrandWidthAve, so the
@@ -521,9 +527,14 @@ void Diligent::HairRender::CreateGenerateDSVolumePSO()
 		}
 		m_GenerateDSVolumeCS.DSInfoBuffer = CreateConstBuffer(sizeof(DSInfoCB), &dsCfg, "DS Info");
 
-		// Strand count cbuffer.
+		// Strand count cbuffer. y = how many leading strands are voxelized (the
+		// source mesh is already evenly decimated, so the leading slice is a
+		// uniform subset). Splatting every strand makes the volume ~3x denser
+		// than the reference and the self-shadow term crushes the hair to black.
 		HairStrandCountCB strandCB{};
-		strandCB.HairStrandCount = uint4((uint)m_HairRawData.HairIdxDataArray.size(), 0, 0, 0);
+		const uint dsStrandCount = (uint)m_HairRawData.HairIdxDataArray.size();
+		strandCB.HairStrandCount = uint4(dsStrandCount,
+			(dsStrandCount + kDSVolumeStrandDivisor - 1) / kDSVolumeStrandDivisor, 0, 0);
 		m_GenerateDSVolumeCS.StrandCountBuffer = CreateConstBuffer(sizeof(HairStrandCountCB), &strandCB, "Hair Strand Count");
 
 		m_GenerateDSVolumeCS.VerticesData = m_apHairVertexArray;
@@ -1113,12 +1124,14 @@ void Diligent::HairRender::RunGenerateDSVolumeCS()
 	const uint clearGroups = (uint)ceil(kVolumeRes / 4.0);
 	m_pDeviceCtx->DispatchCompute(DispatchComputeAttribs(clearGroups, clearGroups, clearGroups));
 
-	// Splat hair strand density into the volume (one thread per strand).
+	// Splat hair strand density into the volume (one thread per voxelized strand,
+	// i.e. the leading 1/kDSVolumeStrandDivisor of the strand list).
 	{
 		m_pDeviceCtx->SetPipelineState(m_GenerateDSVolumeCS.PSO_FromHair);
 		m_pDeviceCtx->CommitShaderResources(m_GenerateDSVolumeCS.SRB_FromHair, RESOURCE_STATE_TRANSITION_MODE_TRANSITION);
 		const uint strandCount = (uint)m_HairRawData.HairIdxDataArray.size();
-		const uint fromHairGroups = (uint)ceil(strandCount / 64.0);
+		const uint splatCount  = (strandCount + kDSVolumeStrandDivisor - 1) / kDSVolumeStrandDivisor;
+		const uint fromHairGroups = (uint)ceil(splatCount / 64.0);
 		if (fromHairGroups > 0)
 			m_pDeviceCtx->DispatchCompute(DispatchComputeAttribs(fromHairGroups, 1, 1));
 	}
