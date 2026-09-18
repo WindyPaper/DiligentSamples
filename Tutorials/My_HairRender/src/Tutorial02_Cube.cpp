@@ -678,7 +678,16 @@ void Tutorial02_Cube::UpdateUI()
 			m_DirectionalLightData.HairEnableMultiScattering = EnableMultiScatter ? 1.0f : 0.0f;
 		}
 
-		ImGui::SliderFloat3("Head Offset", &m_HeadOffset[0], -1.0f, 1.0f);
+		bool EnableDeepShadowScatter = (m_DirectionalLightData.HairEnableDeepShadowScattering > 0.5f);
+		if (ImGui::Checkbox("Enable Deep Shadow Scattering (compare)", &EnableDeepShadowScatter))
+		{
+			m_DirectionalLightData.HairEnableDeepShadowScattering = EnableDeepShadowScatter ? 1.0f : 0.0f;
+		}
+
+		static const float3 HeadOffsetDefault = m_HeadOffset;
+		ImGui::SliderFloat("Head Offset X", &m_HeadOffset.x, HeadOffsetDefault.x - 0.1f, HeadOffsetDefault.x + 0.1f);
+		ImGui::SliderFloat("Head Offset Y", &m_HeadOffset.y, HeadOffsetDefault.y - 0.1f, HeadOffsetDefault.y + 0.1f);
+		ImGui::SliderFloat("Head Offset Z", &m_HeadOffset.z, HeadOffsetDefault.z - 0.1f, HeadOffsetDefault.z + 0.1f);
 	}
 	ImGui::End();
 

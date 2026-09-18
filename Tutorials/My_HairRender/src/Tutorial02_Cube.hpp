@@ -102,7 +102,7 @@ private:
     RefCntAutoPtr<IBuffer>                m_HeadNormalTangentBuffer;
     RefCntAutoPtr<IBuffer>                m_HeadIndexBuffer;
     Uint32                                m_HeadIndexCount = 0;
-    float3                                m_HeadOffset = float3(0.285f, -0.038f, -0.037f);
+    float3                                m_HeadOffset = float3(0.293f, -0.043f, -0.027f);
 
     
 };

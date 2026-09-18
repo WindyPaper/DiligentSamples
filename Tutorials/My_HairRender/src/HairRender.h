@@ -38,7 +38,7 @@ struct ShadingLightData
 	float  HairAlpha;
 	float  HairUseRefMarschner;
 	float  HairEnableMultiScattering;
-	float  _pad;
+	float  HairEnableDeepShadowScattering;
 
 	ShadingLightData()
 	{
@@ -50,7 +50,7 @@ struct ShadingLightData
 			HairAlpha     = 0.07f;
 			HairUseRefMarschner = 0.0f;
 			HairEnableMultiScattering = 1.0f;
-			_pad          = 0.0f;
+			HairEnableDeepShadowScattering = 1.0f;
 	}
 };
 

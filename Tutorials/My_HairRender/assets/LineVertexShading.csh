@@ -15,7 +15,7 @@ cbuffer ShadingLightData
     float  HairAlpha;
     float  HairUseRefMarschner;
     float  HairEnableMultiScattering;
-    float  _pad;
+    float  HairEnableDeepShadowScattering;
 };
 
 struct HairVertexData
@@ -266,6 +266,16 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float  ds_hair_count = 0.0f;
     float  ds_coverage   = 0.0f;
     float3 ds_scatter    = DeepShadowScattering(V1.Pos, ds_hair_count, ds_coverage);
+
+    // Compare toggle: when disabled, bypass the deep-shadow contribution so the
+    // hair renders with no self-shadow coverage, no TT scatter modulation and no
+    // dual-scatter hair count (neutral baseline for A/B comparison).
+    if (HairEnableDeepShadowScattering < 0.5f)
+    {
+        ds_hair_count = 0.0f;
+        ds_coverage   = 0.0f;
+        ds_scatter    = float3(1.0f, 1.0f, 1.0f);
+    }
 
     float  SinLightAngle       = dot(L, T);
     float3 RemappedAbsorption  = FromLinearAbsorption(HairColor);
