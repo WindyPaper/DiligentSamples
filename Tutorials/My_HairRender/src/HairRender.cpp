@@ -304,8 +304,11 @@ void Diligent::HairRender::CreateGetLineVisibilityPSO()
 
 void Diligent::HairRender::CreatePrecomputeForShadingPSO()
 {
+	ShaderMacroHelper DualScatteringMacros;
+	DualScatteringMacros.AddShaderMacro("PERMUTATION_LUT_TYPE", 1); // PERMUTATION_LUT_TYPE_DUALSCATTERING
+	DualScatteringMacros.Finalize();
 	AutoPtrShader ap_precompute_lut_tex = CreateShader("CSMain", "./HairStrandsLUT.csh", \
-		"precompute lut tex CS", SHADER_TYPE_COMPUTE);
+		"precompute lut tex CS", SHADER_TYPE_COMPUTE, &DualScatteringMacros);
 
 	ComputePipelineStateCreateInfo PSOCreateInfo;
 	// clang-format off

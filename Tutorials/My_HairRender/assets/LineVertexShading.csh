@@ -30,10 +30,13 @@ StructuredBuffer<uint>           LineVisibilityBuffer;
 
 RWStructuredBuffer<uint>         OutHairVertexShadeData;
 
-// DSLut3D: 3D dual-scattering LUT
+// DSLut3D: 3D dual-scattering LUT (HairStrandsLUT.csh, PERMUTATION_LUT_TYPE_DUALSCATTERING)
 //   UV = (|sin θ_i|, roughness, absorption_ch)
-//   .x = A_front, .y = A_back,
-//   .z = azimuthal R weight, .w = azimuthal TRT weight
+//   .x = A_front (front hemisphere average scattering)
+//   .y = A_back  (back hemisphere average scattering)
+//   .z = 0, .w = 1 (unused)
+// The R/TRT Fresnel and azimuthal terms are evaluated analytically in CSMain
+// (the LUT integrates phi out, so it cannot provide an azimuthal distribution).
 Texture3D<float4>  DSLut3D;
 SamplerState       DSLut3D_sampler;
 
@@ -357,28 +360,16 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 T_abs       = exp(-2.0f * sigma_a / max(cos_gt, 0.01f));
     float3 A_TT        = one_mF * one_mF * T_abs;       // (1-F)² · T
 
-    // 4.7 3D LUT 采样（双散射权重 A_front/A_back 已在第3步用过；
-    //     这里复用 MEAN_ENERGY 通道的 Fresnel/方位角权重给 R/TRT）
-    //     各通道对应不同 beta（R / TRT 分别用自己的宽度）
-    float  cosThAbs    = saturate(abs(cosThI));
-    float4 lut3dR  = DSLut3D.SampleLevel(DSLut3D_sampler,
-        float3(cosThAbs, saturate(betaR_w),
-               saturate(RemappedAbsorption.r)), 0.0f);
-    float4 lut3dG  = DSLut3D.SampleLevel(DSLut3D_sampler,
-        float3(cosThAbs, saturate(betaR_w),
-               saturate(RemappedAbsorption.g)), 0.0f);
-    float4 lut3dBv = DSLut3D.SampleLevel(DSLut3D_sampler,
-        float3(cosThAbs, saturate(betaR_w),
-               saturate(RemappedAbsorption.b)), 0.0f);
-
-    // Fresnel 钳位 [0, 0.99]
-    float3 fresnel0 = float3(min(lut3dR.x,  0.99f),
-                             min(lut3dG.x,  0.99f),
-                             min(lut3dBv.x, 0.99f));
-    float3 fresnel1 = float3(min(lut3dR.y,  0.99f),
-                             min(lut3dG.y,  0.99f),
-                             min(lut3dBv.y, 0.99f));
-    float3 one_f0   = 1.0f - fresnel0;
+    // 4.7 R / TRT 的 Fresnel（解析式，取代原先误用的 MEAN_ENERGY LUT 通道）
+    //     与 HairBsdf.csh 的 Attenuation() 一致：
+    //       p=0 (R)  : F = Hair_F(sqrt(0.5 + 0.5 * dot(V, L)))
+    //       p=2 (TRT): F = Hair_F(cosθ_d * sqrt(1 - h²))，h=0 → Hair_F(cosθ_d)
+    //     Fresnel 与吸收无关，故三通道同值；钳位 [0, 0.99]
+    float  VoL       = dot(V, L);
+    float  cosThetaD = cos(0.5f * abs(thetaR - thetaI));
+    float3 fresnel0  = min(Hair_F(sqrt(saturate(0.5f + 0.5f * VoL))), 0.99f);
+    float3 fresnel1  = min(Hair_F(saturate(cosThetaD)), 0.99f);
+    float3 one_f1    = 1.0f - fresnel1;
 
     // 4.8 各瓣纵向高斯 M
     float shift  = HairAlpha;
@@ -391,9 +382,11 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 T_single = exp(-sigma_a / max(cos_gt, 0.01f));   // 单次穿透
     float3 T_TRT    = T_single * T_single * T_single * T_single;
 
-    // 4.10 方位角分量
-    float3 az_R   = float3(lut3dR.z,  lut3dG.z,  lut3dBv.z);
-    float3 az_TRT = float3(lut3dR.w,  lut3dG.w,  lut3dBv.w);
+    // 4.10 方位角分量（解析式，h=0 近似 + 9 项环绕 Gaussian detector）
+    //     参考 AzimuthalScattering()：Np(p) ≈ A(p, h=0) * Dp(B[p], φ - Ω(p, 0))
+    //     Ω(0, 0) = 0，Ω(2, 0) = 2π；A 已拆到 fresnel0 / fresnel1·T_TRT
+    float3 az_R   = GaussianDetector(max(betaR_w,   0.01f), phi_o);
+    float3 az_TRT = GaussianDetector(max(betaTRT_w, 0.01f), phi_o - NTT_TWO_PI);
     // TT 方位角：N_tt_fit × A_TT × DS（A_TT 已含 (1-F)^2 和透射衰减）
     // 参考 hair_shade.hlsl:1106-1108 —— DS 只调制 TT 瓣，R / TRT 不受影响。
     float3 az_TT  = N_tt_fit.xxx * A_TT * ds_scatter;
@@ -401,10 +394,10 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     // 4.11 三瓣 Marschner 单散射
     //   R   : 外表面 Fresnel 反射
     //   TT  : 方位角 D_TT × 吸收 A_TT（h=0 近似，与 LUT 解耦）
-    //   TRT : 内反射 × 透射^4 × 方位角权重
-    float3 bsdf_R   = M_R   * fresnel0                       * az_R;
+    //   TRT : (1-F)² · F · 透射^4 × 方位角权重
+    float3 bsdf_R   = M_R   * fresnel0                     * az_R;
     float3 bsdf_TT  = M_TT  * az_TT;
-    float3 bsdf_TRT = M_TRT * (one_f0 * one_f0) * fresnel1 * T_TRT * az_TRT;
+    float3 bsdf_TRT = M_TRT * (one_f1 * one_f1) * fresnel1 * T_TRT * az_TRT;
 
     float3 marschner_fs_lut = bsdf_R + bsdf_TT + bsdf_TRT;
 
