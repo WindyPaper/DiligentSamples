@@ -684,6 +684,33 @@ void Tutorial02_Cube::UpdateUI()
 			m_DirectionalLightData.HairEnableDeepShadowScattering = EnableDeepShadowScatter ? 1.0f : 0.0f;
 		}
 
+		if (ImGui::CollapsingHeader("Deep Shadow Tuning"))
+		{
+			ImGui::TextDisabled("remap: intensity * pow(value, power)");
+
+			ImGui::Text("HairCount (drives a_f^n, sigma_f^2)");
+			ImGui::SliderFloat("HairCount Power",     &m_DirectionalLightData.DSHairCountPower,     0.1f, 4.0f);
+			ImGui::SliderFloat("HairCount Intensity", &m_DirectionalLightData.DSHairCountIntensity, 0.0f, 8.0f);
+
+			ImGui::Text("Coverage (used as saturate(1 - coverage))");
+			ImGui::SliderFloat("Coverage Power",      &m_DirectionalLightData.DSCoveragePower,      0.1f, 4.0f);
+			ImGui::SliderFloat("Coverage Intensity",  &m_DirectionalLightData.DSCoverageIntensity,  0.0f, 4.0f);
+
+			ImGui::Text("Scatter (modulates TT + LocalScattering)");
+			ImGui::SliderFloat("Scatter Power",       &m_DirectionalLightData.DSScatterPower,       0.1f, 4.0f);
+			ImGui::SliderFloat("Scatter Intensity",   &m_DirectionalLightData.DSScatterIntensity,   0.0f, 4.0f);
+
+			if (ImGui::Button("Reset Deep Shadow Tuning"))
+			{
+				m_DirectionalLightData.DSHairCountPower     = 1.0f;
+				m_DirectionalLightData.DSHairCountIntensity = 1.0f;
+				m_DirectionalLightData.DSCoveragePower      = 1.0f;
+				m_DirectionalLightData.DSCoverageIntensity  = 1.0f;
+				m_DirectionalLightData.DSScatterPower       = 1.0f;
+				m_DirectionalLightData.DSScatterIntensity   = 1.0f;
+			}
+		}
+
 		static const float3 HeadOffsetDefault = m_HeadOffset;
 		ImGui::SliderFloat("Head Offset X", &m_HeadOffset.x, HeadOffsetDefault.x - 0.1f, HeadOffsetDefault.x + 0.1f);
 		ImGui::SliderFloat("Head Offset Y", &m_HeadOffset.y, HeadOffsetDefault.y - 0.1f, HeadOffsetDefault.y + 0.1f);

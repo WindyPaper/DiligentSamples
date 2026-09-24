@@ -298,25 +298,29 @@ void CSMain(uint3 DispatchThreadId : SV_DispatchThreadID)
 
 #if PERMUTATION_LUT_TYPE == PERMUTATION_LUT_TYPE_NTT
 
-// NTT LUT: Frostbite-style TT azimuthal distribution (physical formula).
-// For each (theta_o, betaN) we integrate the TT azimuthal distribution over the
-// fiber offset h and fit a gaussian centered at the forward direction phi = PI:
+// NTT LUT: Frostbite-style azimuthal distributions (physical formula).
+// For each (theta_o, betaN) we integrate the azimuthal distribution of a lobe
+// over the fiber offset h and fit a gaussian centered at that lobe's specular
+// direction:
 //
-//   D_TT(phi)   = 0.5 * integral_{-1}^{1} N_g(betaN; phi - Phi_TT(h)) dh
-//   Phi_TT(h)   = PI + 2*gamma_t - 2*gamma_i,  gamma_i=asin(h), gamma_t=asin(h/etaP)
-//   fit  g(phi) = a * exp(-b * (phi - PI)^2)
+//   D_p(phi)   = 0.5 * integral_{-1}^{1} N_g(betaN; phi - Phi_p(h)) dh
+//   Phi_p(h)   = p*PI + 2*p*gamma_t - 2*gamma_i,  gamma_i=asin(h), gamma_t=asin(h/etaP)
+//   fit g(phi) = a * exp(-b * (phi - phi_center)^2)
 //
 // Axes / parameterization (matches Frostbite presentation):
 //   X = theta_o in [0, PI/2]  (first param)  -> Bravais index etaP(theta_o)
 //   Y = betaN   in [0, 1]     (second param, azimuthal roughness)
-// Output: .x = a (peak amplitude), .y = b (gaussian falloff), .zw unused.
+// Output: .x = a_TT, .y = b_TT (center phi = PI)
+//         .z = a_TRT, .w = b_TRT (center phi = 0, since Phi_TRT(0) = 2*PI)
 //
-// D_TT is symmetric about phi = PI (Phi_TT(-h) = 2*PI - Phi_TT(h)) and TT has no
-// caustic, so the peak sits at PI; a = D_TT(PI) and b is a peak-weighted fit.
-// Attenuation A_TT (Fresnel + absorption) is NOT baked here; the PDF applies it
-// separately at runtime at h = 0. Expect a in ~[0.25,0.70], b in ~[0.2,1.4]; this
-// is physically correct but dimmer/broader than the old ntt_yes (a up to 20), so
-// the runtime TT gain / M_TT may need to be re-tuned.
+// The h-integral is what keeps D_p bounded: a narrower betaN makes N_g taller but
+// shrinks the fraction of h that lands within betaN of phi, so the two cancel.
+// Evaluating at a single h (e.g. h=0) instead would leave the 1/(sqrt(2pi)*betaN)
+// peak un-normalized and blow up as roughness drops.
+//
+// Attenuation A_p (Fresnel + absorption) is NOT baked here; the runtime applies it
+// separately at h = 0. The R lobe needs no LUT: its h-integral has the closed form
+// N_R(phi) = 0.25*cos(phi/2).
 
 RWTexture2D<float4> OutputNTT;
 
@@ -358,8 +362,9 @@ float WrapPi(float x)
     return x - PI;
 }
 
-// D_TT(phi) = 0.5 * integral_h N_g(betaN; phi - Phi_TT(h)) dh
-float IntegrateNTTAtPhi(float phi_o, float betaN, float etaP)
+// D_p(phi) = 0.5 * integral_h N_g(betaN; phi - Phi_p(h)) dh
+//   Phi_p(h) = p*PI + 2*p*gamma_t - 2*gamma_i   (matches Omega() in HairBsdf.csh)
+float IntegrateNpAtPhi(uint p, float phi_o, float betaN, float etaP)
 {
     float accum = 0.0f;
     float dh = 2.0f / float(N_H);
@@ -372,10 +377,36 @@ float IntegrateNTTAtPhi(float phi_o, float betaN, float etaP)
             continue;
         float gamma_i = asin(clamp(h,      -1.0f, 1.0f));
         float gamma_t = asin(clamp(sin_gt, -1.0f, 1.0f));
-        float phi_tt  = PI + 2.0f * gamma_t - 2.0f * gamma_i;
-        accum += WrappedGaussian(betaN, WrapPi(phi_o - phi_tt)) * dh;
+        float phi_p   = p * PI + 2.0f * p * gamma_t - 2.0f * gamma_i;
+        accum += WrappedGaussian(betaN, WrapPi(phi_o - phi_p)) * dh;
     }
     return 0.5f * accum;   // 0.5 keeps the h-domain [-1,1] energy scale
+}
+
+// Peak-weighted least squares for a*exp(-b*(phi-phi_center)^2):
+//   ln(D/a) = -b * x^2  =>  b = -sum(w x^2 ln(D/a)) / sum(w x^4),  w = D
+float2 FitLobeGaussian(uint p, float phi_center, float betaN, float etaP)
+{
+    float a = IntegrateNpAtPhi(p, phi_center, betaN, etaP);
+
+    const float dphiStep = TWO_PI / float(N_PHI);
+    float sum_wx4  = 0.0f;
+    float sum_wx2y = 0.0f;
+    [loop]
+    for (int si = 0; si < N_PHI; ++si)
+    {
+        float phi = (si + 0.5f) * dphiStep;
+        float val = IntegrateNpAtPhi(p, phi, betaN, etaP);
+        float x   = WrapPi(phi - phi_center);
+        float x2  = x * x;
+        float w   = val;
+        float y   = log(max(val, 1e-8f) / max(a, 1e-8f));
+        sum_wx4  += w * x2 * x2;
+        sum_wx2y += w * x2 * y;
+    }
+    float b = (sum_wx4 > 1e-12f) ? (-sum_wx2y / sum_wx4) : 1.0f;
+
+    return float2(max(a, 0.0f), max(b, 0.01f));
 }
 
 [numthreads(TILE_PIXEL_SIZE, TILE_PIXEL_SIZE, 1)]
@@ -392,29 +423,13 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     float betaN  = max((yi + 0.5f) / max(1.0f, (float)RoughnessCount), 0.01f);
     float etaP   = BravisEtaPerp(1.55f, thetaO);
 
-    // Peak amplitude at the forward direction (symmetry => peak at PI).
-    float a = IntegrateNTTAtPhi(PI, betaN, etaP);
+    // TT  is symmetric about phi = PI  (Phi_TT(-h)  = 2*PI - Phi_TT(h)), no caustic.
+    // TRT is symmetric about phi = 0   (Phi_TRT(0)  = 2*PI == 0); its caustic is
+    // smoothed out by the h-integral and the betaN blur.
+    float2 tt  = FitLobeGaussian(1u, PI,   betaN, etaP);
+    float2 trt = FitLobeGaussian(2u, 0.0f, betaN, etaP);
 
-    // Peak-weighted least squares for the falloff b of a*exp(-b*(phi-PI)^2):
-    //   ln(D/a) = -b * x^2  =>  b = -sum(w x^2 ln(D/a)) / sum(w x^4),  w = D
-    const float dphiStep = TWO_PI / float(N_PHI);
-    float sum_wx4  = 0.0f;
-    float sum_wx2y = 0.0f;
-    [loop]
-    for (int si = 0; si < N_PHI; ++si)
-    {
-        float phi = (si + 0.5f) * dphiStep;
-        float val = IntegrateNTTAtPhi(phi, betaN, etaP);
-        float x   = WrapPi(phi - PI);
-        float x2  = x * x;
-        float w   = val;
-        float y   = log(max(val, 1e-8f) / max(a, 1e-8f));
-        sum_wx4  += w * x2 * x2;
-        sum_wx2y += w * x2 * y;
-    }
-    float b = (sum_wx4 > 1e-12f) ? (-sum_wx2y / sum_wx4) : 1.0f;
-
-    OutputNTT[uint2(xi, yi)] = float4(max(a, 0.0f), max(b, 0.01f), 0.0f, 1.0f);
+    OutputNTT[uint2(xi, yi)] = float4(tt.x, tt.y, trt.x, trt.y);
 }
 
 #endif

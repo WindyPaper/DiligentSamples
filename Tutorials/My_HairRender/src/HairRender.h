@@ -39,6 +39,16 @@ struct ShadingLightData
 	float  HairUseRefMarschner;
 	float  HairEnableMultiScattering;
 	float  HairEnableDeepShadowScattering;
+	// Deep-shadow artist controls: intensity * pow(value, power). (1, 1) = identity.
+	// Layout must match the ShadingLightData cbuffer in LineVertexShading.csh.
+	float  DSHairCountPower;
+	float  DSHairCountIntensity;
+	float  DSCoveragePower;
+	float  DSCoverageIntensity;
+	float  DSScatterPower;
+	float  DSScatterIntensity;
+	float  _DSPad0;
+	float  _DSPad1;
 
 	ShadingLightData()
 	{
@@ -51,6 +61,15 @@ struct ShadingLightData
 			HairUseRefMarschner = 0.0f;
 			HairEnableMultiScattering = 1.0f;
 			HairEnableDeepShadowScattering = 1.0f;
+
+			DSHairCountPower     = 1.0f;
+			DSHairCountIntensity = 1.0f;
+			DSCoveragePower      = 1.0f;
+			DSCoverageIntensity  = 1.0f;
+			DSScatterPower       = 1.0f;
+			DSScatterIntensity   = 1.0f;
+			_DSPad0              = 0.0f;
+			_DSPad1              = 0.0f;
 	}
 };
 

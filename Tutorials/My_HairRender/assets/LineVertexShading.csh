@@ -9,13 +9,26 @@ cbuffer ShadingLightData
     float4 DirectionLightColor;
     float3 HairColor;
     float  HairRoughness;
-    // HairAlpha: hair cuticle tilt angle (radians).
-    // Typical value ≈ 0.07 (~4°, matching Marschner shift convention).
-    // Maps to: R shift = -HairAlpha, TT = -HairAlpha*0.5, TRT = +HairAlpha*1.5
+    // HairAlpha: hair cuticle tilt angle (radians), measured in the root-ward
+    // tangent frame (same convention as HairStrandsLUT.csh:132 / HairShadingRef).
+    // Default 0.07 == 2 * the hardcoded Shift in HairBsdf.csh:223.
+    // Lobe centres: R = -HairAlpha, TT = +HairAlpha/4, TRT = +HairAlpha,
+    // which matches HairShadingRef's measured centres (-4.04, +1.00, +4.08 deg)
+    // to within 0.07 deg. See tools/verify_alpha_shift.py.
     float  HairAlpha;
     float  HairUseRefMarschner;
     float  HairEnableMultiScattering;
     float  HairEnableDeepShadowScattering;
+    // Deep-shadow artist controls. Each output of DeepShadowScattering() is
+    // remapped as  intensity * pow(value, power).  (1, 1) is the identity.
+    float  DSHairCountPower;
+    float  DSHairCountIntensity;
+    float  DSCoveragePower;
+    float  DSCoverageIntensity;
+    float  DSScatterPower;
+    float  DSScatterIntensity;
+    float  _DSPad0;
+    float  _DSPad1;
 };
 
 struct HairVertexData
@@ -252,8 +265,17 @@ void CSMain(uint3 id : SV_DispatchThreadID,
         tangNext      = dNext * rsqrt(dot(dNext, dNext));
     }
 
+    // Vertices are stored root -> tip (verified: the root-flagged segment always
+    // holds the strand's lowest vertex index, and that end sits on the scalp), so
+    // the forward difference points toward the TIP. The BSDF convention is the
+    // opposite: HairStrandsLUT.csh:132 and HairShadingRef() define N as "parallel
+    // to hair pointing toward root", and the cuticle tilt signs in Alpha[] /
+    // HairAlpha are relative to that. Negate so the alpha shift, the dual-scatter
+    // delta_b shift and the Kajiya-Kay wrap diffuse all land on the right side.
+    // (The DSLut3D lookup uses abs(dot(L,T)) and phi_o is unsigned, so those two
+    // are invariant either way.)
     float3 tangSum = tangPrev + tangNext;
-    float3 T       = tangSum * rsqrt(dot(tangSum, tangSum));   // averaged hair tangent
+    float3 T       = -tangSum * rsqrt(dot(tangSum, tangSum));  // hair tangent, root-ward
     float3 V = normalize(CameraWPos.xyz - V1.Pos);           // view vector
     float3 L = normalize(DirectionLightDir.xyz);             // light direction
 
@@ -269,6 +291,15 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float  ds_hair_count = 0.0f;
     float  ds_coverage   = 0.0f;
     float3 ds_scatter    = DeepShadowScattering(V1.Pos, ds_hair_count, ds_coverage);
+
+    // Artist remap: intensity * pow(value, power). Applied before the bypass below
+    // so that disabling deep-shadow scattering still yields the neutral baseline.
+    //   ds_hair_count -> drives a_f^n and sigma_f^2 in ComputeDualScatteringTerms
+    //   ds_coverage   -> consumed as saturate(1 - coverage), so keep it in [0,1]
+    //   ds_scatter    -> modulates the TT lobe and LocalScattering
+    ds_hair_count = pow(max(ds_hair_count, 0.0f), DSHairCountPower) * DSHairCountIntensity;
+    ds_coverage   = saturate(pow(saturate(ds_coverage), DSCoveragePower) * DSCoverageIntensity);
+    ds_scatter    = pow(max(ds_scatter, 0.0f), DSScatterPower) * DSScatterIntensity;
 
     // Compare toggle: when disabled, bypass the deep-shadow contribution so the
     // hair renders with no self-shadow coverage, no TT scatter modulation and no
@@ -314,7 +345,7 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float thetaR  = asin(clamp(cosThR, -1.0f, 1.0f));
     float thetaH  = (thetaI + thetaR) * 0.5f;
 
-    // 4.3 三瓣宽度
+    // 4.3 三瓣宽度（B[] 对齐 HairBsdf.csh:230-235）
     float roughSq   = HairRoughness * HairRoughness;
     float betaR_w   = roughSq;
     float betaTT_w  = roughSq * 0.5f;
@@ -327,12 +358,15 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float  lenLiLr = dot(Li_perp, Li_perp) * dot(Lr_perp, Lr_perp);
     float  cosPhi  = dot(Li_perp, Lr_perp) * rsqrt(max(lenLiLr, 1e-8f));
     float  phi_o   = acos(clamp(cosPhi, -1.0f, 1.0f));   // ∈ [0, π]
+    // cos(phi/2); drives both the separable-R width and the R azimuthal term,
+    // where the two cancel exactly (see 4.8 / 4.10).
+    float  cosHalfPhi = sqrt(saturate(0.5f + 0.5f * cosPhi));
 
     static const float NTT_HALF_PI = 1.5707963f;
     static const float NTT_TWO_PI = 6.2831853f;
 
     // 4.5 NTT LUT sampling: UV = (theta_o normalized, roughness)
-    //     theta_o follows Frostbite presentation parameterization.
+    //     .xy = TT gaussian (center phi = PI), .zw = TRT gaussian (center phi = 0)
     float thetaO = abs(thetaR);
     float2 nttUV = float2(saturate(thetaO / NTT_HALF_PI),
                           saturate(HairRoughness));
@@ -342,23 +376,23 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float  dphiTT   = phi_o - PI;
     dphiTT         -= NTT_TWO_PI * round(dphiTT / NTT_TWO_PI); // wrap [-pi, pi]
     float  N_tt_fit = nttA * exp(-nttB * dphiTT * dphiTT);
+    float  nttA_TRT = max(nttSmp.z, 0.0f);
+    float  nttB_TRT = max(nttSmp.w, 0.01f);
+    float  dphiTRT  = phi_o;                                   // TRT center = 0
+    dphiTRT        -= NTT_TWO_PI * round(dphiTRT / NTT_TWO_PI); // wrap [-pi, pi]
+    float  N_trt_fit = nttA_TRT * exp(-nttB_TRT * dphiTRT * dphiTRT);
 
-    // 4.6 A_TT_h0：h=0 近似的 TT 吸收项
-    //     eta_p = Bravais 等效折射率（斜入射修正）
-    //     F     = Schlick Fresnel @ h=0 (cos γ_i = 1) = R0
-    //     T     = exp(-2σ_a / cos γ_t)
-    float  eta_hair    = 1.55f;
-    float  sinTh_abs   = abs(cosThR);   // |sinθ_r|
-    float  cosTh_abs   = sqrt(max(1.0f - sinTh_abs * sinTh_abs, 0.0f));
-    float  eta_p       = sqrt(max(eta_hair * eta_hair - sinTh_abs * sinTh_abs, 1e-6f))
-                         / max(cosTh_abs, 1e-4f);
-    float  R0          = (eta_p - 1.0f) / (eta_p + 1.0f);
-    R0                *= R0;            // Schlick R0；h=0 → (1-cosγ_i)^5=0 → F=R0
-    float  one_mF      = 1.0f - R0;
-    float  cos_gt      = sqrt(max(1.0f - 1.0f / (eta_p * eta_p), 0.0f));
-    float3 sigma_a     = -log(max(HairColor, 1e-6f));   // 正值吸收系数
-    float3 T_abs       = exp(-2.0f * sigma_a / max(cos_gt, 0.01f));
-    float3 A_TT        = one_mF * one_mF * T_abs;       // (1-F)² · T
+    // 4.6 吸收项 T（h=0 近似，对齐 HairBsdf.csh:145-161 的 Attenuation）
+    //     ua       = -0.25 * log(Color)                                    (:149)
+    //     cosThetaT= sqrt(1 - (sinTheta_i / eta)^2)   纵向折射             (:211)
+    //     ua_prime = ua / cosThetaT                                        (:150)
+    //     h = 0  =>  gamma_t = 0  =>  (1 + cos(2*gamma_t)) = 2
+    //     T        = exp(-2 * ua_prime * 2) = Color^(1/cosThetaT)          (:157)
+    //     TT 用 T，TRT 用 T*T（参考 :159/:161），Fresnel 统一走 4.7 的 fresnel1。
+    float  eta_hair  = 1.55f;
+    float  cosThetaT = sqrt(max(1.0f - Pow2(cosThI / eta_hair), 0.0f));
+    float3 sigma_a   = -0.25f * log(max(HairColor, 1e-6f));
+    float3 T_abs     = exp(-4.0f * sigma_a / max(cosThetaT, 1e-4f));
 
     // 4.7 R / TRT 的 Fresnel（解析式，取代原先误用的 MEAN_ENERGY LUT 通道）
     //     与 HairBsdf.csh 的 Attenuation() 一致：
@@ -370,23 +404,33 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     float3 fresnel0  = min(Hair_F(sqrt(saturate(0.5f + 0.5f * VoL))), 0.99f);
     float3 fresnel1  = min(Hair_F(saturate(cosThetaD)), 0.99f);
     float3 one_f1    = 1.0f - fresnel1;
+    float3 A_TT      = one_f1 * one_f1 * T_abs;         // (1-F)² · T
 
     // 4.8 各瓣纵向高斯 M
-    float shift  = HairAlpha;
-    float M_R    = LongitudinalGaussian(thetaH - shift,        betaR_w   * betaR_w);
-    float M_TT   = LongitudinalGaussian(thetaH - shift * 0.5f, betaTT_w  * betaTT_w  * 0.5f);
-    float M_TRT  = LongitudinalGaussian(thetaH + shift * 1.5f, betaTRT_w * betaTRT_w * 2.0f);
+    //     LongitudinalScattering() 的小 v 渐近是 exp(-(thetaI+thetaR)^2/(2*B^2))，
+    //     即在 thetaH 上的高斯、sigma = B/2，故 variance = Pow2(B * 0.5)。
+    //     R 瓣额外走 separable 形式 Bp = B*sqrt(2)*cosHalfPhi（HairBsdf.csh:249）；
+    //     它带来的 1/cosHalfPhi 峰值增长被 4.10 里 az_R 的 cos(phi/2) 精确抵消，
+    //     乘积恒定（实测 tools/verify_lobe_width.py：phi 0->179 度不变）。
+    //     Lobe centres are thetaH = (-HairAlpha, +HairAlpha/4, +HairAlpha), which
+    //     reproduces HairShadingRef's centres to within 0.07 deg at the default
+    //     HairAlpha = 0.07 (= 2 * the hardcoded Shift in HairBsdf.csh:223).
+    //     thetaH is measured with the root-ward T, same frame as the reference.
+    float shift     = HairAlpha;
+    float betaR_eff = betaR_w * 1.41421356f * max(cosHalfPhi, 1e-3f);
+    float M_R    = LongitudinalGaussian(thetaH + shift,         Pow2(betaR_eff * 0.5f));
+    float M_TT   = LongitudinalGaussian(thetaH - shift * 0.25f, Pow2(betaTT_w  * 0.5f));
+    float M_TRT  = LongitudinalGaussian(thetaH - shift,         Pow2(betaTRT_w * 0.5f));
 
-    // 4.9 TRT 吸收（4次透射）
-    //     复用 sigma_a 已算好
-    float3 T_single = exp(-sigma_a / max(cos_gt, 0.01f));   // 单次穿透
-    float3 T_TRT    = T_single * T_single * T_single * T_single;
+    // 4.9 TRT 吸收：参考 Attenuation() p=2 用 T*T（HairBsdf.csh:161）
+    float3 T_TRT = T_abs * T_abs;
 
-    // 4.10 方位角分量（解析式，h=0 近似 + 9 项环绕 Gaussian detector）
-    //     参考 AzimuthalScattering()：Np(p) ≈ A(p, h=0) * Dp(B[p], φ - Ω(p, 0))
-    //     Ω(0, 0) = 0，Ω(2, 0) = 2π；A 已拆到 fresnel0 / fresnel1·T_TRT
-    float3 az_R   = GaussianDetector(max(betaR_w,   0.01f), phi_o);
-    float3 az_TRT = GaussianDetector(max(betaTRT_w, 0.01f), phi_o - NTT_TWO_PI);
+    // 4.10 方位角分量（有界，与 HairShadingRef 的 AzimuthalScattering 同源）
+    //   R  : h-积分有闭式 N_R(φ) = 0.25·cos(φ/2) = 0.25·cosHalfPhi，≤ 0.25，无 caustic
+    //        这里的 cosHalfPhi 与 4.8 里 betaR_eff 的 cosHalfPhi 相消 → 乘积有界
+    //   TRT: 从 NTT LUT 的 .zw 通道重建（烘焙时已对 h 积分 → 有界、caustic 被抹平）
+    float3 az_R   = 0.25f * cosHalfPhi;
+    float3 az_TRT = N_trt_fit.xxx;
     // TT 方位角：N_tt_fit × A_TT × DS（A_TT 已含 (1-F)^2 和透射衰减）
     // 参考 hair_shade.hlsl:1106-1108 —— DS 只调制 TT 瓣，R / TRT 不受影响。
     float3 az_TT  = N_tt_fit.xxx * A_TT * ds_scatter;
@@ -403,11 +447,11 @@ void CSMain(uint3 id : SV_DispatchThreadID,
 
     // Optional compare path: use HairShadingRef single-scattering instead of LUT-NTT reconstructed marschner_fs.
     uint2 randRef = uint2(id.x, VertexIdx0);
-    float3 marschner_fs_ref = HairShadingRef(hair_gb, L, V, T, randRef,
-        HAIR_COMPONENT_R | HAIR_COMPONENT_TT | HAIR_COMPONENT_TRT);
+    float3 marschner_fs_ref = float3(0.0f, 0.0f, 0.0f);
+    //HairShadingRef(hair_gb, L, V, T, randRef, HAIR_COMPONENT_R | HAIR_COMPONENT_TT | HAIR_COMPONENT_TRT);
 
     float useRef = step(0.5f, HairUseRefMarschner);
-    float3 marschner_fs = lerp(marschner_fs_lut, marschner_fs_ref, useRef);
+    float3 marschner_fs = marschner_fs_lut;//lerp(marschner_fs_lut, marschner_fs_ref, useRef);
 
     // --------------------------------------------------------
     // 5. 双散射包装 + Kajiya-Kay 漫射
@@ -425,6 +469,12 @@ void CSMain(uint3 id : SV_DispatchThreadID,
     // (`_2463` = cos(theta_i), `_2213` = saturate(1 - coverage), `_138._m0[5u]` = DL_Color).
     float cosThetaI = sqrt(max(1.0f - cosThI * cosThI, 0.0f));
     hair_dir_fs *= DirectionLightColor.rgb * (saturate(1.0f - ds_coverage) * cosThetaI);
+
+    // Clamp to the fp16 storage range before packing. PackR11G11B10F() runs each
+    // channel through f32tof16 (max 65504); a brighter directional light can push
+    // the result past that, yielding inf -> NaN in the MLAB blend (rgb*alpha with
+    // alpha=0) and a hard flip in the visibility feedback -> sudden brightness jump.
+    hair_dir_fs = clamp(hair_dir_fs, 0.0f, 65000.0f);
 
     // --------------------------------------------------------
     // 6. 打包输出

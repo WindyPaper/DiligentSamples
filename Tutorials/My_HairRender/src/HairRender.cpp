@@ -1270,6 +1270,12 @@ void Diligent::HairRender::RunCS(const float4x4 &view_mat, const float4x4 &viwe_
 		LightCBConstants->HairUseRefMarschner = shading_data.HairUseRefMarschner;
 		LightCBConstants->HairEnableMultiScattering = shading_data.HairEnableMultiScattering;
 		LightCBConstants->HairEnableDeepShadowScattering = shading_data.HairEnableDeepShadowScattering;
+		LightCBConstants->DSHairCountPower     = shading_data.DSHairCountPower;
+		LightCBConstants->DSHairCountIntensity = shading_data.DSHairCountIntensity;
+		LightCBConstants->DSCoveragePower      = shading_data.DSCoveragePower;
+		LightCBConstants->DSCoverageIntensity  = shading_data.DSCoverageIntensity;
+		LightCBConstants->DSScatterPower       = shading_data.DSScatterPower;
+		LightCBConstants->DSScatterIntensity   = shading_data.DSScatterIntensity;
     }
 
     {
